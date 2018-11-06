@@ -129,7 +129,7 @@
 //			writecrash.test
 //	FAIL
 //	exit status 1
-//	FAIL	github.com/cznic/ccgo/v2	481.539s
+//	FAIL	modernc.org/ccgo/v2	481.539s
 
 //	go version go1.11 linux/amd64
 //
@@ -167,9 +167,9 @@
 //	cc 25 ccgo 25 build 25 run 25 ok 25 (100.00%) csmith 25 (1m0.909371585s)
 //	CSmith0	cc 25 ccgo 25 build 25 run 25 ok 25 (100.00%) csmith 25 (1m0.909416163s)
 //	PASS
-//	ok  	github.com/cznic/ccgo/v2	1084.208s
+//	ok  	modernc.org/ccgo/v2	1084.208s
 
-package ccgo
+package ccgo // import "modernc.org/ccgo/v2"
 
 import (
 	"bufio"
@@ -191,8 +191,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cznic/cc/v2"
-	"github.com/cznic/strutil"
+	"modernc.org/cc/v2"
+	"modernc.org/strutil"
 )
 
 func caller(s string, va ...interface{}) {
@@ -384,7 +384,7 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/cznic/crt"
+	"modernc.org/crt"
 )
 
 var _ = math.Inf
@@ -1344,7 +1344,7 @@ func TestTCL0(t *testing.T) { //TODO-
 	return //TODO
 	cc.FlushCache()
 	const (
-		allDefs = `// Output of gcc features.c && ./a.out in github.com/cznic/sqlite2go/internal/c99/headers on linux_amd64.
+		allDefs = `// Output of gcc features.c && ./a.out in modernc.org/sqlite2go/internal/c99/headers on linux_amd64.
 			#define _POSIX_SOURCE 1
 			#define _POSIX_C_SOURCE 200809
 			#define _DEFAULT_SOURCE 1
@@ -2216,7 +2216,7 @@ import (
 	"math"
 	"unsafe"%s
 
-	"github.com/cznic/crt"
+	"modernc.org/crt"
 )
 
 var (

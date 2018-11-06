@@ -6,7 +6,7 @@
 
 // +build !windows
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 const Ttm = "struct{tm_sec int32,tm_min int32,tm_hour int32,tm_mday int32,tm_mon int32,tm_year int32,tm_wday int32,tm_yday int32,tm_isdst int32,__tm_gmtoff int32,__tm_zone *int8}"
 

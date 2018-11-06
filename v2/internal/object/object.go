@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package object reads and writes object files.
-package object
+package object // import "modernc.org/ccgo/v2/internal/object"
 
 import (
 	"bytes"

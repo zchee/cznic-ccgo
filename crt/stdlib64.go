@@ -4,14 +4,14 @@
 
 // +build amd64 amd64p32 arm64 mips64 mips64le mips64p32 mips64p32le ppc64 sparc64
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 import (
 	"fmt"
 	"os"
 	"unsafe"
 
-	"github.com/cznic/mathutil"
+	"modernc.org/mathutil"
 )
 
 // void *calloc(size_t nmemb, size_t size);

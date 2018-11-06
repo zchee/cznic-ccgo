@@ -65,9 +65,9 @@
 //
 // To install or update ccgo and its accompanying tools
 //
-//      $ go get [-u] github.com/cznic/ccgo/v2/...
+//      $ go get [-u] modernc.org/ccgo/v2/...
 //
-// Online documentation: [godoc.org/github.com/cznic/ccgo/v2/ccgo](http://godoc.org/github.com/cznic/ccgo/v2/ccgo)
+// Online documentation: [godoc.org/modernc.org/ccgo/v2/ccgo](http://godoc.org/modernc.org/ccgo/v2/ccgo)
 //
 // Changelog
 //
@@ -85,10 +85,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/cznic/cc/v2"
-	"github.com/cznic/ccgo/v2"
-	"github.com/cznic/ccgo/v2/internal/object"
-	"github.com/cznic/crt"
+	"modernc.org/cc/v2"
+	"modernc.org/ccgo/v2"
+	"modernc.org/ccgo/v2/internal/object"
+	"modernc.org/crt"
 )
 
 const (
@@ -876,7 +876,7 @@ func (c *config) linkGo(fn string) (err error) {
 	}
 
 	crtPrefix := crtPrefix
-	imports := "\n\n\t\"github.com/cznic/crt\""
+	imports := "\n\n\t\"modernc.org/crt\""
 	if c.ffreeStanding {
 		imports = ""
 		crtPrefix = ""

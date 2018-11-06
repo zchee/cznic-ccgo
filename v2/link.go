@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package ccgo
+package ccgo // import "modernc.org/ccgo/v2"
 
 import (
 	"bufio"
@@ -21,9 +21,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cznic/cc/v2"
-	"github.com/cznic/ccgo/v2/internal/object"
-	"github.com/cznic/sortutil"
+	"modernc.org/cc/v2"
+	"modernc.org/ccgo/v2/internal/object"
+	"modernc.org/sortutil"
 )
 
 /*

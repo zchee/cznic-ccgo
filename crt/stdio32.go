@@ -6,7 +6,7 @@
 
 // +build !windows
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 import (
 	"unsafe"

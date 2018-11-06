@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package ccgo translates C99 ASTs to Go source code. Work In Progress. API unstable.
-package ccgo
+package ccgo // import "modernc.org/ccgo/v2"
 
 //TODO must respect 'volatile' -> use sync.Atomic
 
@@ -21,8 +21,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cznic/cc/v2"
-	"github.com/cznic/ir"
+	"modernc.org/cc/v2"
+	"modernc.org/ir"
 )
 
 var (

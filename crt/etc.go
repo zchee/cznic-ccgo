@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Package crt provides C-runtime services. (Work In Progress)
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 import (
 	"fmt"
@@ -17,10 +17,10 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/cznic/ccir/libc/errno"
-	"github.com/cznic/internal/buffer"
-	"github.com/cznic/mathutil"
-	"github.com/cznic/memory"
+	"modernc.org/ccir/libc/errno"
+	"modernc.org/internal/buffer"
+	"modernc.org/mathutil"
+	"modernc.org/memory"
 )
 
 const (

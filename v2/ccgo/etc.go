@@ -19,7 +19,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/cznic/sortutil"
+	"modernc.org/sortutil"
 )
 
 var (

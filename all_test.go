@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package ccgo
+package ccgo // import "modernc.org/ccgo"
 
 import (
 	"bytes"
@@ -23,13 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cznic/cc"
-	"github.com/cznic/ccir"
-	"github.com/cznic/internal/buffer"
-	"github.com/cznic/ir"
-	"github.com/cznic/irgo"
-	"github.com/cznic/strutil"
-	"github.com/cznic/xc"
+	"modernc.org/cc"
+	"modernc.org/ccir"
+	"modernc.org/internal/buffer"
+	"modernc.org/ir"
+	"modernc.org/irgo"
+	"modernc.org/strutil"
+	"modernc.org/xc"
 )
 
 func caller(s string, va ...interface{}) {
@@ -83,7 +83,7 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/cznic/ccgo/crt"
+	"modernc.org/ccgo/crt"
 )
 
 var argv []*int8
@@ -568,7 +568,7 @@ func TestGCCExec(t *testing.T) {
 		// case range
 		"pr34154.c": {},
 
-		// VLA. Need to resolve https://github.com/cznic/cc/issues/91 first.
+		// VLA. Need to resolve https://gitlab.com/cznic/cc/issues/91 first.
 		"20040411-1.c":    {},
 		"20040423-1.c":    {},
 		"20040811-1.c":    {},

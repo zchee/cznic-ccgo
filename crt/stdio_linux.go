@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 import (
 	"bytes"
@@ -14,10 +14,10 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/cznic/ccir/libc/errno"
-	"github.com/cznic/ccir/libc/stdio"
-	"github.com/cznic/internal/buffer"
-	"github.com/cznic/mathutil"
+	"modernc.org/ccir/libc/errno"
+	"modernc.org/ccir/libc/stdio"
+	"modernc.org/internal/buffer"
+	"modernc.org/mathutil"
 )
 
 var (

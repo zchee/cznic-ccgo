@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package ccgo
+package ccgo // import "modernc.org/ccgo/v2"
 
 import (
 	"unsafe"
 
-	"github.com/cznic/cc/v2"
-	"github.com/cznic/ir"
-	"github.com/cznic/xc"
+	"modernc.org/cc/v2"
+	"modernc.org/ir"
+	"modernc.org/xc"
 )
 
 func (g *gen) isZeroInitializer(n *cc.Initializer) bool {

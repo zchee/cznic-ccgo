@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package ccgo
+package ccgo // import "modernc.org/ccgo/v2"
 
 import (
 	"fmt"
@@ -11,9 +11,9 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/cznic/cc/v2"
-	"github.com/cznic/ir"
-	"github.com/cznic/mathutil"
+	"modernc.org/cc/v2"
+	"modernc.org/ir"
+	"modernc.org/mathutil"
 )
 
 func (g *gen) exprListOpt(n *cc.ExprListOpt, void bool) {

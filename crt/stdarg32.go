@@ -4,7 +4,7 @@
 
 // +build 386 arm arm64be armbe mips mipsle ppc ppc64le s390 s390x sparc
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 func VALong(ap *[]interface{}) int64   { return int64(VAInt32(ap)) }
 func VAULong(ap *[]interface{}) uint64 { return uint64(VAUint32(ap)) }

@@ -4,7 +4,7 @@
 
 // +build !crt.strace
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 const strace = false
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE-MUSL file.
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 import (
 	"unsafe"

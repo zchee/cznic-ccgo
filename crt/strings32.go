@@ -4,7 +4,7 @@
 
 // +build 386 arm arm64be armbe mips mipsle ppc ppc64le s390 s390x sparc
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 // int ffsl(long i);
 func X__builtin_ffsl(tls *TLS, i int32) int32 { return X__builtin_ffs(tls, i) }

@@ -5,7 +5,7 @@
 // +build 386 arm arm64be armbe mips mipsle ppc ppc64le s390 s390x sparc
 // +build !windows
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/cznic/ccir/libc/unistd"
+	"modernc.org/ccir/libc/unistd"
 )
 
 // void *sbrk(intptr_t increment);

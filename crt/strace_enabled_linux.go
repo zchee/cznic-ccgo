@@ -4,13 +4,13 @@
 
 // +build crt.strace
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 import (
 	"fmt"
 	"strings"
 
-	fcntl2 "github.com/cznic/ccir/libc/fcntl"
+	fcntl2 "modernc.org/ccir/libc/fcntl"
 )
 
 func cmdString(cmd int32) string {

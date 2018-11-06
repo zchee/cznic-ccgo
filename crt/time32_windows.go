@@ -4,7 +4,7 @@
 
 // +build 386 arm arm64be armbe mips mipsle ppc ppc64le s390 s390x sparc
 
-package crt
+package crt // import "modernc.org/ccgo/crt"
 
 const Ttm = "struct{int32,int32,int32,int32,int32,int32,int32,int32,int32}"
 
