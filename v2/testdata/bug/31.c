@@ -1,4 +1,4 @@
-// https://github.com/cznic/sqlite2go/issues/9
+// https://gitlab.com/cznic/sqlite2go/issues/9
 
 typedef void *HWND;
 
