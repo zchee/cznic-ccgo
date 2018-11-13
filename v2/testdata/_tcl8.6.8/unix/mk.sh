@@ -4,7 +4,7 @@ make clean || true
 make distclean || true
 ./configure CC=ccgo \
 	CFLAGS='--ccgo-full-paths --ccgo-struct-checks --ccgo-use-import exec.ErrNotFound,os.DevNull -D_GNU_SOURCE' \
-	LDFLAGS='--warn-unresolved-libs --warn-go-build --ccgo-go --ccgo-import os,os/exec'
+	LDFLAGS='--warn-unresolved-libs --ccgo-go --ccgo-import os,os/exec'
 make binaries
 make test
 date
@@ -17,3 +17,4 @@ date
 # all.tcl:	Total	14925	Passed	13922	Skipped	909	Failed	94	# Removed -DTCL_MEM_DEBUG
 # all.tcl:	Total	25959	Passed	24919	Skipped	944	Failed	96	# dtto
 # all.tcl:	Total	26037	Passed	25028	Skipped	944	Failed	65	# 2018-11-13
+# all.tcl:	Total	26092	Passed	25050	Skipped	945	Failed	97

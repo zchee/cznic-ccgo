@@ -40,7 +40,6 @@
 //       -shared                     Create a shared library
 //       -v                          Display the programs invoked by the compiler
 //       --version                   Display compiler version information
-//       --warn-go-build             Report 'go build' errors as warning
 //       --warn-unresolved-libs      Report unresolved libraries as warnings
 //       --warn-unresolved-symbols   Report unresolved symbols as warnings
 //       -W  --no-warn               suppress warnings (ignored)
@@ -126,7 +125,6 @@ const (
   -shared                     Create a shared library
   -v                          Display the programs invoked by the compiler
   --version                   Display compiler version information
-  --warn-go-build             Report 'go build' errors as warning
   --warn-unresolved-libs      Report unresolved libraries as warnings
   --warn-unresolved-symbols   Report unresolved symbols as warnings
   -W  --no-warn               suppress warnings (ignored)
@@ -401,7 +399,6 @@ func newConfig(args []string) (c *config, err error) {
 			}
 		case
 			arg == "--export-dynamic",
-			arg == "--warn-go-build",
 			arg == "--warn-unresolved-libs",
 			arg == "--warn-unresolved-symbols":
 
@@ -442,7 +439,6 @@ type linkerConfig struct {
 	warnUnresolvedSymbols bool
 
 	exportDynamic      bool // --export-dynamic
-	warnGoBuild        bool // --warn-go-build
 	warnUnresolvedLibs bool // --warn-unresolved-libs
 }
 
@@ -495,8 +491,6 @@ func newLinkerConfig(prog string, args []string) (c *linkerConfig, err error) {
 			c.warnUnresolvedSymbols = true
 		case arg == "--warn-unresolved-libs":
 			c.warnUnresolvedLibs = true
-		case arg == "--warn-go-build":
-			c.warnGoBuild = true
 		default:
 			errs = append(errs, fmt.Sprintf("%s: error: unrecognized linker option '%v'", prog, arg))
 		}
@@ -789,20 +783,19 @@ func (c *config) linkExecutable() (err error) {
 	}
 
 	if err := c.buildExecutable(fn, src); err != nil {
-		if c.linkerConfig.warnGoBuild {
-			msg := err.Error()
-			if !isArgumentMismatchError(msg) {
-				return err
-			}
+		msg := err.Error()
+		if !isArgumentMismatchError(msg) {
+			return err
+		}
 
-			log("faking a --warn-go-build binary\n%s", msg)
-			src = filepath.Join(dir, "error.go")
-			f, err := os.Create(src)
-			if err != nil {
-				return err
-			}
+		log("faking a --warn-go-build binary\n%s", msg)
+		src = filepath.Join(dir, "error.go")
+		f, err := os.Create(src)
+		if err != nil {
+			return err
+		}
 
-			if _, err := fmt.Fprintf(f, `package main
+		if _, err := fmt.Fprintf(f, `package main
 
 import (
 	"fmt"
@@ -824,13 +817,10 @@ func main() {
 	os.Exit(1)
 }
 `, msg); err != nil {
-				return err
-			}
-
-			return c.buildExecutable(fn, src)
+			return err
 		}
 
-		return err
+		return c.buildExecutable(fn, src)
 	}
 	return nil
 }
@@ -847,9 +837,6 @@ func (c *config) buildExecutable(bin, src string) error {
 		fmt.Fprintf(os.Stderr, "%s\n", strings.Join(a, " "))
 	}
 	if co, err := cmd.CombinedOutput(); err != nil {
-		if c.linkerConfig.warnGoBuild {
-			fmt.Printf("warning: go build %s\n%s\n%v\n", bin, co, err)
-		}
 		return fmt.Errorf("%s\n%v", co, err)
 	}
 	return nil
