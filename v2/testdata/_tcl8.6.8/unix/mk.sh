@@ -16,3 +16,4 @@ date
 # all.tcl:	Total	25904	Passed	24963	Skipped	884	Failed	57	# Fixed vdso clock_gettime
 # all.tcl:	Total	14925	Passed	13922	Skipped	909	Failed	94	# Removed -DTCL_MEM_DEBUG
 # all.tcl:	Total	25959	Passed	24919	Skipped	944	Failed	96	# dtto
+# all.tcl:	Total	26037	Passed	25028	Skipped	944	Failed	65	# 2018-11-13
