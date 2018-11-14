@@ -38,8 +38,8 @@ Lb<mangled name>	Declarator with external linkage has alias attribute. Value: ma
 Ld<mangled name>	Definition (provides) with external linkage. Value: type.
 Le<mangled name>	Declaration (requires) with external linkage. Value: type.
 Lf			Translation unit boundary. Value: file name.
-Lv<mangled name>		Visibility of a declarator with external linkage. Value: eg. "hidden".
-Lw<mangled name>		Declarator with external linkage has weak attribute. Value: none.
+Lv<mangled name>	Visibility of a declarator with external linkage. Value: eg. "hidden".
+Lw<mangled name>	Declarator with external linkage has weak attribute. Value: none.
 
 -------------------------------------------------------------------------------
 Linker magic names
@@ -67,18 +67,18 @@ Lw + "foo"		-> ts + off wchar_t string
 // ----------------------------------------------------------------------------
 // Go
 //
-// // const LdX__pthread_mutex_unlock = "func(TLS, uintptr) int32" //TODO-
+// // const LdX__pthread_mutex_unlock = "func(TLS, uintptr) int32"
 //
 // // X__pthread_mutex_unlock is defined at src/thread/pthread_mutex_unlock.c:3:5
 // func X__pthread_mutex_unlock(tls TLS, _m uintptr /* *Tpthread_mutex_t = struct{F__u struct{F int64; _ [32]byte};} */) (r int32) {
 // 	// ...
 // }
 //
-// // const LeXpthread_mutex_unlock = "func(TLS, uintptr) int32" //TODO-
+// // const LeXpthread_mutex_unlock = "func(TLS, uintptr) int32"
 //
-// // const LwXpthread_mutex_unlock = "" //TODO-
+// // const LwXpthread_mutex_unlock = ""
 //
-// // const LaXpthread_mutex_unlock = "X__pthread_mutex_unlock" //TODO-
+// // const LaXpthread_mutex_unlock = "X__pthread_mutex_unlock"
 
 const (
 	lConstPrefix = "const L"
@@ -171,6 +171,7 @@ func NewObject(out io.Writer, goos, goarch, file string, in *cc.TranslationUnit,
 	return err
 }
 
+//TODO use
 type unit struct { // Translation unit
 	provides map[string]struct{} // key: mangled declarator name with external linkage
 	requires map[string]struct{} // key: mangled declarator name with external linkage
@@ -437,8 +438,8 @@ func (l *Linker) parseID(s string) (string, int) {
 	panic("unreachable")
 }
 
-// Close finihes the linking. The header argument is written prior to any other
-// linker's own output, which does not include the package clause.
+// Close finishes the linking. The header argument is written prior to any
+// other linker's own output, which does not include the package clause.
 func (l *Linker) Close(header string) (err error) {
 	returned := false
 
