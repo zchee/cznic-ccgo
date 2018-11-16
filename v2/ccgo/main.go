@@ -1064,6 +1064,7 @@ func (c *config) compileSource(out, in string, src cc.Source) (err error) {
 #define _DEFAULT_SOURCE 1
 #define _POSIX_C_SOURCE 200809
 #define __FUNCTION__ __func__ // gcc compatibility
+#define __alignof__ _Alignof // gcc compatibility
 #define __ccgo__ 1
 `}
 	for _, v := range c.D {
