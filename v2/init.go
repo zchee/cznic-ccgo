@@ -398,14 +398,17 @@ func (g *gen) initializer(d *cc.Declarator) { // non TLD
 	}
 }
 
-func (g *ngen) initializer(d *cc.Declarator) {
+func (g *ngen) initializer(d *cc.Declarator, inline bool) {
 	n := d.Initializer
 	if n.Case == cc.InitializerExpr { // Expr
+		if !inline {
+			g.w("\n")
+		}
 		switch {
 		case g.escaped(d):
-			g.w("\n*(*%s)(unsafe.Pointer(%s))", g.typ(d.Type), g.mangleDeclarator(d))
+			g.w("*(*%s)(unsafe.Pointer(%s))", g.typ(d.Type), g.mangleDeclarator(d))
 		default:
-			g.w("\n%s", g.mangleDeclarator(d))
+			g.w("%s", g.mangleDeclarator(d))
 		}
 		g.w(" = ")
 		g.literal(d.Type, n)

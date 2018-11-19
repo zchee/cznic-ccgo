@@ -912,9 +912,9 @@ func (g *gen) declaration(n *cc.Declaration, deadCode *bool) {
 	g.initDeclaratorListOpt(n.InitDeclaratorListOpt, deadCode)
 }
 
-func (g *ngen) declaration(n *cc.Declaration) {
+func (g *ngen) declaration(n *cc.Declaration, inline bool) {
 	// DeclarationSpecifiers InitDeclaratorListOpt ';'
-	g.initDeclaratorListOpt(n.InitDeclaratorListOpt)
+	g.initDeclaratorListOpt(n.InitDeclaratorListOpt, inline)
 }
 
 func (g *gen) initDeclaratorListOpt(n *cc.InitDeclaratorListOpt, deadCode *bool) {
@@ -925,12 +925,12 @@ func (g *gen) initDeclaratorListOpt(n *cc.InitDeclaratorListOpt, deadCode *bool)
 	g.initDeclaratorList(n.InitDeclaratorList, deadCode)
 }
 
-func (g *ngen) initDeclaratorListOpt(n *cc.InitDeclaratorListOpt) {
+func (g *ngen) initDeclaratorListOpt(n *cc.InitDeclaratorListOpt, inline bool) {
 	if n == nil {
 		return
 	}
 
-	g.initDeclaratorList(n.InitDeclaratorList)
+	g.initDeclaratorList(n.InitDeclaratorList, inline)
 }
 
 func (g *gen) initDeclaratorList(n *cc.InitDeclaratorList, deadCode *bool) {
@@ -939,9 +939,11 @@ func (g *gen) initDeclaratorList(n *cc.InitDeclaratorList, deadCode *bool) {
 	}
 }
 
-func (g *ngen) initDeclaratorList(n *cc.InitDeclaratorList) {
+func (g *ngen) initDeclaratorList(n *cc.InitDeclaratorList, inline bool) {
+	first := true
 	for ; n != nil; n = n.InitDeclaratorList {
-		g.initDeclarator(n.InitDeclarator)
+		g.initDeclarator(n.InitDeclarator, inline && first)
+		first = false
 	}
 }
 
@@ -960,7 +962,7 @@ func (g *gen) initDeclarator(n *cc.InitDeclarator, deadCode *bool) {
 	}
 }
 
-func (g *ngen) initDeclarator(n *cc.InitDeclarator) {
+func (g *ngen) initDeclarator(n *cc.InitDeclarator, inline bool) {
 	d := n.Declarator
 	ds := d.DeclarationSpecifier
 	if ds.IsExtern() {
@@ -972,7 +974,7 @@ func (g *ngen) initDeclarator(n *cc.InitDeclarator) {
 		return
 	}
 	if n.Case == cc.InitDeclaratorInit { // Declarator '=' Initializer
-		g.initializer(d)
+		g.initializer(d, inline)
 	}
 }
 
