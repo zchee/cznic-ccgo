@@ -332,6 +332,7 @@ func (g *gen) stmt(n *cc.Stmt, cases map[*cc.LabeledStmt]int, brk, cont *int, de
 }
 
 func (g *ngen) stmt(n *cc.Stmt, cases map[*cc.LabeledStmt]int, brk, cont *int, main, value bool) (returned bool) {
+	//g.w("\n/* %v: %v %v */\n", g.position(n), n.Case, n.HasLabels)
 	switch n.Case {
 	case cc.StmtExpr: // ExprStmt
 		g.exprStmt(n.ExprStmt, value)
@@ -565,8 +566,16 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 		g.w("\n")
 		if e := n.ExprList; g.voidCanIgnoreExprList(e) {
 			if e.IsZero() {
+				if !n.HasLabels {
+					g.exprList(e, true)
+					g.w("if false {\n") //TODO later remove
+					g.stmt(n.Stmt, cases, brk, cont, main, value)
+					g.w("}")
+					break
+				}
+
 				a := g.local()
-				g.exprList(n.ExprList, true)
+				g.exprList(e, true)
 				g.w("\ngoto _%d\n", a)
 				g.stmt(n.Stmt, cases, brk, cont, main, value)
 				g.w("\n_%d:", a)
@@ -574,10 +583,19 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 			}
 
 			if e.IsNonZero() {
-				g.exprList(n.ExprList, true)
+				g.exprList(e, true)
 				g.stmt(n.Stmt, cases, brk, cont, main, value)
 				break
 			}
+		}
+
+		if !n.HasLabels {
+			g.w("if ")
+			g.exprList(n.ExprList, false)
+			g.w(" != 0 {\n")
+			g.stmt(n.Stmt, cases, brk, cont, main, value)
+			g.w("}")
+			break
 		}
 
 		// if exprList == 0 { goto A }
@@ -593,6 +611,16 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 		g.w("\n")
 		if e := n.ExprList; g.voidCanIgnoreExprList(e) {
 			if e.IsZero() {
+				if !n.HasLabels {
+					g.exprList(n.ExprList, true)
+					g.w("if false {")
+					g.stmt(n.Stmt, cases, brk, cont, main, value)
+					g.w("} else {")
+					g.stmt(n.Stmt2, cases, brk, cont, main, value)
+					g.w("}")
+					break
+				}
+
 				a := g.local()
 				b := g.local()
 				g.exprList(n.ExprList, true)
@@ -606,6 +634,16 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 			}
 
 			if e.IsNonZero() {
+				if !n.HasLabels {
+					g.exprList(n.ExprList, true)
+					g.w("if true {")
+					g.stmt(n.Stmt, cases, brk, cont, main, value)
+					g.w("} else {")
+					g.stmt(n.Stmt2, cases, brk, cont, main, value)
+					g.w("}")
+					break
+				}
+
 				a := g.local()
 				g.exprList(n.ExprList, true)
 				g.stmt(n.Stmt, cases, brk, cont, main, value)
@@ -614,6 +652,17 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 				g.w("\n_%d:", a)
 				break
 			}
+		}
+
+		if !n.HasLabels {
+			g.w("if ")
+			g.exprList(n.ExprList, false)
+			g.w(" != 0 {\n")
+			g.stmt(n.Stmt, cases, brk, cont, main, value)
+			g.w("} else {\n")
+			g.stmt(n.Stmt2, cases, brk, cont, main, value)
+			g.w("}")
+			break
 		}
 
 		// if exprList == 0 { goto A }
@@ -1107,7 +1156,6 @@ func (g *ngen) jumpStmt(n *cc.JumpStmt, brk, cont *int, main bool) (returned boo
 					case n.Expr.IsZero() && g.voidCanIgnore(n.Expr):
 						g.w("\nreturn ")
 						g.convert(n.Expr2, rt)
-						g.w("\n")
 					case n.Expr.IsNonZero() && g.voidCanIgnore(n.Expr):
 						g.w("\nreturn ")
 						g.exprList2(n.ExprList, rt)
@@ -1117,9 +1165,8 @@ func (g *ngen) jumpStmt(n *cc.JumpStmt, brk, cont *int, main bool) (returned boo
 						g.value(n.Expr, false)
 						g.w(" != 0 { return ")
 						g.exprList2(n.ExprList, rt)
-						g.w("}\n\nreturn ")
+						g.w("}\nreturn ")
 						g.convert(n.Expr2, rt)
-						g.w("\n")
 					}
 				default:
 					g.w("\nreturn ")
@@ -1129,7 +1176,6 @@ func (g *ngen) jumpStmt(n *cc.JumpStmt, brk, cont *int, main bool) (returned boo
 		default:
 			g.w("\nreturn ")
 		}
-		g.w("\n")
 		returned = true
 	case cc.JumpStmtBreak: // "break" ';'
 		if *brk < 0 {

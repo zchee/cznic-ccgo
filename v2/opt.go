@@ -736,21 +736,36 @@ func (o *nopt) stmt(n *ast.Stmt) {
 		o.expr(&x.Cond, true)
 		o.blockStmt(x.Body, false)
 		o.stmt(&x.Else)
-		if len(x.Body.List) == 0 {
+		switch xe := x.Else.(type) {
+		case *ast.BlockStmt:
+			if len(xe.List) == 0 {
+				x.Else = nil
+				break
+			}
+
+			if len(xe.List) == 1 {
+				if x0, ok := xe.List[0].(*ast.IfStmt); ok {
+					x.Else = x0
+				}
+			}
+		case *ast.EmptyStmt:
+			x.Else = nil
+		}
+		if len(x.Body.List) == 0 && x.Else != nil {
 			// Turn
 			//	if cond {} else { stmtList }
 			// into
 			//	if !cond { stmtList }
-			x.Cond = o.not(x.Cond)
 			switch y := x.Else.(type) {
 			case *ast.BlockStmt:
+				x.Cond = o.not(x.Cond)
 				x.Body.List = y.List
-			case nil:
-				// ok
+				x.Else = nil
+			case *ast.IfStmt:
+				//TODO if cond {} else if cond2 { ... } -> if !cond && cond2 { ... }
 			default:
 				todo("%T", y)
 			}
-			x.Else = nil
 		}
 	case *ast.IncDecStmt:
 		o.expr(&x.X, true)
@@ -982,6 +997,17 @@ func (o *nopt) not(n ast.Expr) ast.Expr {
 			return x.X
 		default:
 			todo("%v: %T %s", o.pos(n), x, o.fn)
+		}
+	case *ast.Ident:
+		switch x.Name {
+		case "true":
+			x.Name = "false"
+			return x
+		case "false":
+			x.Name = "true"
+			return x
+		default:
+			return &ast.UnaryExpr{Op: token.NOT, X: x}
 		}
 	default:
 		todo("%v: %T %s", o.pos(n), x, o.fn)
