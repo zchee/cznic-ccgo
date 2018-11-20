@@ -332,7 +332,7 @@ func (g *gen) stmt(n *cc.Stmt, cases map[*cc.LabeledStmt]int, brk, cont *int, de
 }
 
 func (g *ngen) stmt(n *cc.Stmt, cases map[*cc.LabeledStmt]int, brk, cont *int, main, value bool) (returned bool) {
-	//g.w("\n/* %v: %v %v */\n", g.position(n), n.Case, n.HasLabels)
+	//g.w("\n/* %v: %v %v */\n", g.position(n), n.Case, n.UseGotos)
 	switch n.Case {
 	case cc.StmtExpr: // ExprStmt
 		g.exprStmt(n.ExprStmt, value)
@@ -566,16 +566,16 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 		g.w("\n")
 		if e := n.ExprList; g.voidCanIgnoreExprList(e) {
 			if e.IsZero() {
-				if !n.HasLabels {
-					g.exprList(e, true)
-					g.w("if false {\n") //TODO later remove
+				if !n.UseGotos {
+					g.exprList(e, true, false)
+					g.w("if false {\n")
 					g.stmt(n.Stmt, cases, brk, cont, main, value)
 					g.w("}")
 					break
 				}
 
 				a := g.local()
-				g.exprList(e, true)
+				g.exprList(e, true, false)
 				g.w("\ngoto _%d\n", a)
 				g.stmt(n.Stmt, cases, brk, cont, main, value)
 				g.w("\n_%d:", a)
@@ -583,15 +583,15 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 			}
 
 			if e.IsNonZero() {
-				g.exprList(e, true)
+				g.exprList(e, true, false)
 				g.stmt(n.Stmt, cases, brk, cont, main, value)
 				break
 			}
 		}
 
-		if !n.HasLabels {
+		if !n.UseGotos {
 			g.w("if ")
-			g.exprList(n.ExprList, false)
+			g.exprList(n.ExprList, false, true)
 			g.w(" != 0 {\n")
 			g.stmt(n.Stmt, cases, brk, cont, main, value)
 			g.w("}")
@@ -603,7 +603,7 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 		// A:
 		a := g.local()
 		g.w("if ")
-		g.exprList(n.ExprList, false)
+		g.exprList(n.ExprList, false, true)
 		g.w(" == 0 { goto _%d }\n", a)
 		g.stmt(n.Stmt, cases, brk, cont, main, value)
 		g.w("\n_%d:", a)
@@ -611,8 +611,8 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 		g.w("\n")
 		if e := n.ExprList; g.voidCanIgnoreExprList(e) {
 			if e.IsZero() {
-				if !n.HasLabels {
-					g.exprList(n.ExprList, true)
+				if !n.UseGotos {
+					g.exprList(n.ExprList, true, false)
 					g.w("if false {")
 					g.stmt(n.Stmt, cases, brk, cont, main, value)
 					g.w("} else {")
@@ -623,7 +623,7 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 
 				a := g.local()
 				b := g.local()
-				g.exprList(n.ExprList, true)
+				g.exprList(n.ExprList, true, false)
 				g.w("\ngoto _%d\n", a)
 				g.stmt(n.Stmt, cases, brk, cont, main, value)
 				g.w("\ngoto _%d\n", b)
@@ -634,8 +634,8 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 			}
 
 			if e.IsNonZero() {
-				if !n.HasLabels {
-					g.exprList(n.ExprList, true)
+				if !n.UseGotos {
+					g.exprList(n.ExprList, true, false)
 					g.w("if true {")
 					g.stmt(n.Stmt, cases, brk, cont, main, value)
 					g.w("} else {")
@@ -645,7 +645,7 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 				}
 
 				a := g.local()
-				g.exprList(n.ExprList, true)
+				g.exprList(n.ExprList, true, false)
 				g.stmt(n.Stmt, cases, brk, cont, main, value)
 				g.w("\ngoto _%d\n", a)
 				g.stmt(n.Stmt2, cases, brk, cont, main, value)
@@ -654,9 +654,9 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 			}
 		}
 
-		if !n.HasLabels {
+		if !n.UseGotos {
 			g.w("if ")
-			g.exprList(n.ExprList, false)
+			g.exprList(n.ExprList, false, true)
 			g.w(" != 0 {\n")
 			g.stmt(n.Stmt, cases, brk, cont, main, value)
 			g.w("} else {\n")
@@ -674,7 +674,7 @@ func (g *ngen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int,
 		a := g.local()
 		b := g.local()
 		g.w("if ")
-		g.exprList(n.ExprList, false)
+		g.exprList(n.ExprList, false, true)
 		g.w(" == 0 { goto _%d }\n", a)
 		g.stmt(n.Stmt, cases, brk, cont, main, value)
 		g.w("\ngoto _%d\n", b)
@@ -796,7 +796,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 				// A: <- continue, break
 				a := -g.local()
 				g.stmt(n.Stmt, cases, &a, &a, main, value)
-				g.exprList(e, true)
+				g.exprList(e, true, false)
 				if a > 0 {
 					g.w("\n_%d:", a)
 				}
@@ -804,16 +804,15 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			}
 
 			if e.IsNonZero() {
-				if !n.HasLabels {
-					a := g.local()
+				if !n.UseGotos {
 					b := -g.local()
-					g.w("\n_%d: for {", a)
-					g.stmt(n.Stmt, cases, &b, &a, main, value)
-					g.exprList(e, true)
-					g.w("}")
+					g.w("\nfor {")
+					g.stmt(n.Stmt, cases, nil, &b, main, value)
 					if b > 0 {
 						g.w("\n_%d:", b)
 					}
+					g.exprList(e, true, false)
+					g.w("}")
 					break
 				}
 
@@ -825,7 +824,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 				b := -g.local()
 				g.w("\n_%d:", a)
 				g.stmt(n.Stmt, cases, &b, &a, main, value)
-				g.exprList(e, true)
+				g.exprList(e, true, false)
 				g.w("\ngoto _%d\n", a)
 				if b > 0 {
 					g.w("\n_%d:", b)
@@ -834,20 +833,16 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			}
 		}
 
-		if !n.HasLabels {
+		if !n.UseGotos {
 			b := -g.local()
-			c := -g.local()
 			g.w("\nfor {")
-			g.stmt(n.Stmt, cases, &c, &b, main, value)
+			g.stmt(n.Stmt, cases, nil, &b, main, value)
 			if b > 0 {
 				g.w("\n_%d:", b)
 			}
 			g.w("\nif ")
-			g.exprList(n.ExprList, false)
+			g.exprList(n.ExprList, false, true)
 			g.w(" == 0 { break }}")
-			if c > 0 {
-				g.w("\n_%d:", c)
-			}
 			break
 		}
 
@@ -865,17 +860,34 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			g.w("\n_%d:", b)
 		}
 		g.w("\nif ")
-		g.exprList(n.ExprList, false)
+		g.exprList(n.ExprList, false, true)
 		g.w(" != 0 { goto _%d }\n", a)
 		if c > 0 {
 			g.w("\n_%d:", c)
 		}
 	case cc.IterationStmtForDecl: // "for" '(' Declaration ExprListOpt ';' ExprListOpt ')' Stmt
 		if n.ExprListOpt == nil || n.ExprListOpt.ExprList.IsNonZero() && g.voidCanIgnoreExprList(n.ExprListOpt.ExprList) {
-			//TODO if !n.HasLabels {
-			//TODO 	todo("", g.position(n))
-			//TODO 	break
-			//TODO }
+			if !n.UseGotos {
+				g.w("\nfor ")
+				g.declaration(n.Declaration, false)
+				g.w(";")
+				g.w(";")
+				if n.ExprListOpt2 != nil {
+					g.exprListOpt(n.ExprListOpt2, isSingleExpression(n.ExprListOpt2.ExprList), true)
+				}
+				g.w("{")
+				b := -g.local()
+				c := -g.local()
+				g.stmt(n.Stmt, cases, &c, &b, main, value)
+				if b > 0 {
+					g.w("\n_%d:", b)
+				}
+				g.w("}")
+				if c > 0 {
+					g.w("\n_%d:", c)
+				}
+				break
+			}
 
 			// Declaration
 			// A:
@@ -897,7 +909,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			if b > 0 {
 				g.w("\n_%d:", b)
 			}
-			g.exprListOpt(n.ExprListOpt2, true)
+			g.exprListOpt(n.ExprListOpt2, true, true)
 			g.w("\ngoto _%d\n", a)
 			if c > 0 {
 				g.w("\n_%d:", c)
@@ -906,10 +918,26 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 		}
 
 		if n.ExprListOpt != nil && n.ExprListOpt.ExprList.IsZero() && g.voidCanIgnoreExprList(n.ExprListOpt.ExprList) {
-			//TODO if !n.HasLabels {
-			//TODO 	todo("", g.position(n))
-			//TODO 	break
-			//TODO }
+			if !n.UseGotos {
+				g.w("\nfor ")
+				g.declaration(n.Declaration, true)
+				g.w("; false ;")
+				if n.ExprListOpt2 != nil {
+					g.exprListOpt(n.ExprListOpt2, isSingleExpression(n.ExprListOpt2.ExprList), true)
+				}
+				g.w("{")
+				a := g.local()
+				b := -g.local()
+				g.stmt(n.Stmt, cases, &a, &b, main, value)
+				if b > 0 {
+					g.w("\n_%d:", b)
+				}
+				g.w("\n_%d:", a)
+				if a > 0 {
+					g.w("\n_%d:", a)
+				}
+				break
+			}
 
 			// Declaration
 			// goto A
@@ -929,32 +957,30 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			if b > 0 {
 				g.w("\n_%d:", b)
 			}
-			g.exprListOpt(n.ExprListOpt2, true)
+			g.exprListOpt(n.ExprListOpt2, true, true)
 			g.w("\n_%d:", a)
 			return
 		}
 
-		if !n.HasLabels {
+		if !n.UseGotos {
 			g.w("\nfor ")
 			g.declaration(n.Declaration, true)
 			g.w(";")
 			b := -g.local()
-			c := -g.local()
 			if n.ExprListOpt != nil {
-				g.exprList(n.ExprListOpt.ExprList, false)
+				g.exprList(n.ExprListOpt.ExprList, false, false)
 				g.w(" != 0")
 			}
 			g.w(";")
-			g.exprListOpt(n.ExprListOpt2, false)
+			if n.ExprListOpt2 != nil {
+				g.exprListOpt(n.ExprListOpt2, isSingleExpression(n.ExprListOpt2.ExprList), true)
+			}
 			g.w("{")
-			g.stmt(n.Stmt, cases, &c, &b, main, value)
+			g.stmt(n.Stmt, cases, nil, &b, main, value)
 			if b > 0 {
 				g.w("\n_%d:", b)
 			}
 			g.w("}")
-			if c > 0 {
-				g.w("\n_%d:", c)
-			}
 			break
 		}
 
@@ -974,7 +1000,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 		g.w("\n_%d:", a)
 		if n.ExprListOpt != nil {
 			g.w("if ")
-			g.exprList(n.ExprListOpt.ExprList, false)
+			g.exprList(n.ExprListOpt.ExprList, false, false)
 			c = -c
 			g.w(" == 0 { goto _%d }\n", c)
 		}
@@ -985,13 +1011,36 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 		if b > 0 {
 			g.w("\n_%d:", b)
 		}
-		g.exprListOpt(n.ExprListOpt2, true)
+		g.exprListOpt(n.ExprListOpt2, true, false)
 		g.w("\ngoto _%d\n", a)
 		if c > 0 {
 			g.w("\n_%d:", c)
 		}
 	case cc.IterationStmtFor: // "for" '(' ExprListOpt ';' ExprListOpt ';' ExprListOpt ')' Stmt
 		if n.ExprListOpt2 == nil || n.ExprListOpt2.ExprList.IsNonZero() && g.voidCanIgnoreExprList(n.ExprListOpt2.ExprList) {
+			if !n.UseGotos {
+				g.w("\nfor ")
+				if n.ExprListOpt != nil {
+					g.exprListOpt(n.ExprListOpt, isSingleExpression(n.ExprListOpt.ExprList), true)
+				}
+				g.w(";;")
+				if n.ExprListOpt3 != nil {
+					g.exprListOpt(n.ExprListOpt3, isSingleExpression(n.ExprListOpt3.ExprList), true)
+				}
+				g.w(" {")
+				b := -g.local()
+				c := -g.local()
+				g.stmt(n.Stmt, cases, &c, &b, main, value)
+				if b > 0 {
+					g.w("\n_%d:", b)
+				}
+				g.w("}")
+				if c > 0 {
+					g.w("\n_%d:", c)
+				}
+				break
+			}
+
 			// ExprListOpt
 			// A:
 			// Stmt
@@ -1000,7 +1049,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			// goto A
 			// C: <- break
 			g.w("\n")
-			g.exprListOpt(n.ExprListOpt, true)
+			g.exprListOpt(n.ExprListOpt, true, false)
 			a := g.local()
 			b := -g.local()
 			c := -g.local()
@@ -1012,7 +1061,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			if b > 0 {
 				g.w("\n_%d:", b)
 			}
-			g.exprListOpt(n.ExprListOpt3, true)
+			g.exprListOpt(n.ExprListOpt3, true, false)
 			g.w("\ngoto _%d\n", a)
 			if c > 0 {
 				g.w("\n_%d:", c)
@@ -1021,6 +1070,29 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 		}
 
 		if n.ExprListOpt2 != nil && n.ExprListOpt2.ExprList.IsZero() && g.voidCanIgnoreExprList(n.ExprListOpt2.ExprList) {
+			if !n.UseGotos {
+				g.w("\nfor ")
+				if n.ExprListOpt != nil {
+					g.exprListOpt(n.ExprListOpt, isSingleExpression(n.ExprListOpt.ExprList), true)
+				}
+				g.w("; false ;")
+				if n.ExprListOpt3 != nil {
+					g.exprListOpt(n.ExprListOpt3, isSingleExpression(n.ExprListOpt3.ExprList), true)
+				}
+				g.w(" {")
+				b := -g.local()
+				c := -g.local()
+				g.stmt(n.Stmt, cases, &c, &b, main, value)
+				if b > 0 {
+					g.w("\n_%d:", b)
+				}
+				g.w("}")
+				if c > 0 {
+					g.w("\n_%d:", c)
+				}
+				break
+			}
+
 			// ExprListOpt
 			// A:
 			// goto C
@@ -1030,7 +1102,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			// goto A
 			// C: <- break
 			g.w("\n")
-			g.exprListOpt(n.ExprListOpt, true)
+			g.exprListOpt(n.ExprListOpt, true, false)
 			a := g.local()
 			b := -g.local()
 			c := -g.local()
@@ -1043,12 +1115,36 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 			if b > 0 {
 				g.w("\n_%d:", b)
 			}
-			g.exprListOpt(n.ExprListOpt3, true)
+			g.exprListOpt(n.ExprListOpt3, true, false)
 			g.w("\ngoto _%d\n", a)
 			if c > 0 {
 				g.w("\n_%d:", c)
 			}
 			return
+		}
+
+		if !n.UseGotos {
+			g.w("\nfor ")
+			if n.ExprListOpt != nil {
+				g.exprListOpt(n.ExprListOpt, isSingleExpression(n.ExprListOpt.ExprList), true)
+			}
+			g.w(";")
+			if n.ExprListOpt2 != nil {
+				g.exprList(n.ExprListOpt2.ExprList, false, true)
+				g.w(" != 0")
+			}
+			g.w(";")
+			if n.ExprListOpt3 != nil {
+				g.exprListOpt(n.ExprListOpt3, isSingleExpression(n.ExprListOpt3.ExprList), true)
+			}
+			g.w(" {")
+			b := -g.local()
+			g.stmt(n.Stmt, cases, nil, &b, main, value)
+			if b > 0 {
+				g.w("\n_%d:", b)
+			}
+			g.w("}")
+			break
 		}
 
 		// ExprListOpt
@@ -1060,14 +1156,14 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 		// goto A
 		// C: <- break
 		g.w("\n")
-		g.exprListOpt(n.ExprListOpt, true)
+		g.exprListOpt(n.ExprListOpt, true, false)
 		a := g.local()
 		b := -g.local()
 		c := -g.local()
 		g.w("\n_%d:", a)
 		if n.ExprListOpt2 != nil {
 			g.w("if ")
-			g.exprList(n.ExprListOpt2.ExprList, false)
+			g.exprList(n.ExprListOpt2.ExprList, false, true)
 			c = -c
 			g.w(" == 0 { goto _%d }\n", c)
 		}
@@ -1078,18 +1174,49 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 		if b > 0 {
 			g.w("\n_%d:", b)
 		}
-		g.exprListOpt(n.ExprListOpt3, true)
+		g.exprListOpt(n.ExprListOpt3, true, false)
 		g.w("\ngoto _%d\n", a)
 		if c > 0 {
 			g.w("\n_%d:", c)
 		}
 	case cc.IterationStmtWhile: // "while" '(' ExprList ')' Stmt
 		if e := n.ExprList; g.voidCanIgnoreExprList(e) {
-			//TODO if e.IsZero() {
-			//TODO 	return
-			//TODO }
+			if e.IsZero() {
+				if !n.UseGotos {
+					a := -g.local()
+					b := -g.local()
+					g.w("\nfor false {")
+					g.stmt(n.Stmt, cases, &b, &a, main, value)
+					if a > 0 {
+						g.w("\n_%d:", a)
+					}
+					g.w("}")
+					if b > 0 {
+						g.w("\n_%d:", b)
+					}
+					break
+				}
+
+				//TODO todo("", g.position(n))
+				//TODO break
+			}
 
 			if e.IsNonZero() {
+				if !n.UseGotos {
+					a := -g.local()
+					b := -g.local()
+					g.w("\nfor {")
+					g.stmt(n.Stmt, cases, &b, &a, main, value)
+					if a > 0 {
+						g.w("\n_%d:", a)
+					}
+					g.w("}")
+					if b > 0 {
+						g.w("\n_%d:", b)
+					}
+					break
+				}
+
 				// A:
 				// exprList
 				// stmt
@@ -1098,7 +1225,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 				a := g.local()
 				b := -g.local()
 				g.w("\n_%d:", a)
-				g.exprList(n.ExprList, true)
+				g.exprList(n.ExprList, true, false)
 				g.stmt(n.Stmt, cases, &b, &a, main, value)
 				g.w("\ngoto _%d\n", a)
 				if b > 0 {
@@ -1106,6 +1233,23 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 				}
 				return
 			}
+		}
+
+		if !n.UseGotos {
+			a := -g.local()
+			b := -g.local()
+			g.w("\nfor ")
+			g.exprList(n.ExprList, false, true)
+			g.w(" != 0 {")
+			g.stmt(n.Stmt, cases, &b, &a, main, value)
+			if a > 0 {
+				g.w("\n_%d:", a)
+			}
+			g.w("}")
+			if b > 0 {
+				g.w("\n_%d:", b)
+			}
+			break
 		}
 
 		// A:
@@ -1116,7 +1260,7 @@ func (g *ngen) iterationStmt(n *cc.IterationStmt, cases map[*cc.LabeledStmt]int,
 		a := g.local()
 		b := g.local()
 		g.w("\n_%d:\nif ", a)
-		g.exprList(n.ExprList, false)
+		g.exprList(n.ExprList, false, true)
 		g.w(" == 0 { goto _%d }\n", b)
 		g.stmt(n.Stmt, cases, &b, &a, main, value)
 		g.w("\ngoto _%d\n\n_%d:", a, b)
@@ -1212,7 +1356,7 @@ func (g *ngen) jumpStmt(n *cc.JumpStmt, brk, cont *int, main bool) (returned boo
 				case isSingleExpression(o.ExprList) && o.ExprList.Expr.Case == cc.ExprCond:
 					todo("", g.position(n))
 				default:
-					g.exprList(o.ExprList, true)
+					g.exprList(o.ExprList, true, false)
 				}
 			default:
 				switch {
@@ -1244,6 +1388,11 @@ func (g *ngen) jumpStmt(n *cc.JumpStmt, brk, cont *int, main bool) (returned boo
 		}
 		returned = true
 	case cc.JumpStmtBreak: // "break" ';'
+		if brk == nil {
+			g.w("\nbreak")
+			break
+		}
+
 		if *brk < 0 {
 			*brk = -*brk // Signal used.
 		}
@@ -1278,6 +1427,6 @@ func (g *ngen) exprStmt(n *cc.ExprStmt, value bool) {
 		if value {
 			g.w("return ")
 		}
-		g.exprList(o.ExprList, !value)
+		g.exprList(o.ExprList, !value, false)
 	}
 }

@@ -24,12 +24,12 @@ func (g *gen) exprListOpt(n *cc.ExprListOpt, void bool) {
 	g.exprList(n.ExprList, void)
 }
 
-func (g *ngen) exprListOpt(n *cc.ExprListOpt, void bool) {
+func (g *ngen) exprListOpt(n *cc.ExprListOpt, void, noSemi bool) {
 	if n == nil {
 		return
 	}
 
-	g.exprList(n.ExprList, void)
+	g.exprList(n.ExprList, void, noSemi)
 }
 
 func (g *gen) exprList(n *cc.ExprList, void bool) {
@@ -56,12 +56,28 @@ func (g *gen) exprList(n *cc.ExprList, void bool) {
 	}
 }
 
-func (g *ngen) exprList(n *cc.ExprList, void bool) {
+func (g *ngen) exprList(n *cc.ExprList, void, noSemi bool) {
 	switch l := g.pexprList(n); {
 	case void:
-		for _, v := range l {
-			g.void(v)
-			g.w(";")
+		switch {
+		case len(l) == 1 && noSemi:
+			switch {
+			case g.isAritheticAsop(l[0]):
+				g.w(" func() {")
+				g.void(l[0])
+				g.w(" }()")
+			default:
+				g.void(l[0])
+			}
+		default:
+			for i, v := range l {
+				g.void(v)
+				if i == len(l)-1 && noSemi {
+					continue
+				}
+
+				g.w(";")
+			}
 		}
 	default:
 		switch {
@@ -77,6 +93,26 @@ func (g *ngen) exprList(n *cc.ExprList, void bool) {
 			g.value(l[len(l)-1], false)
 			g.w("}()")
 		}
+	}
+}
+
+func (g *ngen) isAritheticAsop(n *cc.Expr) bool {
+	switch n.Case {
+	case
+		cc.ExprAddAssign,
+		cc.ExprAndAssign,
+		cc.ExprDivAssign,
+		cc.ExprLshAssign,
+		cc.ExprModAssign,
+		cc.ExprMulAssign,
+		cc.ExprOrAssign,
+		cc.ExprRshAssign,
+		cc.ExprSubAssign,
+		cc.ExprXorAssign:
+
+		return true
+	default:
+		return false
 	}
 }
 
@@ -568,7 +604,7 @@ func (g *ngen) void(n *cc.Expr) {
 			if !g.voidCanIgnore(n.Expr) {
 				g.void(n.Expr)
 			}
-			g.exprList(n.ExprList, true)
+			g.exprList(n.ExprList, true, false)
 		default:
 			// if expr != 0 {
 			//	exprList
@@ -578,7 +614,7 @@ func (g *ngen) void(n *cc.Expr) {
 			g.w("if ")
 			g.value(n.Expr, false)
 			g.w(" != 0 {")
-			g.exprList(n.ExprList, true)
+			g.exprList(n.ExprList, true, false)
 			g.w("} else {")
 			g.void(n.Expr2)
 			g.w("}")
@@ -626,7 +662,7 @@ func (g *ngen) void(n *cc.Expr) {
 		if !g.voidCanIgnoreExprList(n.ExprList) {
 			g.w("\n")
 		}
-		g.exprList(n.ExprList, true)
+		g.exprList(n.ExprList, true, false)
 	case // Unary
 		cc.ExprAddrof,     // '&' Expr
 		cc.ExprCpl,        // '~' Expr
@@ -1554,7 +1590,7 @@ func (g *ngen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 				todo("%v: %v", g.position(n), it)
 			default:
 				g.w("*(*%s)(unsafe.Pointer(", g.typ(n.Operand.Type))
-				g.exprList(n.ExprList, false)
+				g.exprList(n.ExprList, false, true)
 				g.indexOff2(n.Expr, it)
 				g.w("))")
 			}
@@ -1680,7 +1716,7 @@ func (g *ngen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		case n.Expr.IsZero() && g.voidCanIgnore(n.Expr):
 			g.value0(n.Expr2, false, exprCall)
 		case n.Expr.IsNonZero() && g.voidCanIgnore(n.Expr):
-			g.exprList(n.ExprList, false)
+			g.exprList(n.ExprList, false, true)
 		default:
 			g.w(" func() %s { if ", g.typ(t))
 			g.value0(n.Expr, false, exprCall)
@@ -1869,6 +1905,17 @@ func (g *ngen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		}
 	case cc.ExprSubAssign: // Expr "-=" Expr
 		switch x := cc.UnderlyingType(n.Expr.Operand.Type).(type) {
+		case *cc.PointerType:
+			g.w("%sPreinc(", g.crtPrefix)
+			g.lvalue(n.Expr)
+			switch y := n.Expr2.Operand.Value.(type) {
+			case *ir.Int64Value:
+				g.w(", uintptr(%d", uint64(-g.model.Sizeof(x.Item)*y.Value))
+			default:
+				g.w(", %d*uintptr(", g.model.Sizeof(x.Item))
+				g.value0(n.Expr2, false, exprCall)
+			}
+			g.w("))")
 		case cc.TypeKind:
 			if x.IsArithmeticType() {
 				switch op := n.Expr.Operand; {
@@ -2046,6 +2093,26 @@ func (g *ngen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		default:
 			todo("%v: %T", g.position(n), x)
 		}
+	case cc.ExprLshAssign: // Expr "<<=" Expr
+		switch x := cc.UnderlyingType(n.Expr.Operand.Type).(type) {
+		case cc.TypeKind:
+			if x.IsIntegerType() {
+				switch op := n.Expr.Operand; {
+				case op.Bits() != 0:
+					todo("", g.position(n))
+				default:
+					g.w("%s(", g.registerHelper("lsh%d", ">>", g.typ(n.Expr.Operand.Type), g.typ(x)))
+					g.lvalue(n.Expr)
+					g.w(", uint(")
+					g.value(n.Expr2, false)
+					g.w(")%%%d)", g.shiftMod(x))
+				}
+				return
+			}
+			todo("", g.position(n), x)
+		default:
+			todo("%v: %T", g.position(n), x)
+		}
 	case cc.ExprRshAssign: // Expr ">>=" Expr
 		switch x := cc.UnderlyingType(n.Expr.Operand.Type).(type) {
 		case cc.TypeKind:
@@ -2187,7 +2254,7 @@ func (g *ngen) indexOff(n *cc.ExprList, it cc.Type) { // p[42]
 	default:
 		//fmt.Printf("%v:\n", g.position(n)) //TODO- DBG
 		g.w(" + %d*uintptr(", g.model.Sizeof(it))
-		g.exprList(n, false)
+		g.exprList(n, false, true)
 		g.w(")")
 	}
 }

@@ -1002,6 +1002,9 @@ func (l *Linker) genHelper(nm string, a []string) {
 	return %[2]s(w)<<(%[6]s-%[5]s)>>(%[6]s-%[5]s)
 }`, a[1], a[2], a[3], a[4], a[5], a[6])
 
+	case "lsh%d":
+		// eg.: [0: "rsh%d" 1: op ">>" 2: lhs type "uint32" 3: promotion type]
+		l.w("(p *%[2]s, v uint) (r %[2]s) { r = %[2]s(%[3]s(*p) << v); *p = r; return r }", a[1], a[2], a[3])
 	case "rsh%d":
 		// eg.: [0: "rsh%d" 1: op ">>" 2: lhs type "uint32" 3: promotion type]
 		l.w("(p *%[2]s, v uint) (r %[2]s) { r = %[2]s(%[3]s(*p) >> v); *p = r; return r }", a[1], a[2], a[3])
