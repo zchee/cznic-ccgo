@@ -2582,8 +2582,13 @@ func TestCSmith(t *testing.T) {
 		t.Logf("unsupported OS")
 		return
 	}
-	if _, err := os.Stat(filepath.Join(inc, "csmith.h")); err != nil {
+again:
+	if _, err := os.Stat(filepath.Join(filepath.FromSlash(inc), "csmith.h")); err != nil {
 		if os.IsNotExist(err) {
+			if inc == "/usr/include" {
+				inc += "/csmith"
+				goto again
+			}
 			t.Logf("%s not found: skipping test", inc)
 			return
 		}

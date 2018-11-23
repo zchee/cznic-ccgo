@@ -2,6 +2,7 @@ set -e
 rm -f log-ccgo
 make clean || true
 make distclean || true
+go install -v modernc.org/ccgo/v2/ccgo
 ./configure CC=ccgo \
 	CFLAGS='--ccgo-full-paths --ccgo-struct-checks --ccgo-use-import exec.ErrNotFound,os.DevNull -D_GNU_SOURCE' \
 	LDFLAGS='--warn-unresolved-libs --ccgo-go --ccgo-import os,os/exec'

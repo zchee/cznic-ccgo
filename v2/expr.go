@@ -1910,7 +1910,7 @@ func (g *ngen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 			g.lvalue(n.Expr)
 			switch y := n.Expr2.Operand.Value.(type) {
 			case *ir.Int64Value:
-				g.w(", uintptr(%d", uint64(-g.model.Sizeof(x.Item)*y.Value))
+				g.w(", uintptr(%d", g.int64ToUintptr(-g.model.Sizeof(x.Item)*y.Value))
 			default:
 				g.w(", %d*uintptr(", g.model.Sizeof(x.Item))
 				g.value0(n.Expr2, false, exprCall)
@@ -3814,6 +3814,15 @@ func (g *ngen) convertEscaped(n *cc.Expr, t cc.Type) {
 			g.convert(l[len(l)-1], t)
 			g.w("}()")
 		}
+	case cc.ExprCompLit: // '(' TypeName ')' '{' InitializerList CommaOpt '}
+		if d := n.Declarator; d != nil {
+			g.w("func() uintptr { *(*%s)(unsafe.Pointer(%s)) = ", g.typ(d.Type), g.mangleDeclarator(d))
+			g.literal(d.Type, d.Initializer)
+			g.w("; return %s }()", g.mangleDeclarator(d))
+			break
+		}
+
+		todo("%v: %v, op %v, d %v, t %v, %q %v:", g.position(n), n.Case, n.Operand.Type, d.Type, t, dict.S(d.Name()), g.position(d))
 	default:
 		todo("%v: %v, op %v, d %v, t %v, %q %v:", g.position(n), n.Case, n.Operand.Type, d.Type, t, dict.S(d.Name()), g.position(d))
 	}

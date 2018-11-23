@@ -13,8 +13,6 @@
 
 #include "tclInt.h"
 
-void __log(char*, ...);
-
 #ifdef USE_VFORK
 #define fork vfork
 #endif
@@ -678,8 +676,6 @@ TclpCreateProcess(
 	Tcl_SetObjResult(interp, Tcl_ObjPrintf(
 		"couldn't execute \"%.150s\": %s", argv[0], Tcl_PosixError(interp)));
     }
-
-    __log("%s:%i.%s: pid %i(0x%x) inputFile %i, outputFile %i, errorFile %i", __FILE__, __LINE__, __func__, pid, (unsigned)pid, inputFile, outputFile, errorFile);
 
     /*
      * Free the mem we used for the fork

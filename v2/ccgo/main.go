@@ -591,8 +591,6 @@ compilation terminated`, c.arg0)
 		sysPaths = []string{
 			filepath.Join(libc, "arch", libcArch),
 			filepath.Join(libc, "arch", "generic"),
-			//TODO filepath.Join(libc, "obj", "src", "internal"),
-			//TODO filepath.Join(libc, "src", "internal"),
 			filepath.Join(libc, "obj", "include"),
 			filepath.Join(libc, "include"),
 		}
@@ -1070,6 +1068,10 @@ func (c *config) compileSource(out, in string, src cc.Source) (err error) {
 	for _, v := range c.D {
 		defs = append(defs, fmt.Sprintf("#define %s", v))
 	}
+	undefs := []string{`
+#undef __PIC__
+#undef __pic__
+`}
 
 	tweaks := &cc.Tweaks{
 		// TrackExpand:   func(s string) { fmt.Print(s) },
@@ -1092,6 +1094,7 @@ func (c *config) compileSource(out, in string, src cc.Source) (err error) {
 	}
 
 	sources = append(sources, builtin)
+	sources = append(sources, cc.NewStringSource("<undefines>", strings.Join(undefs, "\n")))
 
 	if c.E {
 		tweaks.PreprocessOnly = true

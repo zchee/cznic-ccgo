@@ -298,13 +298,13 @@ func (g *gen) blockItem(n *cc.BlockItem, cases map[*cc.LabeledStmt]int, brk, con
 }
 
 func (g *ngen) blockItem(n *cc.BlockItem, cases map[*cc.LabeledStmt]int, brk, cont *int, main, value bool) (returned bool) {
-	if g.tweaks.Watch {
-		g.w("\ncrt.Watch(tls)")
-	}
 	switch n.Case {
 	case cc.BlockItemDecl: // Declaration
 		g.declaration(n.Declaration, false)
 	case cc.BlockItemStmt: // Stmt
+		if g.tweaks.Watch {
+			g.w("\n%sWatch(tls)", g.crtPrefix)
+		}
 		returned = g.stmt(n.Stmt, cases, brk, cont, main, value)
 	default:
 		todo("", g.position(n), n.Case)

@@ -147,7 +147,7 @@ func newArReader(f *os.File) (*arReader, error) {
 func (r *arReader) Next() bool {
 	if r.odd {
 		var b [1]byte
-		if n, err := r.r.Read(b[:]); n != 1 {
+		if n, err := io.ReadFull(r.r, b[:]); n != 1 {
 			if err == nil {
 				err = fmt.Errorf("internal error")
 			}
@@ -196,7 +196,7 @@ func (r *arReader) Read(b []byte) (int, error) {
 	if int64(rq) > r.rem {
 		rq = int(r.rem)
 	}
-	n, err := r.r.Read(b[:rq])
+	n, err := io.ReadFull(r.r, b[:rq])
 	r.rem -= int64(n)
 	if n == 0 && err == nil {
 		err = io.EOF
