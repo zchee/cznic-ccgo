@@ -2,134 +2,47 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// linux_386
+//	go version go1.11.2 linux/386
 //
-//	TCC0	cc 51 ccgo 51 build 51 run 51 ok 51
-//	Other0	cc 18 ccgo 18 build 18 run 18 ok 18
-//	GCC0	cc 1112 ccgo 1093 build 1089 run 1089 ok 1089
-//	Shell0	cc 1 ccgo 1 build 1 run 1 ok 1
-//	TCL0	tclsqlite build ok
-//	--- FAIL: TestTCL0 (36.48s)
-//		all_test.go:1586:
-//			Test cases:        0
-//			Pass:              0 (NaN%)
-//			Fail:              0 (NaN%)
-//		all_test.go:1594:
-//			Test binary exit error: exit status 2
-//			Last completed test file: ""
-//			Last passed test: ""
-//			Last line written to stdout: ""
-//			Blacklisted test files: 107
-//			btreefault.test
-//			cffault.test
-//			collate1.test
-//			collate2.test
-//			collate3.test
-//			collate4.test
-//			collate5.test
-//			collate6.test
-//			collate9.test
-//			corruptC.test
-//			crash.test
-//			crash2.test
-//			crash3.test
-//			crash4.test
-//			crash6.test
-//			crash7.test
-//			date.test
-//			e_createtable.test
-//			e_delete.test
-//			e_insert.test
-//			e_reindex.test
-//			e_select.test
-//			e_update.test
-//			e_walauto.test
-//			exists.test
-//			func4.test
-//			fuzz.test
-//			fuzzerfault.test
-//			ieee754.test
-//			incrcorrupt.test
-//			incrvacuum_ioerr.test
-//			ioerr3.test
-//			journal3.test
-//			lock.test
-//			lock4.test
-//			lock5.test
-//			malloc.test
-//			minmax.test
-//			misc1.test
-//			misc3.test
-//			misc7.test
-//			mjournal.test
-//			mmap1.test
-//			mmap4.test
-//			multiplex2.test
-//			nan.test
-//			pager1.test
-//			pager4.test
-//			pagerfault.test
-//			pagerfault2.test
-//			pagerfault3.test
-//			pragma.test
-//			printf.test
-//			quota2.test
-//			rbu.test
-//			reindex.test
-//			rollbackfault.test
-//			rowallock.test
-//			savepoint.test
-//			savepoint4.test
-//			savepointfault.test
-//			schema3.test
-//			select9.test
-//			shared2.test
-//			shared9.test
-//			sharedA.test
-//			sort2.test
-//			sort3.test
-//			sort4.test
-//			sortfault.test
-//			speed4.test
-//			speed4p.test
-//			statfault.test
-//			superlock.test
-//			symlink.test
-//			syscall.test
-//			tempfault.test
-//			thread001.test
-//			thread002.test
-//			thread003.test
-//			thread004.test
-//			thread005.test
-//			thread1.test
-//			thread2.test
-//			tkt-5d863f876e.test
-//			tkt-fc62af4523.test
-//			tkt3838.test
-//			tkt3997.test
-//			trans.test
-//			unionvtabfault.test
-//			unixexcl.test
-//			vacuum2.test
-//			vtabH.test
-//			wal.test
-//			wal2.test
-//			wal3.test
-//			wal4.test
-//			wal5.test
-//			walcrash.test
-//			walcrash2.test
-//			walcrash4.test
-//			walro.test
-//			walslow.test
-//			walthread.test
-//			where.test
-//			whereD.test
-//			writecrash.test
-//	FAIL
-//	exit status 1
-//	FAIL	modernc.org/ccgo/v2	481.539s
+//	Sa Nov 24 21:05:15 CET 2018
+//	TCC	cc 51 ccgo 51 build 51 run 51 ok 51 n 51
+//	Other	cc 35 ccgo 35 build 35 run 35 ok 35 n 35
+//	GCC Compat	cc 7 ccgo 7 build 7 run 7 ok 7 n 7
+//	GCC Compile	cc 993 ccgo 993 build 993 ok 993 n 1708
+//	GCC Execute	cc 1097 ccgo 1097 build 1097 run 1097 ok 1097 n 1413
+//	Shell	cc 1 ccgo 1 build 1 run 1 ok 1 n 1
+//	cc 1 ccgo 1 build 1 run 1 ok 1 (100.00%) csmith 1 (1.772384862s) -s 1322542678
+//	cc 2 ccgo 2 build 2 run 2 ok 2 (100.00%) csmith 2 (9.220829194s) -s 1322542678
+//	cc 3 ccgo 3 build 3 run 3 ok 3 (100.00%) csmith 3 (9.872009241s) -s 1901462611
+//	cc 4 ccgo 4 build 4 run 4 ok 4 (100.00%) csmith 4 (11.977540362s) -s 2829621573
+//	cc 5 ccgo 5 build 5 run 5 ok 5 (100.00%) csmith 5 (12.59954287s) -s 576413934
+//	cc 6 ccgo 6 build 6 run 6 ok 6 (100.00%) csmith 6 (14.668189393s) -s 151038493
+//	cc 7 ccgo 7 build 7 run 7 ok 7 (100.00%) csmith 7 (16.691730411s)
+//	cc 8 ccgo 8 build 8 run 8 ok 8 (100.00%) csmith 8 (24.674610885s)
+//	cc 9 ccgo 9 build 9 run 9 ok 9 (100.00%) csmith 9 (32.781642971s)
+//	cc 10 ccgo 10 build 10 run 10 ok 10 (100.00%) csmith 10 (33.384791624s)
+//	cc 11 ccgo 11 build 11 run 11 ok 11 (100.00%) csmith 11 (34.611252984s)
+//	cc 12 ccgo 12 build 12 run 12 ok 12 (100.00%) csmith 12 (35.559574894s)
+//	cc 13 ccgo 13 build 13 run 13 ok 13 (100.00%) csmith 13 (36.175262857s)
+//	cc 14 ccgo 14 build 14 run 14 ok 14 (100.00%) csmith 14 (36.794166036s)
+//	cc 15 ccgo 15 build 15 run 15 ok 15 (100.00%) csmith 15 (37.428945143s)
+//	cc 16 ccgo 16 build 16 run 16 ok 16 (100.00%) csmith 16 (38.434621417s)
+//	cc 17 ccgo 17 build 17 run 17 ok 17 (100.00%) csmith 17 (39.66653564s)
+//	cc 18 ccgo 18 build 18 run 18 ok 18 (100.00%) csmith 18 (41.348559407s)
+//	cc 19 ccgo 19 build 19 run 19 ok 19 (100.00%) csmith 19 (41.985155382s)
+//	cc 20 ccgo 20 build 20 run 20 ok 20 (100.00%) csmith 20 (44.049111677s)
+//	cc 21 ccgo 21 build 21 run 21 ok 21 (100.00%) csmith 21 (45.385363353s)
+//	cc 22 ccgo 22 build 22 run 22 ok 22 (100.00%) csmith 22 (46.391109708s)
+//	cc 23 ccgo 23 build 23 run 23 ok 23 (100.00%) csmith 23 (47.520247769s)
+//	cc 24 ccgo 24 build 24 run 24 ok 24 (100.00%) csmith 24 (48.818993469s)
+//	cc 25 ccgo 25 build 25 run 25 ok 25 (100.00%) csmith 25 (49.810744952s)
+//	cc 26 ccgo 26 build 26 run 26 ok 26 (100.00%) csmith 26 (51.041599503s)
+//	cc 27 ccgo 27 build 27 run 27 ok 27 (100.00%) csmith 27 (51.949928976s)
+//	cc 28 ccgo 28 build 28 run 28 ok 28 (100.00%) csmith 28 (53.557046737s)
+//	cc 29 ccgo 29 build 29 run 29 ok 29 (100.00%) csmith 29 (54.66904889s)
+//	CSmith0	cc 29 ccgo 29 build 29 run 29 ok 29 (100.00%) csmith 29 (1m1.787559698s)
+//	PASS
+//	ok  	modernc.org/ccgo/v2	824.188s
 
 //	go version go1.11.2 linux/amd64
 //
