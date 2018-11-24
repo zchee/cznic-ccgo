@@ -475,7 +475,7 @@ func (g *ngen) initializer(d *cc.Declarator, inline bool) {
 							Operand: cc.Operand{Type: fp.Declarator.Type},
 						}
 						g.w("\n")
-						g.void(e)
+						g.void(e, false)
 					}
 
 					fld++

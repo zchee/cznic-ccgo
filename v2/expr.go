@@ -64,14 +64,14 @@ func (g *ngen) exprList(n *cc.ExprList, void, noSemi bool) {
 			switch {
 			case g.isAritheticAsop(l[0]):
 				g.w(" func() {")
-				g.void(l[0])
+				g.void(l[0], false)
 				g.w(" }()")
 			default:
-				g.void(l[0])
+				g.void(l[0], noSemi)
 			}
 		default:
 			for i, v := range l {
-				g.void(v)
+				g.void(v, false)
 				if i == len(l)-1 && noSemi {
 					continue
 				}
@@ -86,7 +86,7 @@ func (g *ngen) exprList(n *cc.ExprList, void, noSemi bool) {
 		default:
 			g.w("func() %v {", g.typ(n.Operand.Type))
 			for _, v := range l[:len(l)-1] {
-				g.void(v)
+				g.void(v, false)
 				g.w(";")
 			}
 			g.w("return ")
@@ -139,7 +139,7 @@ func (g *ngen) exprList2(n *cc.ExprList, t cc.Type) {
 	default:
 		g.w("func() %v {", g.typ(t))
 		for _, v := range l[:len(l)-1] {
-			g.void(v)
+			g.void(v, false)
 			g.w(";")
 		}
 		g.w("return ")
@@ -413,7 +413,7 @@ func (g *gen) void(n *cc.Expr) {
 	}
 }
 
-func (g *ngen) void(n *cc.Expr) {
+func (g *ngen) void(n *cc.Expr, noSemi bool) {
 	if n.Case == cc.ExprCast && n.Expr.Case == cc.ExprIdent && !isVaList(n.Expr.Operand.Type) {
 		g.enqueue(n.Expr.Declarator)
 		return
@@ -464,20 +464,49 @@ func (g *ngen) void(n *cc.Expr) {
 			todo("%v: %v args %v params %v variadic %v voidParams %v", g.position(n), n.Case, len(args), len(params), t.Variadic, voidParams)
 		}
 	case cc.ExprAssign: // Expr '=' Expr
-		if n.Expr.Equals(n.Expr2) {
-			return
-		}
-
-		op := n.Expr.Operand
+		lhs := n.Expr
+		rhs := n.Expr2
+		op := lhs.Operand
 		if op.Bits() != 0 {
 			g.assignmentValue(n)
 			return
 		}
 
+	again:
+		switch rhs.Case {
+		case cc.ExprPExprList:
+			if rhs.ExprList.ExprList == nil {
+				rhs = rhs.ExprList.Expr
+				goto again
+			}
+		case cc.ExprCond: // Expr '?' ExprList ':' Expr
+			switch {
+			case
+				noSemi,
+				rhs.Operand.Value != nil && g.voidCanIgnore(rhs),
+				rhs.Expr.IsZero() && g.voidCanIgnore(rhs.Expr),
+				rhs.Expr.IsNonZero() && g.voidCanIgnore(rhs.Expr):
+			default:
+				g.w("if ")
+				g.value0(rhs.Expr, false, false)
+				g.w(" != 0 {")
+				g.w("*")
+				g.lvalue(lhs)
+				g.w(" = ")
+				g.exprList2(rhs.ExprList, op.Type)
+				g.w("} else {")
+				g.w("*")
+				g.lvalue(lhs)
+				g.w(" = ")
+				g.convert(rhs.Expr2, op.Type)
+				g.w("}")
+				return
+			}
+		}
 		g.w("*")
-		g.lvalue(n.Expr)
+		g.lvalue(lhs)
 		g.w(" = ")
-		g.convert(n.Expr2, n.Expr.Operand.Type)
+		g.convert(rhs, op.Type)
 	case
 		cc.ExprPostInc, // Expr "++"
 		cc.ExprPreInc:  // "++" Expr
@@ -581,7 +610,7 @@ func (g *ngen) void(n *cc.Expr) {
 		g.voidArithmeticAsop(n)
 	case cc.ExprPExprList: // '(' ExprList ')'
 		for l := n.ExprList; l != nil; l = l.ExprList {
-			g.void(l.Expr)
+			g.void(l.Expr, false)
 			g.w(";")
 		}
 	case cc.ExprCast: // '(' TypeName ')' Expr
@@ -592,17 +621,17 @@ func (g *ngen) void(n *cc.Expr) {
 			return
 		}
 
-		g.void(n.Expr)
+		g.void(n.Expr, false)
 	case cc.ExprCond: // Expr '?' ExprList ':' Expr
 		switch {
 		case n.Expr.IsZero():
 			if !g.voidCanIgnore(n.Expr) {
-				g.void(n.Expr)
+				g.void(n.Expr, false)
 			}
-			g.void(n.Expr2)
+			g.void(n.Expr2, false)
 		case n.Expr.IsNonZero():
 			if !g.voidCanIgnore(n.Expr) {
-				g.void(n.Expr)
+				g.void(n.Expr, false)
 			}
 			g.exprList(n.ExprList, true, false)
 		default:
@@ -616,7 +645,7 @@ func (g *ngen) void(n *cc.Expr) {
 			g.w(" != 0 {")
 			g.exprList(n.ExprList, true, false)
 			g.w("} else {")
-			g.void(n.Expr2)
+			g.void(n.Expr2, false)
 			g.w("}")
 		}
 	case cc.ExprLAnd: // Expr "&&" Expr
@@ -625,17 +654,17 @@ func (g *ngen) void(n *cc.Expr) {
 			// nop
 		case n.Expr.IsZero():
 			if !g.voidCanIgnore(n.Expr) {
-				g.void(n.Expr)
+				g.void(n.Expr, false)
 			}
 		case n.Expr.IsNonZero() && g.voidCanIgnore(n.Expr):
-			g.void(n.Expr2)
+			g.void(n.Expr2, false)
 		case g.voidCanIgnore(n.Expr2):
-			g.void(n.Expr)
+			g.void(n.Expr, false)
 		default:
 			g.w("if ")
 			g.value(n.Expr, false)
 			g.w(" != 0 {")
-			g.void(n.Expr2)
+			g.void(n.Expr2, false)
 			g.w("}")
 		}
 	case cc.ExprLOr: // Expr "||" Expr
@@ -644,21 +673,21 @@ func (g *ngen) void(n *cc.Expr) {
 			// nop
 		case n.Expr.IsNonZero():
 			if !g.voidCanIgnore(n.Expr) {
-				g.void(n.Expr)
+				g.void(n.Expr, false)
 			}
 		case n.Expr.IsZero() && g.voidCanIgnore(n.Expr):
-			g.void(n.Expr2)
+			g.void(n.Expr2, false)
 		case g.voidCanIgnore(n.Expr2):
-			g.void(n.Expr)
+			g.void(n.Expr, false)
 		default:
 			g.w("if ")
 			g.value(n.Expr, false)
 			g.w(" == 0 {")
-			g.void(n.Expr2)
+			g.void(n.Expr2, false)
 			g.w("}")
 		}
 	case cc.ExprIndex: // Expr '[' ExprList ']'
-		g.void(n.Expr)
+		g.void(n.Expr, false)
 		if !g.voidCanIgnoreExprList(n.ExprList) {
 			g.w("\n")
 		}
@@ -671,7 +700,7 @@ func (g *ngen) void(n *cc.Expr) {
 		cc.ExprUnaryMinus, // '-' Expr
 		cc.ExprUnaryPlus:  // '+' Expr
 
-		g.void(n.Expr)
+		g.void(n.Expr, false)
 	case // Binary
 		cc.ExprAdd, // Expr '+' Expr
 		cc.ExprAnd, // Expr '&' Expr
@@ -690,11 +719,11 @@ func (g *ngen) void(n *cc.Expr) {
 		cc.ExprSub, // Expr '-' Expr
 		cc.ExprXor: // Expr '^' Expr
 
-		g.void(n.Expr)
+		g.void(n.Expr, false)
 		if !g.voidCanIgnore(n.Expr2) {
 			g.w(";")
 		}
-		g.void(n.Expr2)
+		g.void(n.Expr2, false)
 	case cc.ExprStatement: // '(' CompoundStmt ')'
 		g.compoundStmt(n.CompoundStmt, nil, nil, false, nil, nil, nil, nil, false, false)
 	default:
@@ -2023,7 +2052,7 @@ func (g *ngen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		default:
 			g.w("func() %v {", g.typ(n.Operand.Type))
 			for _, v := range l[:len(l)-1] {
-				g.void(v)
+				g.void(v, false)
 				g.w(";")
 			}
 			g.w("return ")
@@ -2176,7 +2205,7 @@ func (g *ngen) value0Escaped(n *cc.Expr, packedField bool, exprCall bool) {
 		default:
 			g.w("func() %v {", g.typ(n.Operand.Type))
 			for _, v := range l[:len(l)-1] {
-				g.void(v)
+				g.void(v, false)
 				g.w(";")
 			}
 			g.w("return ")
@@ -2372,7 +2401,7 @@ func (g *ngen) uintptr(n *cc.Expr, packedField bool) {
 		default:
 			g.w("func() uintptr {")
 			for _, v := range l[:len(l)-1] {
-				g.void(v)
+				g.void(v, false)
 				g.w(";")
 			}
 			g.w("return ")
@@ -3491,7 +3520,7 @@ func (g *ngen) convert(n *cc.Expr, t cc.Type) {
 		default:
 			g.w("func() %v {", g.typ(t))
 			for _, v := range l[:len(l)-1] {
-				g.void(v)
+				g.void(v, false)
 				g.w(";")
 			}
 			g.w("return ")
@@ -3807,7 +3836,7 @@ func (g *ngen) convertEscaped(n *cc.Expr, t cc.Type) {
 		default:
 			g.w("func() %v {", g.typ(t))
 			for _, v := range l[:len(l)-1] {
-				g.void(v)
+				g.void(v, false)
 				g.w(";")
 			}
 			g.w("return ")
