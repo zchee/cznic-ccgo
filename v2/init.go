@@ -174,12 +174,17 @@ func (g *ngen) isConstInitializer(t cc.Type, n *cc.Initializer) bool {
 					}
 				}
 				if d := l.Designation; d != nil {
-					l := d.List
-					if len(l) != 1 {
-						todo("", g.position(n))
+					dl := d.List
+					if len(dl) != 1 {
+						if !g.isConstInitializer(d.Type, l.Initializer) {
+							return false
+						}
+
+						fld++
+						continue
 					}
 
-					fld = l[0]
+					fld = dl[0]
 				}
 
 				if !g.isConstInitializer(layout[fld].Type, l.Initializer) {
@@ -595,12 +600,17 @@ func (g *ngen) initializerHasBitFields(t cc.Type, n *cc.Initializer) bool {
 					}
 				}
 				if d := l.Designation; d != nil {
-					l := d.List
-					if len(l) != 1 {
-						todo("", g.position(n))
+					dl := d.List
+					if len(dl) != 1 {
+						if g.initializerHasBitFields(d.Type, l.Initializer) {
+							return true
+						}
+
+						fld++
+						continue
 					}
 
-					fld = l[0]
+					fld = dl[0]
 				}
 
 				if layout[fld].Bits > 0 {
@@ -957,25 +967,36 @@ func (g *ngen) literal(t cc.Type, n *cc.Initializer) {
 						fld++
 					}
 				}
-				if d := l.Designation; d != nil {
-					l := d.List
-					if len(l) != 1 {
-						todo("", g.position(n))
+				if g.isZeroInitializer(l.Initializer) {
+					fld++
+					continue
+				}
+
+				if de := l.Designation; de != nil {
+					dl := de.List
+					if len(dl) != 1 {
+						d := fields[dl[0]] //TODO mixed index fieds vs layout
+						g.w("F%s: ", dict.S(d.Name))
+						li := *n.InitializerList
+						li.Designation.List = dl[1:]
+						g.literal(d.Type, li.Initializer)
+						g.w(", ")
+						g.initializerListNL(n.InitializerList)
+						fld++
+						continue
 					}
 
-					fld = l[0]
+					fld = dl[0]
 				}
 				switch {
 				case layout[fld].Bits > 0:
 					todo("bit field %v", g.position(n))
 				}
-				if !g.isZeroInitializer(l.Initializer) {
-					d := fields[fld] //TODO mixed index fieds vs layout
-					g.w("F%s: ", dict.S(d.Name))
-					g.literal(d.Type, l.Initializer)
-					g.w(", ")
-					g.initializerListNL(n.InitializerList)
-				}
+				d := fields[fld] //TODO mixed index fieds vs layout
+				g.w("F%s: ", dict.S(d.Name))
+				g.literal(d.Type, l.Initializer)
+				g.w(", ")
+				g.initializerListNL(n.InitializerList)
 				fld++
 			}
 		}
@@ -1003,44 +1024,50 @@ func (g *ngen) literal(t cc.Type, n *cc.Initializer) {
 		}
 
 		if n.Expr != nil {
+			et := n.Expr.Operand.Type
+			if et.Equal(t) {
+				g.value(n.Expr, false)
+				return
+			}
+
+			g.w("*(*%s)(unsafe.Pointer(&struct{%s}{%[2]s(", g.typ(t), g.typ(et))
 			g.value(n.Expr, false)
+			g.w(")}))")
 			return
 		}
 
 		g.w("*(*%s)(unsafe.Pointer(&struct{", g.typ(t))
-		if !g.isZeroInitializer(n) {
-			layout := g.model.Layout(t)
-			var fld int64
-			fields := x.Fields
-			for l := n.InitializerList; l != nil; l = l.InitializerList {
-				if fld < int64(len(layout)) {
-					for !layout[fld].Anonymous && (layout[fld].Bits < 0 || layout[fld].Declarator == nil) {
-						fld++
-					}
+		layout := g.model.Layout(t)
+		var fld int64
+		fields := x.Fields
+		for l := n.InitializerList; l != nil; l = l.InitializerList {
+			if fld < int64(len(layout)) {
+				for !layout[fld].Anonymous && (layout[fld].Bits < 0 || layout[fld].Declarator == nil) {
+					fld++
 				}
-				if d := l.Designation; d != nil {
-					l := d.List
-					if len(l) != 1 {
-						todo("", g.position(n))
-					}
-
-					fld = l[0]
-				}
-				switch {
-				case layout[fld].Bits > 0:
-					todo("bit field %v", g.position(n))
-				}
-
-				d := fields[fld] //TODO mixed index fieds vs layout
-				switch pad := g.model.Sizeof(t) - g.model.Sizeof(d.Type); {
-				case pad == 0:
-					g.w("f %s}{", g.typ(d.Type))
-				default:
-					g.w("f %s; _[%d]byte}{f: ", g.typ(d.Type), pad)
-				}
-				g.literal(d.Type, l.Initializer)
-				fld++
 			}
+			if d := l.Designation; d != nil {
+				l := d.List
+				if len(l) != 1 {
+					todo("", g.position(n))
+				}
+
+				fld = l[0]
+			}
+			switch {
+			case layout[fld].Bits > 0:
+				todo("bit field %v", g.position(n))
+			}
+
+			d := fields[fld] //TODO mixed index fieds vs layout
+			switch pad := g.model.Sizeof(t) - g.model.Sizeof(d.Type); {
+			case pad == 0:
+				g.w("f %s}{", g.typ(d.Type))
+			default:
+				g.w("f %s; _[%d]byte}{f: ", g.typ(d.Type), pad)
+			}
+			g.literal(d.Type, l.Initializer)
+			fld++
 		}
 		g.w("}))")
 	default:
