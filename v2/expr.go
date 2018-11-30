@@ -2164,9 +2164,15 @@ func (g *ngen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		}
 	case cc.ExprUnaryPlus: // '+' Expr
 		g.convert(n.Expr, n.Operand.Type)
+	case cc.ExprSizeofExpr: // "sizeof" Expr
+		switch {
+		case isVLAType(n.Expr.Operand.Type):
+			g.w(" func() int32 { panic(`TODO sizeof VLA`) }()")
+		default:
+			g.constant(n)
+		}
 	case
 		cc.ExprInt,        // INTCONST
-		cc.ExprSizeofExpr, // "sizeof" Expr
 		cc.ExprSizeofType, // "sizeof" '(' TypeName ')'
 		cc.ExprString:     // STRINGLITERAL
 

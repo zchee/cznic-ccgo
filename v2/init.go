@@ -1010,12 +1010,16 @@ func (g *ngen) literal(t cc.Type, n *cc.Initializer) {
 			todo("", g.position(n), n.Case)
 		}
 	case cc.TypeKind:
-		if x.IsArithmeticType() {
-			g.convert(n.Expr, t)
-			return
+		if n.Expr != nil {
+			if x.IsArithmeticType() {
+				g.convert(n.Expr, t)
+				return
+			}
+			todo("", g.position(n), x)
 		}
 
-		todo("", g.position(n), x)
+		//todo("", g.position(n), x)
+		g.w(" func() %s { panic(`TODO`) }()", g.typ(t))
 	case *cc.UnionType:
 		// *(*struct{ X int32 })(unsafe.Pointer(&struct{int32}{int32(1)})),
 		if g.isZeroInitializer(n) {

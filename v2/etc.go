@@ -394,3 +394,10 @@ func (s *lineScanner) Scan() bool {
 		}
 	}
 }
+
+func isVLA(d *cc.Declarator) bool { return isVLAType(d.Type) }
+
+func isVLAType(t cc.Type) bool {
+	x, ok := t.(*cc.ArrayType)
+	return ok && x.IsVLA()
+}

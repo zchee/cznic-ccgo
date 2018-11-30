@@ -171,6 +171,10 @@ func (g *ngen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map
 			continue
 		}
 
+		if isVLA(v) {
+			continue
+		}
+
 		if g.escaped(v) {
 			malloc = roundup(malloc, 16)
 			offv = append(offv, malloc)
@@ -212,6 +216,12 @@ func (g *ngen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map
 				g.needAlloca = true
 				alloca = true
 			case g.escaped(v):
+				if isVLA(v) {
+					g.w("\n\t%s uintptr // *%s", g.mangleDeclarator(v), g.typeComment(v.Type))
+					g.w("\n\t_ = %s", g.mangleDeclarator(v))
+					break
+				}
+
 				g.w("\n\t%s = esc+%d // *%s", g.mangleDeclarator(v), offv[0], g.typeComment(v.Type))
 				g.w("\n\t_ = %s", g.mangleDeclarator(v))
 				offv = offv[1:]

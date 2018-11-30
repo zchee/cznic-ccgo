@@ -994,24 +994,24 @@ func TestGCCCompile(t *testing.T) {
 
 func TestGCCExecute(t *testing.T) {
 	blacklist := map[string]struct{}{
-		"20010904-1.c": {}, // __attribute__((aligned(32)))
-		"20010904-2.c": {}, // __attribute__((aligned(32)))
 		"20021127-1.c": {}, // non standard GCC behavior
 		"20040520-1.c": {}, // Nested func
 		"eeprof-1.c":   {}, // requires profiler instrumentation
-		"pr23467.c":    {}, // __attribute__ ((aligned (8)))
 
+		"20010904-1.c":                 {}, //TODO __attribute__((aligned(32)))
+		"20010904-2.c":                 {}, //TODO __attribute__((aligned(32)))
 		"20101011-1.c":                 {}, //TODO Needs sigfpe on int division by zero
-		"970217-1.c":                   {}, //TODO
+		"970217-1.c":                   {}, //TODO VLA
 		"alias-3.c":                    {}, //TODO attr alias for data
 		"bitfld-1.c":                   {}, //TODO bits, arithmetic precision
 		"bitfld-3.c":                   {}, //TODO bits arithcmetic precision
 		"builtin-types-compatible-p.c": {}, //TODO must track type qualifiers
 		"medce-1.c":                    {}, //TODO Handle dead code
+		"pr23467.c":                    {}, //TODO __attribute__ ((aligned (8)))
 		"pr32244-1.c":                  {}, //TODO bits, arithmetic precision
 		"pr34971.c":                    {}, //TODO bits, arithmetic precision
 		"pr67037.c":                    {}, //TODO void f(); f(); f(42)
-		"pr77767.c":                    {}, //TODO
+		"pr77767.c":                    {}, //TODO VLA
 		"zero-struct-2.c":              {}, //TODO The Go translation makes the last zero items array to have size 1.
 		"zerolen-2.c":                  {}, //TODO The Go translation makes the last zero items array to have size 1.
 	}
