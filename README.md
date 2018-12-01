@@ -1,6 +1,6 @@
 # ccgo
 
-Package ccgo translates [cc](https://modernc.org/cc/tree/master/v2) ASTs to Go. (Work In Progress)
+Package ccgo translates [cc](https://modernc.org/cc/v2) ASTs to Go. (Work In Progress)
 
 Installation
 
