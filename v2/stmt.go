@@ -245,12 +245,10 @@ func (g *ngen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map
 		if malloc != 0 {
 			g.w("\n%sFree(esc)", g.crtPrefix)
 		}
-		if alloca {
-			g.w(`
+		g.w(`
 for _, v := range allocs {
 	%sFree(v)
 }`, g.crtPrefix)
-		}
 		g.w("\n}()")
 	case malloc != 0:
 		g.w("\ndefer %sFree(esc)", g.crtPrefix)
