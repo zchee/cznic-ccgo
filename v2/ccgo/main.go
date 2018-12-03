@@ -922,7 +922,11 @@ func (c *config) linkGo(fn string) (err error) {
 		}
 	}
 	if l.Main {
-		header = fmt.Sprintf(pkgHeader+mainHeader, strings.Join(c.osArgs, " "), "main", crtPrefix, c.goos, c.goarch, imports, useImports)
+		pkgName := "main"
+		if c.pkgName != "" {
+			pkgName = c.pkgName
+		}
+		header = fmt.Sprintf(pkgHeader+mainHeader, strings.Join(c.osArgs, " "), pkgName, crtPrefix, c.goos, c.goarch, imports, useImports)
 	}
 	return nil
 }
