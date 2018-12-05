@@ -2916,13 +2916,13 @@ func (g *ngen) constant(n *cc.Expr) {
 	case *ir.Float32Value:
 		switch {
 		case math.IsInf(float64(x.Value), 1):
-			g.w("math.Inf(1)")
+			g.w("float32(math.Inf(1))")
 			return
 		case math.IsInf(float64(x.Value), -1):
-			g.w("math.Inf(-1)")
+			g.w("float32(math.Inf(-1))")
 			return
 		case math.IsNaN(float64(x.Value)):
-			g.w("math.NaN()")
+			g.w("float32(math.NaN())")
 			return
 		}
 		switch u := cc.UnderlyingType(n.Operand.Type).(type) {

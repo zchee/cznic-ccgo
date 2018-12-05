@@ -1316,7 +1316,12 @@ func (g *ngen) jumpStmt(n *cc.JumpStmt, brk, cont *int, main bool) (returned boo
 					}
 				default:
 					g.w("\nreturn ")
-					g.exprList2(o.ExprList, rt)
+					switch {
+					case isSingleExpression(o.ExprList) && o.ExprList.Operand.Value != nil && o.ExprList.Operand.Type.Equal(rt) && g.voidCanIgnoreExprList(o.ExprList):
+						g.constant(o.ExprList.Expr)
+					default:
+						g.exprList2(o.ExprList, rt)
+					}
 				}
 			}
 		default:
