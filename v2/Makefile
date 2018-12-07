@@ -16,6 +16,8 @@ all: editor
 	gosimple || true
 	maligned || true
 	unconvert -apply
+	grep -n 'FAIL\|PASS' log
+	date
 
 clean:
 	go clean
