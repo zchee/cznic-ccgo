@@ -381,13 +381,13 @@ func (g *gen) tld(n *cc.Declarator) {
 		}
 
 		if g.escaped(n) {
-			g.w("\nvar %s = bss + %d", g.mangleDeclarator(n), g.allocBSS(n.Type))
+			g.w("\nvar %s = Lb + %d", g.mangleDeclarator(n), g.allocBSS(n.Type))
 			return
 		}
 
 		switch x := t.(type) {
 		case *cc.StructType:
-			g.w("\nvar %s = bss + %d\n", g.mangleDeclarator(n), g.allocBSS(n.Type))
+			g.w("\nvar %s = Lb + %d\n", g.mangleDeclarator(n), g.allocBSS(n.Type))
 		case *cc.PointerType:
 			g.w("\nvar %s uintptr\n", g.mangleDeclarator(n))
 		case
@@ -597,19 +597,19 @@ func (g *ngen) linkInfo(n *cc.Declarator, declarationOnly bool) {
 
 func (g *gen) escapedTLD(n *cc.Declarator) {
 	if g.isConstInitializer(n.Type, n.Initializer) {
-		g.w("\nvar %s = ds + %d\n", g.mangleDeclarator(n), g.allocDS(n.Type, n.Initializer))
+		g.w("\nvar %s = Ld + %d\n", g.mangleDeclarator(n), g.allocDS(n.Type, n.Initializer))
 		return
 	}
 
 	switch x := cc.UnderlyingType(n.Type).(type) {
 	case *cc.ArrayType:
 		if x.Item.Kind() == cc.Char && n.Initializer.Expr.Operand.Value != nil {
-			g.w("\nvar %s = ds + %d\n", g.mangleDeclarator(n), g.allocDS(n.Type, n.Initializer))
+			g.w("\nvar %s = Ld + %d\n", g.mangleDeclarator(n), g.allocDS(n.Type, n.Initializer))
 			return
 		}
 	}
 
-	g.w("\nvar %s = bss + %d // %v \n", g.mangleDeclarator(n), g.allocBSS(n.Type), n.Type)
+	g.w("\nvar %s = Lb + %d // %v \n", g.mangleDeclarator(n), g.allocBSS(n.Type), n.Type)
 	g.w("\n\nfunc init() { *(*%s)(unsafe.Pointer(%s)) = ", g.typ(n.Type), g.mangleDeclarator(n))
 	g.literal(n.Type, n.Initializer)
 	g.w("}")
@@ -624,7 +624,7 @@ func (g *ngen) escapedTLD(n *cc.Declarator) {
 	switch x := cc.UnderlyingType(n.Type).(type) {
 	case *cc.ArrayType:
 		if x.Item.Kind() == cc.Char && n.Initializer.Expr.Operand.Value != nil {
-			g.w("\nvar %s = ds + %d\n", g.mangleDeclarator(n), g.allocDS(n.Type, n.Initializer))
+			g.w("\nvar %s = Ld + %d\n", g.mangleDeclarator(n), g.allocDS(n.Type, n.Initializer))
 			return
 		}
 	}
