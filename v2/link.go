@@ -148,7 +148,7 @@ func NewObject(out io.Writer, goos, goarch, file string, in *cc.TranslationUnit,
 	}()
 
 	r, w := io.Pipe()
-	g := newNGen(w, in, file, tweaks)
+	g := newGen(w, in, file, tweaks)
 
 	go func() {
 		defer func() {
