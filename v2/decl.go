@@ -256,6 +256,15 @@ func (g *gen) tld(n *cc.Declarator) {
 		pos.Filename = filepath.Base(pos.Filename)
 	}
 	g.w("\n\n// %s %s, escapes: %v, %v", mn, g.typeComment(n.Type), g.escaped(n), pos)
+
+	arr, esc, vla := g.isArray(n)
+	if arr {
+		if !esc || vla {
+			todo("", g.position(n))
+		}
+	}
+	// !arr || arr && esc && !vla
+
 	if g.isZeroInitializer(n.Initializer) {
 		if g.escaped(n) {
 			g.w("\nvar %s = Lb + %d", mn, g.model.Sizeof(n.Type))

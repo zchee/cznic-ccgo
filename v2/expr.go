@@ -16,6 +16,36 @@ import (
 	"modernc.org/mathutil"
 )
 
+func (g *gen) isArray(d *cc.Declarator) (arr, esc, vla bool) {
+	d = g.normalizeDeclarator(d)
+	x, ok := underlyingType(d.Type, false).(*cc.ArrayType)
+	if !ok {
+		return false, false, false
+	}
+
+	if x.Length == nil {
+		if d.IsFunctionParameter {
+			return false, false, false
+		}
+
+		if d.Initializer != nil || d.DeclarationSpecifier.IsExtern() {
+			return true, true, false
+		}
+
+		todo("", g.position(d))
+	}
+
+	if x.Size.Value != nil {
+		if d.IsFunctionParameter {
+			return false, false, false
+		}
+
+		return true, true, false
+	}
+
+	return true, false, true
+}
+
 func (g *gen) exprListOpt(n *cc.ExprListOpt, void, noSemi bool) {
 	if n == nil {
 		return
@@ -443,8 +473,7 @@ func (g *gen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 	switch n.Case {
 	case cc.ExprIdent: // IDENTIFIER
 		d := g.normalizeDeclarator(n.Declarator)
-		switch {
-		case d == nil:
+		if d == nil {
 			if n.Operand.Type == nil || n.Operand.Value == nil {
 				todo("%v: %s, %v, %p", g.position(n), string(n.Token.S()), n.Operand, n.Declarator)
 			}
@@ -453,23 +482,26 @@ func (g *gen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 			g.w("%s(", g.typ(n.Operand.Type))
 			g.constant(n)
 			g.w(")")
-		default:
-			g.enqueue(d)
-			arr, _ := cc.UnderlyingType(d.Type).(*cc.ArrayType)
-			switch {
-			case d.Type.Kind() == cc.Function:
-				if exprCall {
-					g.w("%s", g.mangleDeclarator(d))
-					break
-				}
-
-				g.w("%s(%s)", g.registerHelper("fp%d", g.typ(d.Type)), g.mangleDeclarator(d))
-			case g.escaped(d) && arr == nil:
-				g.w(" *(*%s)(unsafe.Pointer(%s))", g.typ(d.Type), g.mangleDeclarator(d))
-			default:
-				g.w("%s", g.mangleDeclarator(d))
-			}
+			break
 		}
+
+		g.enqueue(d)
+		if arr, esc, vla := g.isArray(d); arr {
+			todo("", g.position(n), esc, vla)
+			break
+		}
+
+		if d.Type.Kind() == cc.Function {
+			if exprCall {
+				g.w("%s", g.mangleDeclarator(d))
+				break
+			}
+
+			g.w("%s(%s)", g.registerHelper("fp%d", g.typ(d.Type)), g.mangleDeclarator(d))
+			break
+		}
+
+		g.w("%s", g.mangleDeclarator(d))
 	case cc.ExprCompLit: // '(' TypeName ')' '{' InitializerList CommaOpt '}
 		if d := n.Declarator; d != nil {
 			switch {
@@ -1248,9 +1280,13 @@ func (g *gen) value0Escaped(n *cc.Expr, packedField bool, exprCall bool) {
 	u := cc.UnderlyingType(d.Type)
 	switch n.Case {
 	case cc.ExprIdent: // IDENTIFIER
-		if u.Kind() == cc.Array {
+		if arr, esc, vla := g.isArray(d); arr {
+			if !esc && !vla {
+				todo("", g.position(n), esc, vla)
+			}
+
 			g.w("%s", g.mangleDeclarator(d))
-			return
+			break
 		}
 
 		if u.Kind() == cc.Function {

@@ -308,6 +308,7 @@ func underlyingType(t cc.Type, enums bool) cc.Type {
 		case cc.TypeKind:
 			switch x {
 			case
+				cc.Bool,
 				cc.Char,
 				cc.Double,
 				cc.DoubleComplex,
