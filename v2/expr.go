@@ -16,34 +16,38 @@ import (
 	"modernc.org/mathutil"
 )
 
-func (g *gen) isArray(d *cc.Declarator) (arr, esc, vla bool) {
-	d = g.normalizeDeclarator(d)
+func (g *gen) isArray(d *cc.Declarator) (arr, esc, vla, param bool) {
+	esc = g.escaped(d)
 	x, ok := underlyingType(d.Type, false).(*cc.ArrayType)
 	if !ok {
-		return false, false, false
+		return false, esc, false, false
+	}
+
+	if d.IsFunctionParameter {
+		if x.Length == nil {
+			return true, esc, false, true
+		}
+
+		if x.Size.Value != nil {
+			return true, esc, false, true
+		}
+
+		todo("", g.position(d))
 	}
 
 	if x.Length == nil {
-		if d.IsFunctionParameter {
-			return false, false, false
-		}
-
 		if d.Initializer != nil || d.DeclarationSpecifier.IsExtern() {
-			return true, true, false
+			return true, esc, false, false
 		}
 
 		todo("", g.position(d))
 	}
 
 	if x.Size.Value != nil {
-		if d.IsFunctionParameter {
-			return false, false, false
-		}
-
-		return true, true, false
+		return true, esc, false, false
 	}
 
-	return true, false, true
+	return true, esc, true, false
 }
 
 func (g *gen) exprListOpt(n *cc.ExprListOpt, void, noSemi bool) {
@@ -486,9 +490,16 @@ func (g *gen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		}
 
 		g.enqueue(d)
-		if arr, esc, vla := g.isArray(d); arr {
-			todo("", g.position(n), esc, vla)
-			break
+		arr, esc, vla, param := g.isArray(d)
+		switch {
+		case
+			!arr,
+			arr && !esc && !vla && param:
+
+			// nop
+		default:
+			todo("", g.position(n), arr, esc, vla, param)
+			return
 		}
 
 		if d.Type.Kind() == cc.Function {
@@ -1275,18 +1286,24 @@ func (g *gen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 } // value0
 
 func (g *gen) value0Escaped(n *cc.Expr, packedField bool, exprCall bool) {
-	d := n.Declarator
+	d := g.normalizeDeclarator(n.Declarator)
 	g.enqueue(d)
 	u := cc.UnderlyingType(d.Type)
 	switch n.Case {
 	case cc.ExprIdent: // IDENTIFIER
-		if arr, esc, vla := g.isArray(d); arr {
-			if !esc && !vla {
-				todo("", g.position(n), esc, vla)
-			}
+		arr, esc, vla, param := g.isArray(d)
+		switch {
+		case !arr:
+			// nop
+		case
+			arr && esc && !vla && !param,
+			arr && esc && vla && !param:
 
-			g.w("%s", g.mangleDeclarator(d))
-			break
+			g.w(" %s", g.mangleDeclarator(d))
+			return
+		default:
+			todo("", g.position(n), arr, esc, vla, param)
+			return
 		}
 
 		if u.Kind() == cc.Function {
@@ -1411,18 +1428,27 @@ func (g *gen) uintptr(n *cc.Expr, packedField bool) {
 		g.literal(t, ini)
 		g.w("; return x }()")
 	case cc.ExprIdent: // IDENTIFIER
-		d := n.Declarator
+		d := g.normalizeDeclarator(n.Declarator)
 		fixMain(d)
 		g.enqueue(d)
-		arr := cc.UnderlyingType(d.Type).Kind() == cc.Array
+		arr, esc, vla, param := g.isArray(d)
+		switch {
+		case !arr:
+			// nop
+		case arr && !esc && !vla && param:
+			g.w(" %s", g.mangleDeclarator(d))
+			return
+		default:
+			todo("", g.position(n), arr, esc, vla, param)
+			return
+		}
+
 		switch {
 		case d.Type.Kind() == cc.Function:
 			g.w("%s(%s)", g.registerHelper("fp%d", g.typ(d.Type)), g.mangleDeclarator(d))
-		case arr:
-			g.w("%s ", g.mangleDeclarator(d))
 		default:
 			// 		g.w("uintptr(unsafe.Pointer(&%s))", g.mangleDeclarator(d))
-			todo("%v: %v TODO (*gen).uintptr", g.position(n), n.Case)
+			todo("", g.position(n))
 		}
 	case cc.ExprIndex: // Expr '[' ExprList ']'
 		t := n.Expr.Operand.Type
@@ -1468,10 +1494,22 @@ func (g *gen) uintptr(n *cc.Expr, packedField bool) {
 } // uintptr
 
 func (g *gen) uintptrEscaped(n *cc.Expr) {
-	d := n.Declarator
+	d := g.normalizeDeclarator(n.Declarator)
 	g.enqueue(d)
 	switch n.Case {
 	case cc.ExprIdent: // IDENTIFIER
+		arr, esc, vla, param := g.isArray(d)
+		switch {
+		case !arr:
+			// nop
+		case arr && esc && !vla && !param:
+			g.w(" %s", g.mangleDeclarator(d))
+			return
+		default:
+			todo("", g.position(n), arr, esc, vla, param)
+			return
+		}
+
 		switch {
 		case d.Type.Kind() == cc.Function:
 			fixMain(d)
@@ -2161,8 +2199,14 @@ func (g *gen) convertEscaped(n *cc.Expr, t cc.Type) {
 	g.enqueue(d)
 	switch n.Case {
 	case cc.ExprIdent: // IDENTIFIER
-		switch x := underlyingType(d.Type, false).(type) {
-		case *cc.ArrayType:
+		arr, esc, vla, param := g.isArray(d)
+		switch {
+		case !arr:
+			// nop
+		case
+			arr && esc && !vla && !param,
+			arr && esc && vla && !param:
+
 			if t.Kind() == cc.Ptr {
 				g.w("%s ", g.mangleDeclarator(d))
 				return
@@ -2173,7 +2217,13 @@ func (g *gen) convertEscaped(n *cc.Expr, t cc.Type) {
 				return
 			}
 
-			todo("%v: %v, op %v, d %v, t %v, %q %v:", g.position(n), n.Case, n.Operand.Type, d.Type, t, dict.S(d.Name()), g.position(d))
+			todo("", g.position(n))
+		default:
+			todo("", g.position(n), arr, esc, vla, param, t)
+			return
+		}
+
+		switch x := underlyingType(d.Type, false).(type) {
 		case *cc.FunctionType: // d is a function declarator.
 			if d.Type.Equal(t) {
 				g.w("%s ", g.mangleDeclarator(d))

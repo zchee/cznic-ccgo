@@ -257,13 +257,17 @@ func (g *gen) tld(n *cc.Declarator) {
 	}
 	g.w("\n\n// %s %s, escapes: %v, %v", mn, g.typeComment(n.Type), g.escaped(n), pos)
 
-	arr, esc, vla := g.isArray(n)
-	if arr {
-		if !esc || vla {
-			todo("", g.position(n))
-		}
+	arr, esc, vla, param := g.isArray(n)
+	switch {
+	case
+		!arr,
+		arr && esc && !vla && !param:
+
+		// nop
+	default:
+		todo("", g.position(n), arr, esc, vla, param)
+		return
 	}
-	// !arr || arr && esc && !vla
 
 	if g.isZeroInitializer(n.Initializer) {
 		if g.escaped(n) {
