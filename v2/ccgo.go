@@ -56,30 +56,6 @@ func init() {
 	}
 }
 
-const (
-	mainSrc = `
-func main() {
-	psz := unsafe.Sizeof(uintptr(0))
-	argv := crt.MustCalloc((len(os.Args) + 1) * int(psz))
-	p := argv
-	for _, v := range os.Args {
-		*(*uintptr)(unsafe.Pointer(p)) = %[1]sCString(v)
-		p += psz
-	}
-	a := os.Environ()
-	env := crt.MustCalloc((len(a) + 1) * int(psz))
-	p = env
-	for _, v := range a {
-		*(*uintptr)(unsafe.Pointer(p)) = %[1]sCString(v)
-		p += psz
-	}
-	*(*uintptr)(unsafe.Pointer(Xenviron)) = env
-	X_start(%[1]sNewTLS(), int32(len(os.Args)), argv)
-}
-`
-	compactStack = 30
-)
-
 type gen struct {
 	crtPrefix          string
 	enqueued           map[interface{}]struct{}
@@ -290,6 +266,10 @@ func (g *gen) defs() {
 	sort.Strings(a)
 	for _, nm := range a {
 		v := tu.Macros[dict.SID(nm)]
+		if v == nil {
+			continue
+		}
+
 		op, err := v.Eval(tu.Model, tu.Macros)
 		if err != nil {
 			continue

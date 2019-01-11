@@ -596,10 +596,3 @@ func (g *gen) initDeclarator(n *cc.InitDeclarator, inline bool) {
 		g.initializer(d, inline)
 	}
 }
-
-func errs(out, in error) error {
-	if out == nil {
-		out = in
-	}
-	return out
-}

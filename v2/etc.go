@@ -8,17 +8,13 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"go/scanner"
 	"io"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
 
 	"modernc.org/cc/v2"
-	"modernc.org/ir"
 	"modernc.org/strutil"
 	"modernc.org/xc"
 )
@@ -37,8 +33,6 @@ var (
 
 	idAlias                  = dict.SID("alias")
 	idAligned                = dict.SID("aligned")
-	idBacktrace              = dict.SID("backtrace")
-	idBuiltin                = dict.SID("__builtin_")
 	idBuiltinAlloca          = dict.SID("__builtin_alloca")
 	idBuiltinTypesCompatible = dict.SID("__builtin_types_compatible__") // Implements __builtin_types_compatible_p
 	idBuiltinVaList          = dict.SID("__builtin_va_list")
@@ -56,12 +50,7 @@ var (
 	idPacked                 = dict.SID("packed")
 	idPacked2                = dict.SID("__packed__")
 	idPure                   = dict.SID("pure")
-	idStart                  = dict.SID("_start")
 	idStdcall                = dict.SID("stdcall")
-	idStderr                 = dict.SID("stderr")
-	idStdin                  = dict.SID("stdin")
-	idStdout                 = dict.SID("stdout")
-	idUU                     = dict.SID("__")
 	idVaList                 = dict.SID("va_list")
 	idVisibility             = dict.SID("visibility")
 	idVisibility2            = dict.SID("__visibility__")
@@ -76,23 +65,6 @@ var (
 )
 
 func pretty(v interface{}) string { return strutil.PrettyString(v, "", "", nil) }
-
-func compact(s string, maxLines int) string {
-	a := strings.Split(s, "\n")
-	w := 0
-	for _, v := range a {
-		v = strings.TrimSpace(v)
-		if v != "" {
-			a[w] = v
-			w++
-		}
-	}
-	a = a[:w]
-	if len(a) > maxLines {
-		a = a[:maxLines]
-	}
-	return strings.Join(a, "\n")
-}
 
 func debugStack0() []byte { return debug.Stack() }
 
@@ -119,12 +91,6 @@ func debugStack2() []byte {
 	return bytes.Join(a, bNL)
 }
 
-func errString(err error) string {
-	var b bytes.Buffer
-	printError(&b, "", err)
-	return b.String()
-}
-
 func isSingleExpression(n *cc.ExprList) bool { return n.ExprList == nil }
 
 func mangleIdent(nm int, exported bool) string {
@@ -140,22 +106,6 @@ func mangleLabel(nm int) string {
 	return fmt.Sprintf("l%s", dict.S(nm))
 }
 
-func printError(w io.Writer, pref string, err error) {
-	switch x := err.(type) {
-	case scanner.ErrorList:
-		x.RemoveMultiples()
-		for i, v := range x {
-			fmt.Fprintf(w, "%s%v\n", pref, v)
-			if i == 50 {
-				fmt.Fprintln(w, "too many errors")
-				break
-			}
-		}
-	default:
-		fmt.Fprintf(w, "%s%v\n", pref, err)
-	}
-}
-
 func roundup(n, to int64) int64 {
 	if r := n % to; r != 0 {
 		return n + to - r
@@ -164,16 +114,7 @@ func roundup(n, to int64) int64 {
 	return n
 }
 
-func strComment(sv *ir.StringValue) string { //TODO-
-	s := dict.S(int(sv.StringID))
-	if len(s) > 32 {
-		s = append(append([]byte(nil), s[:32]...), []byte("...")...)
-	}
-	s = bytes.Replace(s, []byte("*/"), []byte(`*\x2f`), -1)
-	return fmt.Sprintf("/* %q */", s)
-}
-
-func strComment2(s []byte) string {
+func strComment(s []byte) string {
 	const max = 16
 	if len(s) > max {
 		s = append(append([]byte(nil), s[:max]...), []byte("...")...)
@@ -243,53 +184,6 @@ func (g *gen) typeComment(t cc.Type) (r string) {
 	default:
 		return g.ptyp(t, false, 1)
 	}
-}
-
-func env(key, val string) string {
-	if s := os.Getenv(key); s != "" {
-		return s
-	}
-
-	return val
-}
-
-func mkdir(p string) error {
-	if _, err := os.Stat(p); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-
-		return os.MkdirAll(p, 0775)
-	}
-	return nil
-}
-
-func cpDir(dst, src string, buf []byte) error {
-	if len(buf) == 0 {
-		buf = make([]byte, 1<<16)
-	}
-	if err := mkdir(dst); err != nil {
-		return err
-	}
-
-	a, err := ioutil.ReadDir(src)
-	if err != nil {
-		return err
-	}
-
-	for _, v := range a {
-		switch {
-		case v.IsDir():
-			if err = cpDir(filepath.Join(dst, v.Name()), filepath.Join(src, v.Name()), buf); err != nil {
-				return err
-			}
-		default:
-			if err = cpFile(filepath.Join(dst, v.Name()), filepath.Join(src, v.Name()), buf); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func cpFile(dst, src string, buf []byte) (err error) {

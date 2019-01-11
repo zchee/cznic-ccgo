@@ -161,21 +161,14 @@ const (
 )
 
 var (
-	oBuild   = flag.Bool("build", false, "full build errors")
-	oCC      = flag.Bool("cc", false, "full cc errors")
-	oCCGO    = flag.Bool("ccgo", false, "full ccgo errors")
-	oCSmith  = flag.Duration("csmith", time.Minute, "") // Use something like -timeout 25h -csmith 24h for real testing.
-	oEdit    = flag.Bool("edit", false, "")
-	oI       = flag.String("I", "", "")
-	oNoCmp   = flag.Bool("nocmp", false, "")
-	oRE      = flag.String("re", "", "")
-	oTCLRace = flag.Bool("tclrace", false, "")
-	oTmp     = flag.String("tmp", "", "")
-	oTrace   = flag.Bool("trc", false, "")
+	oCSmith = flag.Duration("csmith", time.Minute, "") // Use something like -timeout 25h -csmith 24h for real testing.
+	oEdit   = flag.Bool("edit", false, "")
+	oNoCmp  = flag.Bool("nocmp", false, "")
+	oRE     = flag.String("re", "", "")
+	oTmp    = flag.String("tmp", "", "")
+	oTrace  = flag.Bool("trc", false, "")
 
-	re          *regexp.Regexp
 	searchPaths []string
-	defCCGO     = cc.NewStringSource("<defines>", "#define __ccgo__ 1\n#define __FUNCTION__ __func__\n")
 )
 
 func init() {
@@ -208,18 +201,6 @@ func trim(b []byte) []byte {
 		a[i] = bytes.TrimRight(v, " ")
 	}
 	return bytes.Join(a, []byte{'\n'})
-}
-
-func translate(tweaks *cc.Tweaks, includePaths, sysIncludePaths []string, def string, sources ...cc.Source) (*cc.TranslationUnit, error) {
-	in := []cc.Source{defCCGO, cc.MustBuiltin()}
-	if def != "" {
-		in = append(in, cc.NewStringSource("<defines>", def))
-	}
-	in = append(in, sources...)
-	if *oTrace {
-		fmt.Fprintln(os.Stderr, in)
-	}
-	return cc.Translate(tweaks, includePaths, sysIncludePaths, in...)
 }
 
 func TestTCC(t *testing.T) {

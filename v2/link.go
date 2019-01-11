@@ -544,7 +544,6 @@ func (l *Linker) close(header string) (err error) {
 			if len(s) == 0 {
 				l.emit()
 				state = skipBlank
-				break
 			}
 		case copyFunc:
 			l.tld = append(l.tld, s)
@@ -652,14 +651,6 @@ func (l *Linker) genWeak() {
 	}
 }
 
-func (l *Linker) isFunc(nm string) bool {
-	t := l.declaredExterns[nm]
-	if t == "" {
-		t = l.definedExterns[nm]
-	}
-	return strings.HasPrefix(t, "func")
-}
-
 func (l *Linker) genHelpers() {
 	if l.bool2int {
 		l.w(`
@@ -757,7 +748,7 @@ out:
 				todo("", err)
 			}
 
-			x.Value = fmt.Sprintf("ts+%d %s", v.allocString(dict.SID(s)), strComment2([]byte(s)))
+			x.Value = fmt.Sprintf("ts+%d %s", v.allocString(dict.SID(s)), strComment([]byte(s)))
 		}
 	case *ast.Ident:
 		nm := x.Name

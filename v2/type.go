@@ -227,43 +227,6 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 	panic("unreachable")
 }
 
-func prefer(d *cc.Declarator) bool {
-	if d.DeclarationSpecifier.IsExtern() {
-		return false
-	}
-
-	if d.Initializer != nil || d.FunctionDefinition != nil {
-		return true
-	}
-
-	t := d.Type
-	for {
-		switch x := underlyingType(t, true).(type) {
-		case *cc.ArrayType:
-			return x.Size.Type != nil
-		case *cc.FunctionType:
-			return false
-		case
-			*cc.EnumType,
-			*cc.StructType:
-
-			return true
-		case *cc.PointerType:
-			t = x.Item
-		case *cc.TaggedStructType:
-			return x.Type != nil
-		case cc.TypeKind:
-			if x.IsScalarType() || x == cc.Void {
-				return true
-			}
-
-			todo("", x)
-		default:
-			todo("", x)
-		}
-	}
-}
-
 func underlyingType(t cc.Type, enums bool) cc.Type {
 	for {
 		switch x := t.(type) {
