@@ -14,7 +14,6 @@ all: editor
 	misspell *.go
 	staticcheck || true
 	maligned || true
-	unconvert -apply
 	grep -n 'FAIL\|PASS' log
 	go version
 	date
@@ -36,12 +35,13 @@ edit:
 
 editor:
 	go version
+	$(shell until `unconvert .` ; do unconvert -apply . ; done)
 	gofmt -l -s -w *.go
-	GOOS=linux GOARCH=arm go build
-	GOOS=linux GOARCH=386 go build
+	#TODO GOOS=linux GOARCH=arm go build
+	#TODO GOOS=linux GOARCH=386 go build
 	GOOS=linux GOARCH=amd64 go build
-	GOOS=windows GOARCH=386 go build
-	GOOS=windows GOARCH=amd64 go build
+	#TODO GOOS=windows GOARCH=386 go build
+	#TODO GOOS=windows GOARCH=amd64 go build
 	go test -i
 	cp log log0 || true
 	date 2>&1 | tee log

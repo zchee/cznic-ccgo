@@ -824,7 +824,7 @@ func main() {
 }
 
 func (c *config) buildExecutable(bin, src string) error {
-	a := []string{"go", "build", "-gcflags=-e", "-o", bin, src}
+	a := []string{"go", "build", "-o", bin, src}
 	cmd := exec.Command(a[0], a[1:]...)
 	for _, v := range os.Environ() {
 		if v != "CC=ccgo" {

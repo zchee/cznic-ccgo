@@ -207,28 +207,34 @@ func (r *arReader) Read(b []byte) (int, error) {
 func isArgumentMismatchError(s string) bool {
 	a := strings.Split(s, "\n")
 	for _, v := range a {
+		v = strings.TrimSpace(v)
 		switch {
 		case
 			strings.HasPrefix(v, "#"),
-			strings.HasPrefix(v, "\thave"),
-			strings.HasPrefix(v, "\twant"),
 			strings.HasPrefix(v, "exit status "),
-			v == "":
+			strings.HasPrefix(v, "have"),
+			strings.HasPrefix(v, "want"),
+			v == "",
+			v == "^": // gccgo
 
 			// ok
 		default:
 			i := strings.Index(v, ": ")
 			if i < 0 {
-				return false
+				continue
 			}
 
 			switch v = v[i+2:]; {
 			case
+				strings.Contains(v, "(different number of parameters)"), // gccgo
+				strings.Contains(v, "(has incompatible type)"),          // gccgo
 				strings.HasPrefix(v, "cannot use"),
+				strings.HasPrefix(v, "error: not enough arguments"), // gccgo
 				strings.HasPrefix(v, "not enough arguments in call to"):
 
 				// ok
 			default:
+				log("offending %q", v)
 				return false
 			}
 		}
