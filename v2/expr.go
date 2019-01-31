@@ -630,9 +630,15 @@ func (g *gen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 			todo("%v: %v args %v params %v variadic %v voidParams %v", g.position(n), n.Case, len(args), len(params), t.Variadic, voidParams)
 		}
 		g.convert(n.Expr, t)
-		g.w("(tls")
+		g.w("(")
+		tls := n.Expr.Case != cc.ExprIdent || mangles[n.Expr.Token.Val] == ""
+		if tls {
+			g.w("tls")
+		}
 		for i, v := range args {
-			g.w(", ")
+			if tls || i != 0 {
+				g.w(", ")
+			}
 			switch t := n.CallArgs[i].Type; {
 			case t == nil:
 				g.value(v, false)

@@ -58,6 +58,15 @@ var (
 	idWeak                   = dict.SID("weak")
 	idWeak2                  = dict.SID("__weak__")
 
+	mangles = map[int]string{
+		dict.SID("__builtin_cimag"):    "imag",
+		dict.SID("__builtin_cimagf"):   "imag",
+		dict.SID("__builtin_cimagl"):   "imag",
+		dict.SID("__builtin_complex"):  "complex",
+		dict.SID("__builtin_complexf"): "complex",
+		dict.SID("__builtin_complexl"): "complex",
+	}
+
 	testFn      string
 	traceOpt    bool
 	traceTODO   bool
@@ -181,6 +190,12 @@ func (g *gen) typeComment(t cc.Type) (r string) {
 			x = t
 			n++
 		}
+	case *cc.ArrayType:
+		if x.IsVLA() {
+			return fmt.Sprintf("*%s", g.typeComment(x.Item))
+		}
+
+		return g.ptyp(t, false, 1)
 	default:
 		return g.ptyp(t, false, 1)
 	}

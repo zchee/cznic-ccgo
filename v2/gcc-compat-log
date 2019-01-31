@@ -1,0 +1,7 @@
+strct-layout.c
+struct-align.c
+struct-big.c
+struct-i.c
+struct-ic.c
+struct-ii.c
+struct-ret-1.c

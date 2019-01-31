@@ -471,6 +471,10 @@ func (g *gen) literal(t cc.Type, n *cc.Initializer) {
 
 		g.value(n.Expr, false)
 	case *cc.StructType:
+		if x.HasFlexibleArrayMember {
+			todo("", g.position(n))
+		}
+
 		if n.Expr != nil {
 			g.value(n.Expr, false)
 			return

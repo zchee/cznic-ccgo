@@ -60,6 +60,14 @@ func (g *gen) defineQueued() {
 	}
 }
 
+func (g *gen) isDefined(t cc.Type, prefix string, nm int) {
+	if n, ok := t.(cc.Node); ok && n.Pos() != 0 {
+		pos := g.position(n)
+		pos.Filename = filepath.Base(pos.Filename)
+		g.w("\n// %s%s is defined at %s", prefix, dict.S(nm), pos)
+	}
+}
+
 func (g *gen) defineNamedType(t *cc.NamedType) {
 	if _, ok := g.producedNamedTypes[t.Name]; ok {
 		return
@@ -70,6 +78,7 @@ func (g *gen) defineNamedType(t *cc.NamedType) {
 		todo("", t)
 	}
 
+	g.isDefined(t.Type, "N", t.Name)
 	switch {
 	case t.Name == idLS:
 		g.w("\ntype N%s = %s", dict.S(t.Name), g.typ(t.Type))
@@ -91,7 +100,7 @@ func (g *gen) defineNamedType(t *cc.NamedType) {
 		g.w("\nvar z %s", g.typ(x))
 		fields := x.Fields
 		for i, v := range g.model.Layout(x) {
-			if v.Bits < 0 {
+			if v.IsFlexibleArray || v.Bits < 0 {
 				continue
 			}
 
@@ -135,6 +144,7 @@ func (g *gen) defineTaggedEnumType(t *cc.TaggedEnumType) {
 	}
 
 	tag := dict.S(t.Tag)
+	g.isDefined(et, "E", t.Tag)
 	g.w("\ntype E%s = %s\n", tag, g.typ(et.Enums[0].Operand.Type))
 	g.w("\n// Values of E%s\nconst (", tag)
 	for _, v := range et.Enums {
@@ -160,13 +170,14 @@ func (g *gen) defineTaggedStructType(t *cc.TaggedStructType) {
 		g.opaqueStructTags[t.Tag] = struct{}{}
 	default:
 		g.producedStructTags[t.Tag] = struct{}{}
+		g.isDefined(t.Type, "S", t.Tag)
 		g.w("\ntype S%s = %s\n", dict.S(t.Tag), g.typ(t.Type))
 		if g.tweaks.StructChecks || isTesting {
 			g.w("\n\nfunc init() { // S%s", dict.S(t.Tag))
 			st := cc.UnderlyingType(t.Type).(*cc.StructType)
 			fields := st.Fields
 			for i, v := range g.model.Layout(st) {
-				if v.Bits < 0 {
+				if v.IsFlexibleArray || v.Bits < 0 {
 					continue
 				}
 
@@ -199,6 +210,7 @@ func (g *gen) defineTaggedUnionType(t *cc.TaggedUnionType) {
 	}
 
 	g.producedStructTags[t.Tag] = struct{}{}
+	g.isDefined(t.Type, "U", t.Tag)
 	g.w("\ntype U%s = %s\n", dict.S(t.Tag), g.typ(t.Type))
 	if g.tweaks.StructChecks || isTesting {
 		g.w("\n\nfunc init() { // U%s", dict.S(t.Tag))
@@ -239,6 +251,7 @@ func (g *gen) tld(n *cc.Declarator) {
 
 	ds := n.DeclarationSpecifier
 	g.linkInfo(n, ds.IsExtern())
+
 	if ds.IsExtern() {
 		return
 	}
@@ -315,9 +328,9 @@ func (g *gen) linkInfo(n *cc.Declarator, declarationOnly bool) {
 	mn := g.mangleDeclarator(n)
 	switch {
 	case declarationOnly:
-		g.w("\n\n%se%s = %q", lConstPrefix, mn, g.typ(n.Type))
+		g.w("\n\n%se%s = %q", lConstPrefix, mn, n.Type)
 	default:
-		g.w("\n\n%sd%s = %q", lConstPrefix, mn, g.typ(n.Type))
+		g.w("\n\n%sd%s = %q", lConstPrefix, mn, n.Type)
 	}
 	for _, v := range n.Attributes {
 		if len(v) == 0 {
@@ -340,6 +353,10 @@ func (g *gen) linkInfo(n *cc.Declarator, declarationOnly bool) {
 					switch n2 := n.Scope.LookupIdent(id2).(type) {
 					case *cc.Declarator:
 						g.enqueue(n2)
+						if underlyingType(n.Type, false).Kind() != cc.Function {
+							break
+						}
+
 						switch n2.Linkage {
 						case cc.LinkageInternal:
 							g.w("\n\n%sb%s = %q", lConstPrefix, mn, g.mangleDeclarator(n2))
@@ -464,9 +481,9 @@ func (g *gen) functionDefinition(n *cc.Declarator) {
 				g.w("a%s %s", dict.S(nm), g.flattenParam(v))
 				escParams = append(escParams, param)
 			default:
-				switch cc.UnderlyingType(v).(type) {
+				switch x := cc.UnderlyingType(v).(type) {
 				case *cc.ArrayType:
-					g.w("%s uintptr /* %v */ ", mangleIdent(nm, false), g.typ(v))
+					g.w("%s uintptr /* *%s */ ", mangleIdent(nm, false), g.typeComment(x.Item))
 				default:
 					g.w("%s %s ", mangleIdent(nm, false), g.flattenParam(v))
 				}
@@ -518,6 +535,10 @@ func (g *gen) functionBody(n *cc.FunctionBody, vars []*cc.Declarator, void bool,
 
 func (g *gen) mangleDeclarator(n *cc.Declarator) string {
 	nm := n.Name()
+	if s := mangles[nm]; s != "" {
+		return s
+	}
+
 	if n.Linkage == cc.LinkageExternal {
 		return mangleIdent(nm, true)
 	}

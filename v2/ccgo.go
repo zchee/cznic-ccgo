@@ -307,6 +307,13 @@ func (g *gen) position(n cc.Node) token.Position {
 	return g.in.FileSet.PositionFor(n.Pos(), true)
 }
 
+func (g *gen) tpos(t cc.Type) (r token.Position) {
+	if n, ok := t.(cc.Node); ok && n.Pos() != 0 {
+		r = g.position(n)
+	}
+	return r
+}
+
 func (g *gen) w(s string, args ...interface{}) {
 	if _, err := fmt.Fprintf(&g.out0, s, args...); err != nil {
 		todo("", err)

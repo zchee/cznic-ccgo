@@ -160,7 +160,7 @@ import (
 const null = uintptr(0)
 
 var _ = math.Pi
-var _ = unsafe.Pointer(null)
+var _ unsafe.Pointer
 %[7]s
 `
 	mainHeader = `func main() { %[3]sMain(Xmain) }

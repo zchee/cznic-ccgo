@@ -6,4 +6,6 @@ make clean || true
 	CC=ccgo \
 	CFLAGS='--ccgo-full-paths --ccgo-struct-checks --ccgo-go -I../tcl8.6.8/generic -D_GNU_SOURCE --ccgo-use-import os.DevNull,exec.Command --ccgo-import os,os/exec' \
 	LDFLAGS='--warn-unresolved-libs'
-make tcltest
+make -j 4 tcltest
+go version
+date

@@ -15,6 +15,7 @@ all: editor
 	staticcheck || true
 	maligned || true
 	grep -n 'FAIL\|PASS' log
+	git status
 	go version
 	date
 
@@ -34,8 +35,9 @@ edit:
 	gvim -p Makefile *.go
 
 editor:
-	go version
-	$(shell until `unconvert .` ; do unconvert -apply . ; done)
+	cp log log0 || true
+	go version | tee log
+	./unconvert.sh
 	gofmt -l -s -w *.go
 	#TODO GOOS=linux GOARCH=arm go build
 	#TODO GOOS=linux GOARCH=386 go build
@@ -43,8 +45,7 @@ editor:
 	#TODO GOOS=windows GOARCH=386 go build
 	#TODO GOOS=windows GOARCH=amd64 go build
 	go test -i
-	cp log log0 || true
-	date 2>&1 | tee log
+	date 2>&1 | tee -a log
 	go test -timeout 24h -edit 2>&1 | tee -a log
 
 internalError:

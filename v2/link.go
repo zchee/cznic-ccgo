@@ -33,8 +33,8 @@ Linker constants (const Lx = "value")
 -------------------------------------------------------------------------------
 
 LD<mangled name>	Macro value definition. Value: value.
-La<mangled name>	Declarator with external linkage has alias attribute. Value: mangled alias name with external linkage.
-Lb<mangled name>	Declarator with external linkage has alias attribute. Value: mangled alias name with internal linkage.
+La<mangled name>	Function declarator with external linkage has alias attribute. Value: mangled alias name with external linkage.
+Lb<mangled name>	Function declarator with external linkage has alias attribute. Value: mangled alias name with internal linkage.
 Ld<mangled name>	Definition (provides) with external linkage. Value: type.
 Le<mangled name>	Declaration (requires) with external linkage. Value: type.
 Lf			Translation unit boundary. Value: file name.

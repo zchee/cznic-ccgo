@@ -226,10 +226,7 @@ func isArgumentMismatchError(s string) bool {
 
 			switch v = v[i+2:]; {
 			case
-				strings.Contains(v, "(different number of parameters)"), // gccgo
-				strings.Contains(v, "(has incompatible type)"),          // gccgo
 				strings.HasPrefix(v, "cannot use"),
-				strings.HasPrefix(v, "error: not enough arguments"), // gccgo
 				strings.HasPrefix(v, "not enough arguments in call to"):
 
 				// ok

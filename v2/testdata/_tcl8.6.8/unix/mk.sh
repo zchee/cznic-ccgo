@@ -6,8 +6,9 @@ go install -v modernc.org/ccgo/v2/ccgo
 ./configure CC=ccgo \
 	CFLAGS='--ccgo-full-paths --ccgo-struct-checks --ccgo-use-import exec.ErrNotFound,os.DevNull -D_GNU_SOURCE' \
 	LDFLAGS='--warn-unresolved-libs --ccgo-go --ccgo-import os,os/exec'
-make binaries
-make test
+make -j 4 binaries
+make -j 4 test
+go version
 date
 
 # all.tcl:	Total	25904	Passed	1530	Skipped	943	Failed	23431	# custom match fail unpatched
@@ -26,3 +27,5 @@ date
 # all.tcl:	Total	26037	Passed	25028	Skipped	944	Failed	65	# 2018-11-27 e5-1650 go version go1.11.2 linux/amd64 openSuse Leap 15.0
 # all.tcl:	Total	26037	Passed	25028	Skipped	944	Failed	65	# 2018-11-30 e5-1650 go version go1.11.2 linux/amd64 openSuse Leap 15.0
 # all.tcl:	Total	26092	Passed	25050	Skipped	945	Failed	97	# 2018-11-30 4670 go version go1.11.2 linux/amd64 openSuse 42.3
+
+# all.tcl:	Total	26037	Passed	25028	Skipped	944	Failed	65	# 2019-01-31 e5-1650 go version go1.11.4 linux/amd64 openSuse Leap 15.0

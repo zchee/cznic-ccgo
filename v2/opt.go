@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//TODO if set(l = r) != 0 { ... } -> if l = r; l != 0 { ... }
+//TODO unsafe.Pointer(uintptr(unsafe.Pointer(expr))) -> unsafe.Pointer(expr)
+//TODO unsafe.Pointer(uintptr(0)) -> nil
+
 package ccgo // import "modernc.org/ccgo/v2"
 
 import (

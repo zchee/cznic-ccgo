@@ -93,7 +93,7 @@ func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[
 				alloca = true
 			case g.escaped(v):
 				if isVLA(v) {
-					g.w("\n\t%s uintptr // *%s", g.mangleDeclarator(v), g.typeComment(v.Type))
+					g.w("\n\t%s uintptr // %s", g.mangleDeclarator(v), g.typeComment(v.Type))
 					g.w("\n\t_ = %s", g.mangleDeclarator(v))
 					break
 				}

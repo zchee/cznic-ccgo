@@ -46,49 +46,50 @@
 
 //	go version go1.11.4 linux/amd64
 //
-//	Tue Jan  8 16:11:42 CET 2019
+//	go version go1.11.4 linux/amd64
+//	Thu Jan 31 18:36:34 CET 2019
 //	TCC	cc 51 ccgo 51 build 51 run 51 ok 51 n 51
 //	Other	cc 35 ccgo 35 build 35 run 35 ok 35 n 35
 //	GCC Compat	cc 7 ccgo 7 build 7 run 7 ok 7 n 7
-//	GCC Compile	cc 1005 ccgo 1005 build 1005 ok 1005 n 1708
-//	GCC Execute	cc 1101 ccgo 1101 build 1101 run 1101 ok 1101 n 1411
+//	GCC Compile	cc 1004 ccgo 1004 build 1004 ok 1004 n 1708
+//	GCC Execute	cc 1098 ccgo 1098 build 1098 run 1098 ok 1098 n 1411
 //	Shell	cc 1 ccgo 1 build 1 run 1 ok 1 n 1
-//	cc 1 ccgo 1 build 1 run 1 ok 1 (100.00%) csmith 1 (1.265786915s) -s 1322542678
-//	cc 2 ccgo 2 build 2 run 2 ok 2 (100.00%) csmith 2 (8.424790959s) -s 1322542678
-//	cc 3 ccgo 3 build 3 run 3 ok 3 (100.00%) csmith 3 (8.878088363s) -s 1901462611
-//	cc 4 ccgo 4 build 4 run 4 ok 4 (100.00%) csmith 4 (10.504015699s) -s 2829621573
-//	cc 5 ccgo 5 build 5 run 5 ok 5 (100.00%) csmith 5 (10.950829266s) -s 576413934
-//	cc 6 ccgo 6 build 6 run 6 ok 6 (100.00%) csmith 6 (12.371047213s) -s 151038493
-//	cc 7 ccgo 7 build 7 run 7 ok 7 (100.00%) csmith 7 (14.594555736s)
-//	cc 8 ccgo 8 build 8 run 8 ok 8 (100.00%) csmith 8 (15.631812515s)
-//	cc 9 ccgo 9 build 9 run 9 ok 9 (100.00%) csmith 9 (16.897486985s)
-//	cc 10 ccgo 10 build 10 run 10 ok 10 (100.00%) csmith 10 (18.144851164s)
-//	cc 11 ccgo 11 build 11 run 11 ok 11 (100.00%) csmith 11 (19.901257906s)
-//	cc 12 ccgo 12 build 12 run 12 ok 12 (100.00%) csmith 12 (21.034974418s)
-//	cc 13 ccgo 13 build 13 run 13 ok 13 (100.00%) csmith 13 (21.478276269s)
-//	cc 14 ccgo 14 build 14 run 14 ok 14 (100.00%) csmith 14 (22.451478736s)
-//	cc 15 ccgo 15 build 15 run 15 ok 15 (100.00%) csmith 15 (22.893469656s)
-//	cc 16 ccgo 16 build 16 run 16 ok 16 (100.00%) csmith 16 (23.688706002s)
-//	cc 17 ccgo 17 build 17 run 17 ok 17 (100.00%) csmith 17 (24.123497626s)
-//	cc 18 ccgo 18 build 18 run 18 ok 18 (100.00%) csmith 18 (24.967377057s)
-//	cc 19 ccgo 19 build 19 run 19 ok 19 (100.00%) csmith 19 (25.404479678s)
-//	cc 20 ccgo 20 build 20 run 20 ok 20 (100.00%) csmith 20 (26.590458339s)
-//	cc 21 ccgo 21 build 21 run 21 ok 21 (100.00%) csmith 21 (35.898416992s)
-//	cc 22 ccgo 22 build 22 run 22 ok 22 (100.00%) csmith 22 (36.90634691s)
-//	cc 23 ccgo 23 build 23 run 23 ok 23 (100.00%) csmith 23 (37.377914725s)
-//	cc 24 ccgo 24 build 24 run 24 ok 24 (100.00%) csmith 24 (38.783921397s)
-//	cc 25 ccgo 25 build 25 run 25 ok 25 (100.00%) csmith 25 (41.883502521s)
-//	cc 26 ccgo 26 build 26 run 26 ok 26 (100.00%) csmith 26 (42.937642235s)
-//	cc 27 ccgo 27 build 27 run 27 ok 27 (100.00%) csmith 27 (44.4482684s)
-//	cc 28 ccgo 28 build 28 run 28 ok 28 (100.00%) csmith 28 (45.862920722s)
-//	cc 29 ccgo 29 build 29 run 29 ok 29 (100.00%) csmith 29 (55.090609047s)
-//	cc 30 ccgo 30 build 30 run 30 ok 30 (100.00%) csmith 30 (56.192073861s)
-//	cc 31 ccgo 31 build 31 run 31 ok 31 (100.00%) csmith 31 (57.51028454s)
-//	cc 32 ccgo 32 build 32 run 32 ok 32 (100.00%) csmith 32 (59.164144415s)
-//	cc 33 ccgo 33 build 33 run 33 ok 33 (100.00%) csmith 33 (1m0.067423691s)
-//	CSmith0	cc 33 ccgo 33 build 33 run 33 ok 33 (100.00%) csmith 33 (1m0.067445063s)
+//	cc 1 ccgo 1 build 1 run 1 ok 1 (100.00%) csmith 1 (1.22016773s) -s 1322542678
+//	cc 2 ccgo 2 build 2 run 2 ok 2 (100.00%) csmith 2 (8.363377368s) -s 1322542678
+//	cc 3 ccgo 3 build 3 run 3 ok 3 (100.00%) csmith 3 (8.801703008s) -s 1901462611
+//	cc 4 ccgo 4 build 4 run 4 ok 4 (100.00%) csmith 4 (10.452258509s) -s 2829621573
+//	cc 5 ccgo 5 build 5 run 5 ok 5 (100.00%) csmith 5 (10.905111033s) -s 576413934
+//	cc 6 ccgo 6 build 6 run 6 ok 6 (100.00%) csmith 6 (12.380064915s) -s 151038493
+//	cc 7 ccgo 7 build 7 run 7 ok 7 (100.00%) csmith 7 (12.813695161s)
+//	cc 8 ccgo 8 build 8 run 8 ok 8 (100.00%) csmith 8 (14.298309281s)
+//	cc 9 ccgo 9 build 9 run 9 ok 9 (100.00%) csmith 9 (15.550056678s)
+//	cc 10 ccgo 10 build 10 run 10 ok 10 (100.00%) csmith 10 (16.003065718s)
+//	cc 11 ccgo 11 build 11 run 11 ok 11 (100.00%) csmith 11 (17.308121541s)
+//	cc 12 ccgo 12 build 12 run 12 ok 12 (100.00%) csmith 12 (18.161670901s)
+//	cc 13 ccgo 13 build 13 run 13 ok 13 (100.00%) csmith 13 (19.664515266s)
+//	cc 14 ccgo 14 build 14 run 14 ok 14 (100.00%) csmith 14 (20.502080563s)
+//	cc 15 ccgo 15 build 15 run 15 ok 15 (100.00%) csmith 15 (21.351747069s)
+//	cc 16 ccgo 16 build 16 run 16 ok 16 (100.00%) csmith 16 (35.888045481s)
+//	cc 17 ccgo 17 build 17 run 17 ok 17 (100.00%) csmith 17 (36.313834309s)
+//	cc 18 ccgo 18 build 18 run 18 ok 18 (100.00%) csmith 18 (37.298146786s)
+//	cc 19 ccgo 19 build 19 run 19 ok 19 (100.00%) csmith 19 (37.726379798s)
+//	cc 20 ccgo 20 build 20 run 20 ok 20 (100.00%) csmith 20 (38.504772332s)
+//	cc 21 ccgo 21 build 21 run 21 ok 21 (100.00%) csmith 21 (40.062601816s)
+//	cc 22 ccgo 22 build 22 run 22 ok 22 (100.00%) csmith 22 (41.577478455s)
+//	cc 23 ccgo 23 build 23 run 23 ok 23 (100.00%) csmith 23 (42.390951895s)
+//	cc 24 ccgo 24 build 24 run 24 ok 24 (100.00%) csmith 24 (43.847028238s)
+//	cc 25 ccgo 25 build 25 run 25 ok 25 (100.00%) csmith 25 (45.010783494s)
+//	cc 26 ccgo 26 build 26 run 26 ok 26 (100.00%) csmith 26 (45.446887327s)
+//	cc 27 ccgo 27 build 27 run 27 ok 27 (100.00%) csmith 27 (46.395389262s)
+//	cc 28 ccgo 28 build 28 run 28 ok 28 (100.00%) csmith 28 (47.73191475s)
+//	cc 29 ccgo 29 build 29 run 29 ok 29 (100.00%) csmith 29 (48.786299501s)
+//	cc 30 ccgo 30 build 30 run 30 ok 30 (100.00%) csmith 30 (50.638198561s)
+//	cc 31 ccgo 31 build 31 run 31 ok 31 (100.00%) csmith 31 (51.650165526s)
+//	cc 32 ccgo 32 build 32 run 32 ok 32 (100.00%) csmith 32 (52.479811322s)
+//	cc 33 ccgo 33 build 33 run 33 ok 33 (100.00%) csmith 33 (1m0.203026129s)
+//	CSmith0	cc 33 ccgo 33 build 33 run 33 ok 33 (100.00%) csmith 33 (1m0.203046872s)
 //	PASS
-//	ok  	modernc.org/ccgo/v2	542.251s
+//	ok  	modernc.org/ccgo/v2	538.804s
 
 package ccgo // import "modernc.org/ccgo/v2"
 
@@ -211,6 +212,7 @@ func TestTCC(t *testing.T) {
 		"46_grep.c":             {}, // incompatible forward declaration type
 	}
 
+	var oks []string
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
@@ -300,6 +302,7 @@ func TestTCC(t *testing.T) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				ok++
+				oks = append(oks, filepath.Base(pth))
 				continue
 			}
 		}
@@ -312,7 +315,13 @@ func TestTCC(t *testing.T) {
 		}
 
 		ok++
+		oks = append(oks, filepath.Base(pth))
 	}
+
+	if err := ioutil.WriteFile(filepath.Join(cwd, "tcc-log"), []byte(strings.Join(oks, "\n")), 0660); err != nil {
+		t.Error(err)
+	}
+
 	if c != n || ccgo != n || build != n || run != n || ok != n {
 		t.Fatalf("TCC cc %v ccgo %v build %v run %v ok %v n %v", c, ccgo, build, run, ok, n)
 	}
@@ -339,6 +348,7 @@ func compileCCGO(dir string) (string, error) {
 }
 
 func TestOther(t *testing.T) {
+	var oks []string
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
@@ -424,6 +434,7 @@ func TestOther(t *testing.T) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				ok++
+				oks = append(oks, filepath.Base(pth))
 				continue
 			}
 		}
@@ -436,7 +447,13 @@ func TestOther(t *testing.T) {
 		}
 
 		ok++
+		oks = append(oks, filepath.Base(pth))
 	}
+
+	if err := ioutil.WriteFile(filepath.Join(cwd, "other-log"), []byte(strings.Join(oks, "\n")), 0660); err != nil {
+		t.Error(err)
+	}
+
 	if c != n || ccgo != n || build != n || run != n || ok != n {
 		t.Fatalf("Other\tcc %v ccgo %v build %v run %v ok %v n %v", c, ccgo, build, run, ok, n)
 	}
@@ -448,6 +465,7 @@ func TestOther(t *testing.T) {
 
 func TestGCCCompat(t *testing.T) {
 	blacklist := map[string]struct{}{}
+	var oks []string
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
@@ -537,6 +555,7 @@ func TestGCCCompat(t *testing.T) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				ok++
+				oks = append(oks, filepath.Base(pth))
 				continue
 			}
 		}
@@ -549,6 +568,11 @@ func TestGCCCompat(t *testing.T) {
 		}
 
 		ok++
+		oks = append(oks, filepath.Base(pth))
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(cwd, "gcc-compat-log"), []byte(strings.Join(oks, "\n")), 0660); err != nil {
+		t.Error(err)
 	}
 
 	if run == 0 || run != build || ok != build {
@@ -561,7 +585,10 @@ func TestGCCCompat(t *testing.T) {
 }
 
 func TestGCCCompile(t *testing.T) {
+	//TODO -pr36154.c
+
 	blacklist := map[string]struct{}{}
+	var oks []string
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
@@ -636,6 +663,11 @@ func TestGCCCompile(t *testing.T) {
 		ccgo++
 		build++
 		ok++
+		oks = append(oks, filepath.Base(pth))
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(cwd, "gcc-compile-log"), []byte(strings.Join(oks, "\n")), 0660); err != nil {
+		t.Error(err)
 	}
 
 	if ok != build {
@@ -648,6 +680,10 @@ func TestGCCCompile(t *testing.T) {
 }
 
 func TestGCCExecute(t *testing.T) {
+	//TODO -20010924-1.c
+	//TODO -pr28865.c
+	//TODO -pr33382.c
+
 	blacklist := map[string]struct{}{
 		"20021127-1.c": {}, // non standard GCC behavior
 		"20040520-1.c": {}, // Nested func
@@ -673,6 +709,7 @@ func TestGCCExecute(t *testing.T) {
 		"vla-dealloc-1.c":              {}, //TODO VLA
 	}
 
+	var oks []string
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
@@ -763,6 +800,7 @@ func TestGCCExecute(t *testing.T) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				ok++
+				oks = append(oks, filepath.Base(pth))
 				continue
 			}
 		}
@@ -775,6 +813,11 @@ func TestGCCExecute(t *testing.T) {
 		}
 
 		ok++
+		oks = append(oks, filepath.Base(pth))
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(cwd, "gcc-execute-log"), []byte(strings.Join(oks, "\n")), 0660); err != nil {
+		t.Error(err)
 	}
 
 	if run == 0 || run != build || ok != build {

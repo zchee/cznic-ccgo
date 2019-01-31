@@ -38,14 +38,16 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 		}
 
 		if x, ok := t.(*cc.ArrayType); ok && x.Size.Value == nil {
-			return "uintptr"
+			todo("", g.position(t))
+			//TODO- return "uintptr"
 		}
 	}
 
 	switch x := t.(type) {
 	case *cc.ArrayType:
 		if x.Size.Value == nil {
-			return fmt.Sprintf("*%s", g.ptyp(x.Item, ptr2uintptr, lvl))
+			todo("", g.position(t))
+			//TODO- return fmt.Sprintf("*%s", g.ptyp(x.Item, ptr2uintptr, lvl))
 		}
 
 		return fmt.Sprintf("[%d]%s", x.Size.Value.(*ir.Int64Value).Value, g.ptyp(x.Item, ptr2uintptr, lvl))
@@ -102,7 +104,7 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 		buf.WriteString("struct{")
 		layout := g.model.Layout(x)
 		for i, v := range x.Fields {
-			if v.Bits < 0 {
+			if v.IsFlexibleArray || v.Bits < 0 {
 				continue
 			}
 
