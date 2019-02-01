@@ -274,6 +274,7 @@ func (g *gen) tld(n *cc.Declarator) {
 	switch {
 	case
 		!arr,
+		arr && !esc && !vla && !param,
 		arr && esc && !vla && !param:
 
 		// nop
@@ -302,6 +303,15 @@ func (g *gen) tld(n *cc.Declarator) {
 		return
 	}
 
+	if _, ok := underlyingType(n.Type, false).(cc.TypeKind); !ok && g.isConstInitializer(n.Type, n.Initializer) {
+		b := make([]byte, g.model.Sizeof(n.Type))
+		if !g.isZeroInitializer(n.Initializer) {
+			g.renderInitializer(b, n.Type, n.Initializer)
+		}
+		g.w("\nvar %s = *(*%s)(unsafe.Pointer(%q))", g.mangleDeclarator(n), g.typ(n.Type), b)
+		return
+	}
+
 	switch n.Initializer.Case {
 	case cc.InitializerExpr: // Expr
 		switch cc.UnderlyingType(n.Type).(type) {
@@ -315,6 +325,11 @@ func (g *gen) tld(n *cc.Declarator) {
 			g.convert(n.Initializer.Expr, n.Type)
 			g.w("\n")
 		}
+	case cc.InitializerCompLit: // '{' InitializerList CommaOpt '}'
+		g.w("\nvar %s %s", g.mangleDeclarator(n), g.typ(n.Type))
+		g.w("\n\nfunc init() { %s = ", g.mangleDeclarator(n))
+		g.literal(n.Type, n.Initializer)
+		g.w("}")
 	default:
 		todo("", g.position(n), n.Initializer.Case)
 	}

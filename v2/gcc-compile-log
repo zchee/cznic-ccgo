@@ -672,6 +672,7 @@ pr34093.c
 pr34113.c
 pr34127.c
 pr34138.c
+pr34448.c
 pr34458.c
 pr34648.c
 pr34808.c
@@ -809,6 +810,7 @@ pr46832.c
 pr46856.c
 pr46883.c
 pr47140.c
+pr47141.c
 pr47150.c
 pr47157.c
 pr47265.c
@@ -974,6 +976,7 @@ shloop.c
 shm.c
 signext2.c
 sim.c
+sizeof-macros-1.c
 sne.c
 speed.c
 ssa-pre-1.c
@@ -986,9 +989,11 @@ structs.c
 stuct.c
 switch-1.c
 sym.c
+symconst.c
 t.c
 time.c
 trivial.c
+trunc.c
 trunctfdf.c
 udconvert.c
 uns_tst.c

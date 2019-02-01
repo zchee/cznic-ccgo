@@ -1,0 +1,11 @@
+sizeof(struct s): 4
+sizeof(struct s2): 8
+sizeof(struct fdop): 40
+offsetof(fdop.next): 0
+offsetof(fdop.prev): 8
+offsetof(fdop.cmd): 16
+offsetof(fdop.fd): 20
+offsetof(fdop.srcfd): 24
+offsetof(fdop.oflag): 28
+offsetof(fdop.mode): 32
+offsetof(fdop.path): 36

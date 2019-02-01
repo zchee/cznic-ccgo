@@ -72,17 +72,17 @@ func (o *opt) do(out io.Writer, in io.Reader, fn string) error { //TODO reuse th
 	}
 
 	b := o.out.Bytes()
-	if i := bytes.Index(b, optTrap); i >= 0 {
-		a := bytes.LastIndex(b[:i], []byte{'\n'})
-		if a < 0 {
-			a = 0
-		}
-		z := bytes.Index(b[i:], []byte{'\n'})
-		if z < 0 {
-			z = 0
-		}
-		todo("invalid unsafe.Pointer to uintptr conversion\n%s", bytes.TrimSpace(b[a:i+z]))
-	}
+	// if i := bytes.Index(b, optTrap); i >= 0 {
+	// 	a := bytes.LastIndex(b[:i], []byte{'\n'})
+	// 	if a < 0 {
+	// 		a = 0
+	// 	}
+	// 	z := bytes.Index(b[i:], []byte{'\n'})
+	// 	if z < 0 {
+	// 		z = 0
+	// 	}
+	// 	todo("invalid unsafe.Pointer to uintptr conversion\n%s", bytes.TrimSpace(b[a:i+z]))
+	// }
 
 	b = bytes.Replace(b, []byte("\n\n}"), []byte("\n}"), -1)
 	b = bytes.Replace(b, []byte("\n\t;\n"), []byte("\n"), -1)

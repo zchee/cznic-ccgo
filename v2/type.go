@@ -129,6 +129,14 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 				fmt.Fprintf(&buf, "// %s\n", g.typeComment(v.Type))
 			}
 		}
+		if n := len(layout); n != 0 {
+			if x.HasFlexibleArrayMember {
+				n--
+			}
+			if n := layout[n-1].Padding; n != 0 {
+				fmt.Fprintf(&buf, "_ [%d]byte;", n)
+			}
+		}
 		buf.WriteByte('}')
 		return buf.String()
 	case *cc.EnumType:

@@ -335,11 +335,15 @@ func (g gen) escaped(n *cc.Declarator) bool {
 		return false
 	}
 
-	if n.AddressTaken || n.IsTLD() && n.Linkage == cc.LinkageExternal {
+	if n.IsTLD() || n.DeclarationSpecifier.IsStatic() {
+		return false
+	}
+
+	if n.AddressTaken {
 		return true
 	}
 
-	switch cc.UnderlyingType(n.Type).(type) {
+	switch underlyingType(n.Type, false).(type) {
 	case *cc.ArrayType:
 		return !n.IsFunctionParameter
 	default:

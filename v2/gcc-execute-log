@@ -1053,6 +1053,7 @@ strncmp-1.c
 struct-aliasing-1.c
 struct-ini-2.c
 struct-ini-3.c
+struct-ret-1.c
 struct-ret-2.c
 switch-1.c
 tstdi-1.c
@@ -1075,6 +1076,7 @@ va-arg-21.c
 va-arg-23.c
 va-arg-24.c
 va-arg-26.c
+va-arg-4.c
 va-arg-5.c
 va-arg-6.c
 va-arg-7.c

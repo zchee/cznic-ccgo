@@ -56,21 +56,6 @@ index 54d2ddc..c4d3b87 100644
  		return
  	}
  
-@@ -302,8 +313,13 @@ func (g *gen) tld(n *cc.Declarator) {
- 			g.convert(n.Initializer.Expr, n.Type)
- 			g.w("\n")
- 		}
-+	case cc.InitializerCompLit: // '{' InitializerList CommaOpt '}'
-+		g.w("\nvar %s %s", g.mangleDeclarator(n), g.typ(n.Type))
-+		g.w("\n\nfunc init() { %s = ", g.mangleDeclarator(n))
-+		g.literal(n.Type, n.Initializer)
-+		g.w("}")
- 	default:
--		todo("", g.position(n), n.Initializer.Case)
-+		todo("", g.position(n))
- 	}
- }
- 
 @@ -394,26 +414,6 @@ func (g *gen) linkInfo(n *cc.Declarator, declarationOnly bool) {
  	}
  }
@@ -323,9 +308,6 @@ index 8e9bba1..4f460a5 100644
 +			arr && !vla && param:
  
  			// nop
-+		case arr && !vla && !param:
-+			g.w("unsafe.Pointer(&%s)", g.mangleDeclarator(d))
-+			return
 +		case arr && vla && !param:
 +			g.w(" %s", g.mangleDeclarator(d))
 +			return

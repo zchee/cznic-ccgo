@@ -471,10 +471,6 @@ func (g *gen) literal(t cc.Type, n *cc.Initializer) {
 
 		g.value(n.Expr, false)
 	case *cc.StructType:
-		if x.HasFlexibleArrayMember {
-			todo("", g.position(n))
-		}
-
 		if n.Expr != nil {
 			g.value(n.Expr, false)
 			return
@@ -516,6 +512,9 @@ func (g *gen) literal(t cc.Type, n *cc.Initializer) {
 				switch {
 				case layout[fld].Bits > 0:
 					todo("bit field %v", g.position(n))
+				}
+				if layout[fld].IsFlexibleArray {
+					todo("", g.position(n))
 				}
 				d := fields[fld] //TODO mixed index fieds vs layout
 				g.w("F%s: ", dict.S(d.Name))
@@ -720,6 +719,10 @@ func (g *gen) renderInitializer(b []byte, t cc.Type, n *cc.Initializer) {
 					todo("", g.position(n), sz, v)
 				}
 			default:
+				if fields[fld].IsFlexibleArray {
+					todo("", g.position(n))
+				}
+
 				g.renderInitializer(b[lo:hi:hi], fields[fld].Type, l.Initializer) //TODO mixed index fieds vs layout
 			}
 			fld++

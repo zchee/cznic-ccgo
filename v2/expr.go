@@ -495,6 +495,9 @@ func (g *gen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		case
 			!arr,
 			arr && !esc && !vla && param:
+		case arr && !esc && !vla && !param:
+			g.w("uintptr(unsafe.Pointer(&%s))", g.mangleDeclarator(d))
+			return
 
 			// nop
 		default:
@@ -1441,6 +1444,9 @@ func (g *gen) uintptr(n *cc.Expr, packedField bool) {
 		switch {
 		case !arr:
 			// nop
+		case arr && !esc && !vla && !param:
+			g.w(" uintptr(unsafe.Pointer(&%s))", g.mangleDeclarator(d))
+			return
 		case arr && !esc && !vla && param:
 			g.w(" %s", g.mangleDeclarator(d))
 			return
@@ -1453,8 +1459,7 @@ func (g *gen) uintptr(n *cc.Expr, packedField bool) {
 		case d.Type.Kind() == cc.Function:
 			g.w("%s(%s)", g.registerHelper("fp%d", g.typ(d.Type)), g.mangleDeclarator(d))
 		default:
-			// 		g.w("uintptr(unsafe.Pointer(&%s))", g.mangleDeclarator(d))
-			todo("", g.position(n))
+			g.w("uintptr(unsafe.Pointer(&%s))", g.mangleDeclarator(d))
 		}
 	case cc.ExprIndex: // Expr '[' ExprList ']'
 		t := n.Expr.Operand.Type
