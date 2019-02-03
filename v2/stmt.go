@@ -6,6 +6,7 @@ package ccgo // import "modernc.org/ccgo/v2"
 
 import (
 	"modernc.org/cc/v2"
+	crtp "modernc.org/crt"
 )
 
 func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[*cc.LabeledStmt]int, sentinel bool, brk, cont *int, params, escParams []*cc.Declarator, main, value bool) {
@@ -38,7 +39,7 @@ func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[
 	var malloc int64
 	var offp, offv []int64
 	for _, v := range escParams {
-		malloc = roundup(malloc, 16)
+		malloc = roundup(malloc, crtp.StackAlign)
 		offp = append(offp, malloc)
 		malloc += g.model.Sizeof(v.Type)
 	}
@@ -59,7 +60,8 @@ func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[
 		}
 	}
 	if malloc != 0 {
-		g.w("\nesc := %sMustMalloc(%d)", g.crtPrefix, malloc)
+		malloc = roundup(malloc, crtp.StackAlign)
+		g.w("\nesc := %sMallocStack(tls, %d)", g.crtPrefix, malloc)
 	}
 	if len(vars)+len(escParams) != 0 {
 		localNames := map[int]struct{}{}
@@ -119,7 +121,7 @@ func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[
 	case alloca:
 		g.w("\ndefer func() {")
 		if malloc != 0 {
-			g.w("\n%sFree(esc)", g.crtPrefix)
+			g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, malloc)
 		}
 		g.w(`
 for _, v := range allocs {
@@ -127,7 +129,7 @@ for _, v := range allocs {
 }`, g.crtPrefix)
 		g.w("\n}()")
 	case malloc != 0:
-		g.w("\ndefer %sFree(esc)", g.crtPrefix)
+		g.w("\ndefer %sFreeStack(tls, %d)", g.crtPrefix, malloc)
 	}
 	for _, v := range escParams {
 		g.w("\n*(*%s)(unsafe.Pointer(%s)) = a%s", g.typ(v.Type), g.mangleDeclarator(v), dict.S(v.Name()))
