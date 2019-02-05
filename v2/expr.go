@@ -297,22 +297,22 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 			todo("%v: %T", g.position(n), x)
 		}
 	case cc.ExprAddAssign: // Expr "+=" Expr
-		switch {
-		case cc.UnderlyingType(n.Expr.Operand.Type).Kind() == cc.Ptr:
+		switch x := cc.UnderlyingType(n.Expr.Operand.Type).(type) {
+		case *cc.PointerType:
 			g.w(" *(")
 			g.lvalue(n.Expr)
-			g.w(") += %d*uintptr(", g.model.Sizeof(n.Expr.Operand.Type.(*cc.PointerType).Item))
+			g.w(") += %d*uintptr(", g.model.Sizeof(x.Item))
 			g.value(n.Expr2, false)
 			g.w(")")
 		default:
 			g.voidArithmeticAsop(n)
 		}
 	case cc.ExprSubAssign: // Expr "-=" Expr
-		switch {
-		case n.Expr.Operand.Type.Kind() == cc.Ptr:
+		switch x := cc.UnderlyingType(n.Expr.Operand.Type).(type) {
+		case *cc.PointerType:
 			g.w(" *(")
 			g.lvalue(n.Expr)
-			g.w(") -= %d*uintptr(", g.model.Sizeof(n.Expr.Operand.Type.(*cc.PointerType).Item))
+			g.w(") -= %d*uintptr(", g.model.Sizeof(x.Item))
 			g.value(n.Expr2, false)
 			g.w(")")
 		default:
@@ -749,14 +749,24 @@ func (g *gen) value0(n *cc.Expr, packedField bool, exprCall bool) {
 		switch {
 		case t.Kind() == cc.Ptr:
 			g.value0(n.Expr, false, exprCall)
-			g.w(" + %d*uintptr(", g.model.Sizeof(t.(*cc.PointerType).Item))
-			g.value0(n.Expr2, false, exprCall)
-			g.w(")")
+			switch {
+			case n.Expr2.Operand.Value != nil && g.voidCanIgnore(n.Expr2):
+				g.w("%+d", g.model.Sizeof(t.(*cc.PointerType).Item)*n.Expr2.Operand.Value.(*ir.Int64Value).Value)
+			default:
+				g.w(" + %d*uintptr(", g.model.Sizeof(t.(*cc.PointerType).Item))
+				g.value0(n.Expr2, false, exprCall)
+				g.w(")")
+			}
 		case u.Kind() == cc.Ptr:
-			g.w("%d*uintptr(", g.model.Sizeof(u.(*cc.PointerType).Item))
-			g.value0(n.Expr, false, exprCall)
-			g.w(") + ")
 			g.value0(n.Expr2, false, exprCall)
+			switch {
+			case n.Expr.Operand.Value != nil && g.voidCanIgnore(n.Expr):
+				g.w("%+d", g.model.Sizeof(u.(*cc.PointerType).Item)*n.Expr.Operand.Value.(*ir.Int64Value).Value)
+			default:
+				g.w(" + %d*uintptr(", g.model.Sizeof(u.(*cc.PointerType).Item))
+				g.value0(n.Expr, false, exprCall)
+				g.w(")")
+			}
 		default:
 			g.binop(n)
 		}
