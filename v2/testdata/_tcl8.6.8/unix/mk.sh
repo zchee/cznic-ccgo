@@ -30,3 +30,4 @@ date
 # all.tcl:	Total	26037	Passed	25028	Skipped	944	Failed	65	# 2019-01-31 e5-1650 go version go1.11.4 linux/amd64 openSuse Leap 15.0
 
 # all.tcl:	Total	26092	Passed	25089	Skipped	945	Failed	58	# 2019-02-03 4670 go version go1.11.2 linux/amd64 openSuse 42.3
+# all.tcl:	Total	26092	Passed	25089	Skipped	945	Failed	58	# 2019-02-05 e5-1650 1.11.4 linux/amd64 openSuse Leap 15.0

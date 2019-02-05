@@ -57,6 +57,7 @@ func init() {
 }
 
 type gen struct {
+	allocatedStack     int
 	crtPrefix          string
 	enqueued           map[interface{}]struct{}
 	enumConsts         map[int]struct{}

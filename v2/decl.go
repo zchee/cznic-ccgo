@@ -447,6 +447,7 @@ func (g *gen) escapedTLD(n *cc.Declarator) {
 }
 
 func (g *gen) functionDefinition(n *cc.Declarator) {
+	g.allocatedStack = 0
 	main := fixMain(n)
 	g.nextLabel = 1
 	pos := g.position(n)

@@ -7,6 +7,7 @@ package ccgo // import "modernc.org/ccgo/v2"
 import (
 	"modernc.org/cc/v2"
 	crtp "modernc.org/crt"
+	"modernc.org/mathutil"
 )
 
 func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[*cc.LabeledStmt]int, sentinel bool, brk, cont *int, params, escParams []*cc.Declarator, main, value bool) {
@@ -61,6 +62,11 @@ func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[
 	}
 	if malloc != 0 {
 		malloc = roundup(malloc, crtp.StackAlign)
+		if malloc > mathutil.MaxInt {
+			todo("", g.position(n))
+		}
+
+		g.allocatedStack = int(malloc)
 		g.w("\nesc := %sMallocStack(tls, %d)", g.crtPrefix, malloc)
 	}
 	if len(vars)+len(escParams) != 0 {
@@ -117,24 +123,21 @@ func (g *gen) compoundStmt(n *cc.CompoundStmt, vars []*cc.Declarator, cases map[
 			g.w("\n)")
 		}
 	}
-	switch {
-	case alloca:
+	if alloca {
 		g.w("\ndefer func() {")
-		if malloc != 0 {
-			g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, malloc)
-		}
 		g.w(`
 for _, v := range allocs {
 	%sFree(v)
 }`, g.crtPrefix)
 		g.w("\n}()")
-	case malloc != 0:
-		g.w("\ndefer %sFreeStack(tls, %d)", g.crtPrefix, malloc)
 	}
 	for _, v := range escParams {
 		g.w("\n*(*%s)(unsafe.Pointer(%s)) = a%s", g.typ(v.Type), g.mangleDeclarator(v), dict.S(v.Name()))
 	}
 	returned := g.blockItemListOpt(n.BlockItemListOpt, cases, brk, cont, main, value)
+	if !returned && malloc != 0 {
+		g.w(";%sFreeStack(tls, %d)", g.crtPrefix, malloc)
+	}
 	if vars != nil {
 		if sentinel && !returned {
 			g.w(";return r")
@@ -812,38 +815,86 @@ func (g *gen) jumpStmt(n *cc.JumpStmt, brk, cont *int, main bool) (returned bool
 					todo("", g.position(n))
 				default:
 					g.exprList(o.ExprList, true, false)
+					if g.allocatedStack != 0 {
+						g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, g.allocatedStack)
+					}
+					g.w("\nreturn")
 				}
 			default:
 				switch {
-				case isSingleExpression(o.ExprList) && o.ExprList.Expr.Case == cc.ExprCond:
-					n := o.ExprList.Expr // Expr '?' ExprList ':' Expr
+				case g.allocatedStack != 0:
 					switch {
-					case n.Expr.IsZero() && g.voidCanIgnore(n.Expr):
-						g.w("\nreturn ")
-						g.convert(n.Expr2, rt)
-					case n.Expr.IsNonZero() && g.voidCanIgnore(n.Expr):
-						g.w("\nreturn ")
-						g.exprList2(n.ExprList, rt)
-						g.w("\n")
+					case isSingleExpression(o.ExprList) && o.ExprList.Expr.Case == cc.ExprCond:
+						n := o.ExprList.Expr // Expr '?' ExprList ':' Expr
+						switch {
+						case n.Expr.IsZero() && g.voidCanIgnore(n.Expr):
+							g.w("\nr = ")
+							g.convert(n.Expr2, rt)
+							g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, g.allocatedStack)
+							g.w("\nreturn r")
+						case n.Expr.IsNonZero() && g.voidCanIgnore(n.Expr):
+							g.w("\nr = ")
+							g.exprList2(n.ExprList, rt)
+							g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, g.allocatedStack)
+							g.w("\nreturn r;")
+						default:
+							g.w("\nif ")
+							g.value(n.Expr, false)
+							g.w(" != 0 { r = ")
+							g.exprList2(n.ExprList, rt)
+							g.w(";%sFreeStack(tls, %d)", g.crtPrefix, g.allocatedStack)
+							g.w("; return r }")
+							g.w("\nr = ")
+							g.convert(n.Expr2, rt)
+							g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, g.allocatedStack)
+							g.w("\nreturn r")
+						}
 					default:
-						g.w("\nif ")
-						g.value(n.Expr, false)
-						g.w(" != 0 { return ")
-						g.exprList2(n.ExprList, rt)
-						g.w("}\nreturn ")
-						g.convert(n.Expr2, rt)
+						g.w("\nr = ")
+						switch {
+						case isSingleExpression(o.ExprList) && o.ExprList.Operand.Value != nil && o.ExprList.Operand.Type.Equal(rt) && g.voidCanIgnoreExprList(o.ExprList):
+							g.constant(o.ExprList.Expr)
+						default:
+							g.exprList2(o.ExprList, rt)
+						}
+						g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, g.allocatedStack)
+						g.w("\nreturn r")
 					}
 				default:
-					g.w("\nreturn ")
 					switch {
-					case isSingleExpression(o.ExprList) && o.ExprList.Operand.Value != nil && o.ExprList.Operand.Type.Equal(rt) && g.voidCanIgnoreExprList(o.ExprList):
-						g.constant(o.ExprList.Expr)
+					case isSingleExpression(o.ExprList) && o.ExprList.Expr.Case == cc.ExprCond:
+						n := o.ExprList.Expr // Expr '?' ExprList ':' Expr
+						switch {
+						case n.Expr.IsZero() && g.voidCanIgnore(n.Expr):
+							g.w("\nreturn ")
+							g.convert(n.Expr2, rt)
+						case n.Expr.IsNonZero() && g.voidCanIgnore(n.Expr):
+							g.w("\nreturn ")
+							g.exprList2(n.ExprList, rt)
+							g.w("\n")
+						default:
+							g.w("\nif ")
+							g.value(n.Expr, false)
+							g.w(" != 0 { return ")
+							g.exprList2(n.ExprList, rt)
+							g.w("}\nreturn ")
+							g.convert(n.Expr2, rt)
+						}
 					default:
-						g.exprList2(o.ExprList, rt)
+						g.w("\nreturn ")
+						switch {
+						case isSingleExpression(o.ExprList) && o.ExprList.Operand.Value != nil && o.ExprList.Operand.Type.Equal(rt) && g.voidCanIgnoreExprList(o.ExprList):
+							g.constant(o.ExprList.Expr)
+						default:
+							g.exprList2(o.ExprList, rt)
+						}
 					}
 				}
 			}
 		default:
+			if g.allocatedStack != 0 {
+				g.w("\n%sFreeStack(tls, %d)", g.crtPrefix, g.allocatedStack)
+			}
 			g.w("\nreturn ")
 		}
 		returned = true
