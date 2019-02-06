@@ -775,7 +775,7 @@ func TestGCCExecute(t *testing.T) {
 			fmt.Fprintln(os.Stderr, pth)
 		}
 		n++
-		out, err := exec.Command(compiler, "--ccgo-struct-checks", "-o", testGo, pth).CombinedOutput()
+		out, err := exec.Command(compiler, "--ccgo-struct-checks", "--ccgo-import", "sync/atomic", "--ccgo-use-import", "atomic.Value{}", "-o", testGo, pth).CombinedOutput()
 		if err != nil {
 			t.Logf("%s: %s\n%v", pth, out, err)
 			continue
@@ -872,7 +872,7 @@ func TestSQLiteShell(t *testing.T) {
 	var c, ccgo, build, run, ok, n int
 	for {
 		n++
-		out, err := exec.Command(compiler, "--ccgo-struct-checks", filepath.Join(root, "shell.c"), filepath.Join(root, "sqlite3.c")).CombinedOutput()
+		out, err := exec.Command(compiler, "--ccgo-struct-checks", "--ccgo-import", "sync/atomic", filepath.Join(root, "shell.c"), filepath.Join(root, "sqlite3.c")).CombinedOutput()
 		if err != nil {
 			t.Logf("%s: %s\n%v", dir, out, err)
 			break

@@ -104,6 +104,10 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 		buf.WriteString("struct{")
 		layout := g.model.Layout(x)
 		for i, v := range x.Fields {
+			var volatile string
+			if d := v.Declarator; d != nil && d.DeclarationSpecifier.IsVolatile() {
+				volatile = "volatile "
+			}
 			if v.IsFlexibleArray || v.Bits < 0 {
 				continue
 			}
@@ -125,8 +129,13 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 				fmt.Fprintf(&buf, "F%s ", dict.S(v.Name))
 			}
 			fmt.Fprintf(&buf, "%s;", g.ptyp(v.Type, ptr2uintptr, lvl+1))
-			if lvl == 0 && ptr2uintptr && v.Type.Kind() == cc.Ptr {
-				fmt.Fprintf(&buf, "// %s\n", g.typeComment(v.Type))
+			if lvl == 0 {
+				switch {
+				case ptr2uintptr && v.Type.Kind() == cc.Ptr:
+					fmt.Fprintf(&buf, "// %s%s\n", volatile, g.typeComment(v.Type))
+				case volatile != "":
+					fmt.Fprintf(&buf, "// %s\n", volatile)
+				}
 			}
 		}
 		if n := len(layout); n != 0 {
@@ -197,6 +206,10 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 		buf.WriteString("struct{")
 		layout := g.model.Layout(x)
 		for i, v := range x.Fields {
+			var volatile string
+			if d := v.Declarator; d != nil && d.DeclarationSpecifier.IsVolatile() {
+				volatile = "volatile "
+			}
 			if v.Bits < 0 {
 				continue
 			}
@@ -218,8 +231,13 @@ func (g *gen) ptyp(t cc.Type, ptr2uintptr bool, lvl int) (r string) {
 				fmt.Fprintf(&buf, "F%s ", dict.S(v.Name))
 			}
 			fmt.Fprintf(&buf, "[0]%s;", g.ptyp(v.Type, ptr2uintptr, lvl+1))
-			if lvl == 0 && ptr2uintptr && v.Type.Kind() == cc.Ptr {
-				fmt.Fprintf(&buf, "// %s\n", g.typeComment(v.Type))
+			if lvl == 0 {
+				switch {
+				case ptr2uintptr && v.Type.Kind() == cc.Ptr:
+					fmt.Fprintf(&buf, "// %s%s\n", volatile, g.typeComment(v.Type))
+				case volatile != "":
+					fmt.Fprintf(&buf, "// %s\n", volatile)
+				}
 			}
 		}
 		al := int64(g.model.Alignof(x))

@@ -347,8 +347,10 @@ func (g gen) escaped(n *cc.Declarator) bool {
 	switch underlyingType(n.Type, false).(type) {
 	case *cc.ArrayType:
 		return !n.IsFunctionParameter
-	default:
+	case *cc.PointerType:
 		return false
+	default:
+		return n.DeclarationSpecifier.IsVolatile()
 	}
 }
 

@@ -266,9 +266,9 @@ func (g *gen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int, 
 			if e.IsZero() {
 				if !n.UseGotos {
 					g.exprList(e, true, false)
-					g.w("if false {\n")
-					g.stmt(n.Stmt, cases, brk, cont, main, value)
-					g.w("}")
+					//TODO- g.w("if false {\n")
+					//TODO- g.stmt(n.Stmt, cases, brk, cont, main, value)
+					//TODO- g.w("}")
 					break
 				}
 
@@ -311,11 +311,11 @@ func (g *gen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int, 
 			if e.IsZero() {
 				if !n.UseGotos {
 					g.exprList(n.ExprList, true, false)
-					g.w("if false {")
-					g.stmt(n.Stmt, cases, brk, cont, main, value)
-					g.w("} else {")
+					//TODO- g.w("if false {")
+					//TODO- g.stmt(n.Stmt, cases, brk, cont, main, value)
+					//TODO- g.w("} else {")
 					g.stmt(n.Stmt2, cases, brk, cont, main, value)
-					g.w("}")
+					//TODO- g.w("}")
 					break
 				}
 
@@ -334,11 +334,11 @@ func (g *gen) selectionStmt(n *cc.SelectionStmt, cases map[*cc.LabeledStmt]int, 
 			if e.IsNonZero() {
 				if !n.UseGotos {
 					g.exprList(n.ExprList, true, false)
-					g.w("if true {")
+					//TODO- g.w("if true {")
 					g.stmt(n.Stmt, cases, brk, cont, main, value)
-					g.w("} else {")
-					g.stmt(n.Stmt2, cases, brk, cont, main, value)
-					g.w("}")
+					//TODO- g.w("} else {")
+					//TODO- g.stmt(n.Stmt2, cases, brk, cont, main, value)
+					//TODO- g.w("}")
 					break
 				}
 
