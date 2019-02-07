@@ -140,6 +140,17 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 		return
 	}
 
+	if d := n.Declarator; d.IsVolatile() {
+		switch n.Case {
+		case cc.ExprIdent:
+			g.w("_ = ")
+			g.volatileValue(n)
+			return
+		default:
+			todo("%v: %v %v:", g.position(n), n.Case, g.position(d))
+		}
+	}
+
 	if g.voidCanIgnore(n) {
 		return
 	}
@@ -188,6 +199,90 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 		lhs := n.Expr
 		rhs := n.Expr2
 		op := lhs.Operand
+
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			case *cc.PointerType:
+				// volatile int *p; p = &i;
+				// ok, nop
+			case cc.TypeKind:
+				switch x {
+				case cc.Char:
+					//TODO(volatile char)
+					g.w("/*TODO volatile char */")
+				case cc.Int:
+					//TODO(volatile)
+					switch {
+					case g.escaped(d):
+						g.w("atomic.StoreInt32((*int32)(unsafe.Pointer(%s)), ", g.mangleDeclarator(d))
+						g.convert(rhs, op.Type)
+						g.w(")")
+					default:
+						g.w("atomic.StoreInt32(&%s, ", g.mangleDeclarator(d))
+						g.convert(rhs, op.Type)
+						g.w(")")
+					}
+					return
+				case cc.Float:
+					//TODO(volatile)
+					switch {
+					case g.escaped(d):
+						g.w("atomic.StoreUint32((*uint32)(unsafe.Pointer(%s)), math.Float32bits(", g.mangleDeclarator(d))
+						g.convert(rhs, op.Type)
+						g.w("))")
+					default:
+						g.w("atomic.StoreUint32((*uint32)(unsafe.Pointer(&%s)), math.Float32bits(", g.mangleDeclarator(d))
+						g.convert(rhs, op.Type)
+						g.w("))")
+					}
+					return
+				case cc.Double:
+					//TODO(volatile)
+					switch {
+					case g.escaped(d):
+						g.w("atomic.StoreUint64((*uint64)(unsafe.Pointer(%s)), math.Float64bits(", g.mangleDeclarator(d))
+						g.convert(rhs, op.Type)
+						g.w("))")
+					default:
+						todo("%v: %v %v:", g.position(n), x, g.position(d))
+					}
+					return
+				case cc.LongDouble:
+					//TODO(volatile)
+					switch {
+					case g.escaped(d):
+						g.w("atomic.StoreUint64((*uint64)(unsafe.Pointer(%s)), math.Float64bits(", g.mangleDeclarator(d))
+						g.convert(rhs, op.Type)
+						g.w("))")
+					default:
+						todo("%v: %v %v:", g.position(n), x, g.position(d))
+					}
+					return
+				default:
+					todo("%v: %v %v:", g.position(n), x, g.position(d))
+				}
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
+
+		switch lhs.Case {
+		case cc.ExprIdent:
+			//TODO(volatile)
+		case cc.ExprDeref:
+			//TODO(volatile)
+		case cc.ExprIndex:
+			//TODO(volatile)
+		case cc.ExprPExprList:
+			//TODO(volatile)
+		case cc.ExprPSelect:
+			//TODO(volatile)
+		case cc.ExprSelect:
+			//TODO(volatile)
+		default:
+			todo("", g.position(lhs), lhs.Case)
+		}
+
 		if op.Bits() != 0 {
 			g.assignmentValue(n)
 			return
@@ -223,6 +318,23 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 	case
 		cc.ExprPostInc, // Expr "++"
 		cc.ExprPreInc:  // "++" Expr
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			case *cc.PointerType:
+				//TODO(volatile)
+			case cc.TypeKind:
+				switch x {
+				case cc.Int:
+					//TODO(volatile)
+				case cc.UInt:
+					//TODO(volatile)
+				default:
+					todo("%v: %v %v:", g.position(n), x, g.position(d))
+				}
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
 
 		switch x := cc.UnderlyingType(n.Operand.Type).(type) {
 		case *cc.PointerType:
@@ -256,6 +368,13 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 		cc.ExprPostDec, // Expr "--"
 		cc.ExprPreDec:  // "--" Expr
 
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
+
 		switch x := cc.UnderlyingType(n.Operand.Type).(type) {
 		case *cc.PointerType:
 			switch sz := g.model.Sizeof(x.Item); {
@@ -287,6 +406,20 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 			todo("%v: %T", g.position(n), x)
 		}
 	case cc.ExprAddAssign: // Expr "+=" Expr
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			case cc.TypeKind:
+				switch x {
+				case cc.Int:
+					//TODO(volatile)
+				default:
+					todo("%v: %v %v:", g.position(n), x, g.position(d))
+				}
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
+
 		switch x := cc.UnderlyingType(n.Expr.Operand.Type).(type) {
 		case *cc.PointerType:
 			g.w(" *(")
@@ -298,6 +431,20 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 			g.voidArithmeticAsop(n)
 		}
 	case cc.ExprSubAssign: // Expr "-=" Expr
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			case cc.TypeKind:
+				switch x {
+				case cc.Double:
+					//TODO(volatile)
+				default:
+					todo("%v: %v %v:", g.position(n), x, g.position(d))
+				}
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
+
 		switch x := cc.UnderlyingType(n.Expr.Operand.Type).(type) {
 		case *cc.PointerType:
 			g.w(" *(")
@@ -318,6 +465,20 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 		cc.ExprRshAssign, // Expr ">>=" Expr
 		cc.ExprXorAssign: // Expr "^=" Expr
 
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			case cc.TypeKind:
+				switch x {
+				case cc.Double:
+					//TODO(volatile)
+				default:
+					todo("%v: %v %v:", g.position(n), x, g.position(d))
+				}
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
+
 		g.voidArithmeticAsop(n)
 	case cc.ExprPExprList: // '(' ExprList ')'
 		for l := n.ExprList; l != nil; l = l.ExprList {
@@ -325,6 +486,7 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 			g.w(";")
 		}
 	case cc.ExprCast: // '(' TypeName ')' Expr
+		//TODO abstract declarator IsVolatile()
 		if isVaList(n.Expr.Operand.Type) { //TODO- ?
 			g.w("%sVA%s(", g.crtPrefix, g.typ(cc.UnderlyingType(n.TypeName.Type)))
 			g.value(n.Expr, false)
@@ -398,6 +560,13 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 			g.w("}")
 		}
 	case cc.ExprIndex: // Expr '[' ExprList ']'
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
+
 		g.void(n.Expr, false)
 		if !g.voidCanIgnoreExprList(n.ExprList) {
 			g.w("\n")
@@ -410,6 +579,13 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 		cc.ExprNot,        // '!' Expr
 		cc.ExprUnaryMinus, // '-' Expr
 		cc.ExprUnaryPlus:  // '+' Expr
+
+		if d := n.Expr.Declarator; d.IsVolatile() {
+			switch x := underlyingType(d.Type, false).(type) {
+			default:
+				todo("%v: %T %v:", g.position(n), x, g.position(d))
+			}
+		}
 
 		g.void(n.Expr, false)
 	case // Binary
@@ -441,6 +617,30 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 		todo("", g.position(n), n.Case)
 	}
 } // void
+
+func (g *gen) volatileValue(n *cc.Expr) {
+	switch d := n.Declarator; n.Case {
+	case cc.ExprIdent:
+		switch x := underlyingType(d.Type, false).(type) {
+		case cc.TypeKind:
+			switch x {
+			case cc.UInt:
+				switch {
+				case g.escaped(d):
+					todo("%v: %v %v:", g.position(n), x, g.position(d))
+				default:
+					g.w("atomic.LoadUint32(&%s)", g.mangleDeclarator(d))
+				}
+			default:
+				todo("%v: %v %v:", g.position(n), x, g.position(d))
+			}
+		default:
+			todo("%v: %T %v:", g.position(n), x, g.position(d))
+		}
+	default:
+		todo("%v: %v %v:", g.position(n), n.Case, g.position(d))
+	}
+}
 
 func (g *gen) inc(n *cc.Expr) {
 	g.w(" *(")

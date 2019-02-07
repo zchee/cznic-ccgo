@@ -638,7 +638,7 @@ func TestGCCCompile(t *testing.T) {
 		}
 	}()
 
-	testGo := filepath.Join(dir, "test.go")
+	testGo := filepath.Join(dir, "main.go")
 	var c, ccgo, build, ok, n int
 	for _, pth := range m {
 		if re != nil && !re.MatchString(filepath.Base(pth)) {
@@ -872,7 +872,7 @@ func TestSQLiteShell(t *testing.T) {
 	var c, ccgo, build, run, ok, n int
 	for {
 		n++
-		out, err := exec.Command(compiler, "--ccgo-struct-checks", "--ccgo-import", "sync/atomic", filepath.Join(root, "shell.c"), filepath.Join(root, "sqlite3.c")).CombinedOutput()
+		out, err := exec.Command(compiler, "--ccgo-struct-checks", "--ccgo-import", "sync/atomic", "--ccgo-use-import", "atomic.Value{}", filepath.Join(root, "shell.c"), filepath.Join(root, "sqlite3.c")).CombinedOutput()
 		if err != nil {
 			t.Logf("%s: %s\n%v", dir, out, err)
 			break
