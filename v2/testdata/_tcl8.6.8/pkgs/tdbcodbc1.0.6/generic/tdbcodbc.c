@@ -39,7 +39,7 @@
 
 /* Static data contained in this file */
 
-TCL_DECLARE_MUTEX(hEnvMutex);	/* Mutex protecting the environment handle
+TCL_DECLARE_MUTEX(hEnvMutex)	/* Mutex protecting the environment handle
 				 * and its reference count */
 
 static Tcl_LoadHandle odbcLoadHandle = NULL;

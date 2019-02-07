@@ -443,95 +443,12 @@ func (g *gen) void(n *cc.Expr, noSemi bool) {
 } // void
 
 func (g *gen) inc(n *cc.Expr) {
-	switch d := n.Declarator; {
-	case d != nil && d.DeclarationSpecifier.IsVolatile():
-		switch x := underlyingType(d.Type, false).(type) {
-		case cc.TypeKind:
-			switch x {
-			case cc.Int:
-				switch {
-				case g.escaped(d):
-					g.w("atomic.AddInt32((*int32)(unsafe.Pointer(%s)), 1)", g.mangleDeclarator(d))
-				default:
-					g.w("atomic.AddInt32(&%s, 1)", g.mangleDeclarator(d))
-				}
-			case cc.UInt:
-				switch {
-				case g.escaped(d):
-					todo("%v: %v %v:", g.position(n), x, g.position(d))
-				default:
-					g.w("atomic.AddUint32(&%s, 1)", g.mangleDeclarator(d))
-				}
-			default:
-				todo("%v: %v %v:", g.position(n), x, g.position(d))
-			}
-			return
-		default:
-			todo("%v: %T %v:", g.position(n), x, g.position(d))
-		}
-	}
-
 	g.w(" *(")
 	g.lvalue(n)
 	g.w(")++")
 }
 
 func (g *gen) assignment(lhs, rhs *cc.Expr, rhsList *cc.ExprList) {
-	switch d := lhs.Declarator; {
-	case d != nil && d.DeclarationSpecifier.IsVolatile():
-		switch x := underlyingType(d.Type, false).(type) {
-		case *cc.PointerType:
-			// ok
-		case cc.TypeKind:
-			switch x {
-			case cc.Char:
-				// No Go support
-				g.w("/*TODO assignment to volatile char */\n")
-				g.w("%s = ", g.mangleDeclarator(d))
-				g.rhsValue(lhs, rhs, rhsList)
-			case cc.Int:
-				switch {
-				case g.escaped(d):
-					g.w("atomic.StoreInt32((*int32)(unsafe.Pointer(%s)), ", g.mangleDeclarator(d))
-					g.rhsValue(lhs, rhs, rhsList)
-					g.w(")")
-				default:
-					g.w("atomic.StoreInt32(&%s, ", g.mangleDeclarator(d))
-					g.rhsValue(lhs, rhs, rhsList)
-					g.w(")")
-				}
-			case cc.Float:
-				switch {
-				case g.escaped(d):
-					g.w("atomic.StoreUint32((*uint32)(unsafe.Pointer(%s)), math.Float32bits(float32(", g.mangleDeclarator(d))
-					g.rhsValue(lhs, rhs, rhsList)
-					g.w(")))")
-				default:
-					g.w("atomic.StoreUint32((*uint32)(unsafe.Pointer(&%s)), math.Float32bits(float32(", g.mangleDeclarator(d))
-					g.rhsValue(lhs, rhs, rhsList)
-					g.w(")))")
-				}
-			case
-				cc.Double,
-				cc.LongDouble:
-
-				switch {
-				case g.escaped(d):
-					g.w("atomic.StoreUint64((*uint64)(unsafe.Pointer(%s)), math.Float64bits(float64(", g.mangleDeclarator(d))
-					g.rhsValue(lhs, rhs, rhsList)
-					g.w(")))")
-				default:
-					todo("%v: %v %v:", g.position(lhs), x, g.position(d))
-				}
-			default:
-				todo("%v: %v %v:", g.position(lhs), x, g.position(d))
-			}
-			return
-		default:
-			todo("%v: %T %v:", g.position(lhs), x, g.position(d))
-		}
-	}
-
 	g.w("*")
 	g.lvalue(lhs)
 	g.w(" = ")
@@ -548,15 +465,6 @@ func (g *gen) rhsValue(lhs, rhs *cc.Expr, rhsList *cc.ExprList) {
 }
 
 func (g *gen) lvalue(n *cc.Expr) {
-	if d := n.Declarator; d != nil && d.DeclarationSpecifier.IsVolatile() {
-		switch x := underlyingType(d.Type, false).(type) {
-		case *cc.PointerType:
-			// ok
-		default:
-			todo("%v: %T %v:", g.position(n), x, g.position(d))
-		}
-	}
-
 	g.w("&")
 	g.value(n, false)
 }
@@ -1977,38 +1885,6 @@ func (g *gen) voidArithmeticAsop(n *cc.Expr) {
 		bits := int(g.model.Sizeof(fp.Type) * 8)
 		g.w("; *p = (*p &^ %#x) | (%s((%s(%s(*p>>%d)<<%d>>%[6]d)) ", mask, g.typ(fp.PackedType), g.typ(op.Type), g.typ(fp.Type), fp.Bitoff, bits-fp.Bits)
 	case d != nil:
-		if d.DeclarationSpecifier.IsVolatile() {
-			switch x := underlyingType(d.Type, false).(type) {
-			case cc.TypeKind:
-				switch x {
-				case cc.Int:
-					switch {
-					case g.escaped(d):
-						todo("", g.position(n))
-					default:
-						g.w("atomic.StoreInt32(&%s, atomic.LoadInt32(&%[1]s)", g.mangleDeclarator(d))
-						g.voidArithmeticAsop2(n, op)
-						g.w(")")
-					}
-					return
-				case cc.Double:
-					switch {
-					case g.escaped(d):
-						g.w("atomic.StoreUint64((*uint64)(unsafe.Pointer(%s)), math.Float64bits(math.Float64frombits(atomic.LoadUint64((*uint64)(unsafe.Pointer(%[1]s))))", g.mangleDeclarator(d))
-						g.voidArithmeticAsop2(n, op)
-						g.w("))")
-					default:
-						todo("", g.position(n))
-					}
-					return
-				default:
-					todo("%v: %v", g.position(n), x)
-				}
-			default:
-				todo("%v: %T", g.position(n), x)
-			}
-		}
-
 		g.w(" *(")
 		g.lvalue(n.Expr)
 		g.w(") = %s(", g.typ(n.Expr.Operand.Type))
@@ -2056,36 +1932,6 @@ func (g *gen) voidArithmeticAsop(n *cc.Expr) {
 	default:
 		g.w(")}")
 	}
-}
-
-func (g *gen) voidArithmeticAsop2(n *cc.Expr, op cc.Operand) {
-	switch n.Token.Rune {
-	case cc.ANDASSIGN:
-		g.w("&")
-	case cc.ADDASSIGN:
-		g.w("+")
-	case cc.SUBASSIGN:
-		g.w("-")
-	case cc.MULASSIGN:
-		g.w("*")
-	case cc.DIVASSIGN:
-		g.w("/")
-	case cc.ORASSIGN:
-		g.w("|")
-	case cc.RSHASSIGN:
-		g.w(">>")
-		op.Type = cc.UInt
-	case cc.XORASSIGN:
-		g.w("^")
-	case cc.MODASSIGN:
-		g.w("%%")
-	case cc.LSHASSIGN:
-		g.w("<<")
-		op.Type = cc.UInt
-	default:
-		todo("", g.position(n), cc.TokSrc(n.Token))
-	}
-	g.convert(n.Expr2, op.Type)
 }
 
 func (g *gen) assignmentValue(n *cc.Expr) {

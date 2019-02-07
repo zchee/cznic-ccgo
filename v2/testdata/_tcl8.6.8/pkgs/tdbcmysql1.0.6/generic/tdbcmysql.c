@@ -34,7 +34,7 @@
 
 /* Static data contained in this file */
 
-TCL_DECLARE_MUTEX(mysqlMutex);	/* Mutex protecting the global environment
+TCL_DECLARE_MUTEX(mysqlMutex)	/* Mutex protecting the global environment
 				 * and its reference count */
 
 static int mysqlRefCount = 0;	/* Reference count on the global environment */
