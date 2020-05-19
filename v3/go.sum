@@ -33,14 +33,12 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 h1:E7g+9GITq07hpfrRu66IVDexMakfv52eLZ2CXBWiKr4=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-modernc.org/cc v1.0.0 h1:nPibNuDEx6tvYrUAtvDTTw98rx5juGsa5zuDnKwEEQQ=
 modernc.org/cc/v3 v3.0.0-20200518162753-8388753ec51c h1:S/CV/l9yLJHvVlNiH2zGn5yko7DeoJD7uLFy4J+9LE8=
 modernc.org/cc/v3 v3.0.0-20200518162753-8388753ec51c/go.mod h1:HeoKlFQ2EDE2ZKKqHH0djWUK2WPs5SYKBdZDVDUz78A=
-modernc.org/crt v1.0.0 h1:avY0RResvfWYzwlZTAO31E5B1mUr0JF6n6gaLJHeO+I=
+modernc.org/cc/v3 v3.0.0 h1:lJM3DVVE74lyGL3gxyPhWyIEbwxBojFhd2LWJ7QoIiI=
+modernc.org/cc/v3 v3.0.0/go.mod h1:HeoKlFQ2EDE2ZKKqHH0djWUK2WPs5SYKBdZDVDUz78A=
 modernc.org/crt/v2 v2.0.1-alpha.3 h1:fUwncKweDIyJJxv6GYq/LC+N7DWsvVAAXC0iY458n4c=
 modernc.org/crt/v2 v2.0.1-alpha.3/go.mod h1:K7tDS2XDAsVcX1puL+MEnzy8/E2kUh1GgV57DLtCNgg=
-modernc.org/crt/v3 v3.0.0 h1:jQ+k3EoeT3ot5uQrF3u/a94rSVr55vAYjmX35qTDO3M=
-modernc.org/crt/v3 v3.0.0/go.mod h1:6O6CpqmSt6ECXxNvpJU2PpWycHPaDDYosS4uMLCDk/M=
 modernc.org/crt/v3 v3.0.1 h1:05zWJvueMYAOMDgS32w7Os3lCYp+B0sZU9kj/M/Dbc4=
 modernc.org/crt/v3 v3.0.1/go.mod h1:6O6CpqmSt6ECXxNvpJU2PpWycHPaDDYosS4uMLCDk/M=
 modernc.org/mathutil v1.0.0 h1:93vKjrJopTPrtTNpZ8XIovER7iCIH1QU7wNbOQXC60I=

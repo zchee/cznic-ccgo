@@ -823,12 +823,14 @@ func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement, trailer string) (
 	// case cc.JumpStatementContinue: // "continue" ';'
 	// 	panic(todo("", n.Position()))
 	case cc.JumpStatementBreak: // "break" ';'
-		switch ctx.switchCtx {
-		case inSwitchCase:
-			ctx.switchCtx = inSwitchSeenBreak
-			return
-		default:
-			panic(todo("", n.Position(), ctx.switchCtx))
+		if _, ok := n.Context().(*cc.SelectionStatement); ok {
+			switch ctx.switchCtx {
+			case inSwitchCase:
+				ctx.switchCtx = inSwitchSeenBreak
+				return
+			default:
+				panic(todo("", n.Position(), ctx.switchCtx))
+			}
 		}
 		g.w("break%s", trailer) //TODO need .Context from cc
 	case cc.JumpStatementReturn: // "return" Expression ';'
