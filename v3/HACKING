@@ -1,0 +1,24 @@
+Version 3 notes
+
+Install:
+
+    $ go get modernc.org/ccgo/v3
+
+- Compile hello.c
+
+    jnml@e5-1650:~/tmp> ll
+    total 0
+    jnml@e5-1650:~/tmp> cat << EOF > hello.c
+    #include <stdio.h>
+    
+    int main() {
+            printf("Hello World!\n");
+    }
+    EOF
+    jnml@e5-1650:~/tmp> ccgo hello.c -o hello.go
+    jnml@e5-1650:~/tmp> go run hello.go
+    Hello World!
+    jnml@e5-1650:~/tmp>
+
+- Run `$ go test -download` to (once) get required test resources. Add -dev for
+  additional 100MB of gcc sources.
