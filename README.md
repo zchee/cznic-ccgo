@@ -1,15 +1,16 @@
 # ccgo
 
-Package ccgo translates [cc](https://modernc.org/cc/v2) ASTs to Go. (Work In Progress)
+Package ccgo translates [cc](https://modernc.org/cc/) ASTs to Go. (Work In Progress)
 
 Installation
 
-    $ go get modernc.org/ccgo
+    $ O111MODULE=on go get -t -v -x modernc.org/ccgo/v3
 
-Documentation: [godoc.org/modernc.org/ccgo](http://godoc.org/modernc.org/ccgo)
+After this, assuming binaries built by the Go downloader are on your $PATH, you shold be able to run
 
-Changelog
+    $ ccgo hello.c -o hello.go
 
-2018-07-01 This package is no longer maintained. Please see the v2 version at
+on a C "Hello, World" program and get an interesting result.
 
-[https://modernc.org/ccgo/v2](https://modernc.org/ccgo/v2)
+This directory also containds the older v2 and v1 versions. You almost certainly want the version in v3.
+
