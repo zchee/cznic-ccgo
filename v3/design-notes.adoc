@@ -14,6 +14,24 @@ fail.
 
 INSERT CODE EXAMPLES ILLUSTRATING THE PROBLEM HERE
 
+== How the parser works
+
+There are no comment nodes in the C AST. Instead every cc.Token has a
+Sep field: https://godoc.org/modernc.org/cc/v3#Token
+
+It captures, when configured to do so, all white space preceding the
+token, combined, including comments, if any. So we have all white
+space/comments information for every token in the AST. A final white
+space/comment, preceding EOF, is available as field TrailingSeperator
+in the AST: https://godoc.org/modernc.org/cc/v3#AST.
+
+To get the lexically first white space/comment for any node, use
+tokenSeparator():
+https://gitlab.com/cznic/ccgo/-/blob/6551e2544a758fdc265c8fac71fb2587fb3e1042/v3/go.go#L1476
+
+The same with a default value is comment():
+https://gitlab.com/cznic/ccgo/-/blob/6551e2544a758fdc265c8fac71fb2587fb3e1042/v3/go.go#L1467
+
 == Looking forward
 
 Eric says: In my visualization of how the translator would work, the
