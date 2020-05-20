@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"go/format"
-	"go/parser"
 	"go/token"
 	"math"
 	"path/filepath"
@@ -252,17 +250,17 @@ type taggedStruct struct {
 	emitted bool
 }
 
-func (s *taggedStruct) emit(g *gen, doc string) {
+func (s *taggedStruct) emit(g *gen, ds *cc.DeclarationSpecifiers) {
 	if s == nil || s.emitted {
 		return
 	}
 
 	s.emitted = true
-	g.w("%stype %s = %s\n\n", doc, s.name, s.gotyp)
+	g.w("%stype %s = %s;", comment("\n", ds), s.name, s.gotyp)
 }
 
 type gen struct {
-	buf     bytes.Buffer         // wbuf flush goes here
+	buf     bytes.Buffer
 	ds      data                 // Data segment
 	imports map[string]*imported // C name: import info
 	scope   scope
@@ -273,7 +271,6 @@ type gen struct {
 	ts      data // Text segment
 	tsName  string
 	tsNameP string
-	wbuf    bytes.Buffer // g.w
 
 	isMain bool
 }
@@ -494,7 +491,7 @@ func (g *gen) w(s string, args ...interface{}) {
 	if oTraceW {
 		fmt.Printf(s, args...)
 	}
-	fmt.Fprintf(&g.wbuf, s, args...)
+	fmt.Fprintf(&g.buf, s, args...)
 }
 
 func (g *gen) main() error {
@@ -536,7 +533,6 @@ func main() { %sStart(Xmain) }`, g.task.crt)
 	}
 	g.flushStructs()
 	g.flushTS()
-	g.flush(false)
 	g.buf.WriteTo(g.task.out)
 	return nil
 }
@@ -550,25 +546,8 @@ func (g *gen) flushStructs() {
 	}
 	sort.Slice(a, func(i, j int) bool { return a[i].name < a[j].name })
 	for _, v := range a {
-		v.emit(g, "")
+		v.emit(g, nil)
 	}
-}
-
-func (g *gen) flush(opt bool) {
-	buf := bytes.NewBufferString("package p\n")
-	buf.Write(g.wbuf.Bytes())
-	g.wbuf.Reset()
-	fset := token.NewFileSet()
-	ast, err := parser.ParseFile(fset, "", buf.Bytes(), parser.ParseComments)
-	if err != nil {
-		panic(todo("\n%s\n----\n%s\n----", buf.Bytes(), err))
-	}
-
-	if opt {
-		newTidy(g, fset).file(ast)
-	}
-	fmt.Fprintf(&g.buf, "\n\n")
-	format.Node(&g.buf, fset, ast.Decls)
 }
 
 func (g *gen) flushTS() {
@@ -622,19 +601,18 @@ func (g *gen) functionDefinition(n *cc.FunctionDefinition) {
 	g.w(" ")
 	if need := ctx.off; need != 0 {
 		ctx.scope.take("bp")
-		g.w("{\n")
-		g.w("bp := tls.Alloc(%d)\n", need)
+		g.w("{\nbp := tls.Alloc(%d)\n", need)
 		g.w("defer tls.Free(%d)\n", need)
 	}
 	g.compoundStatement(ctx, n.CompoundStatement, false)
-	g.flush(true)
+	g.w("\n\n")
 }
 
 func (g *gen) compoundStatement(ctx *context, n *cc.CompoundStatement, forceNoBraces bool) {
 	// '{' BlockItemList '}'
 	brace := (!n.IsJumpTarget() || n.Parent() == nil) && !forceNoBraces
 	if brace && (n.Parent() != nil || ctx.off == 0) {
-		g.w("{\n")
+		g.w("{")
 	}
 	ctx.block = ctx.blocks[n]
 	if ctx.block.topDecl {
@@ -642,23 +620,23 @@ func (g *gen) compoundStatement(ctx *context, n *cc.CompoundStatement, forceNoBr
 	}
 	var r *cc.JumpStatement
 	for list := n.BlockItemList; list != nil; list = list.BlockItemList {
-		r = g.blockItem(ctx, list.BlockItem, "\n")
+		r = g.blockItem(ctx, list.BlockItem)
 	}
 	if n.Parent() == nil && r == nil && ctx.rt.Kind() != cc.Void {
-		g.w("return ")
+		g.w("\nreturn ")
 		g.w("0%s", convert(g.task.cfg.ABI.Type(cc.Int), ctx.rt))
 	}
 	if brace {
-		g.w("}\n")
+		g.w("}")
 	}
 }
 
-func (g *gen) blockItem(ctx *context, n *cc.BlockItem, trailer string) (r *cc.JumpStatement) {
+func (g *gen) blockItem(ctx *context, n *cc.BlockItem) (r *cc.JumpStatement) {
 	switch n.Case {
 	case cc.BlockItemDecl: // Declaration
 		g.declaration(ctx, n.Declaration)
 	case cc.BlockItemStmt: // Statement
-		r = g.statement(ctx, n.Statement, trailer, false)
+		r = g.statement(ctx, n.Statement, false)
 	case cc.BlockItemLabel: // LabelDeclaration
 		panic(todo("", n.Position()))
 	case cc.BlockItemFuncDef: // DeclarationSpecifiers Declarator CompoundStatement
@@ -668,16 +646,17 @@ func (g *gen) blockItem(ctx *context, n *cc.BlockItem, trailer string) (r *cc.Ju
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
+	g.w(";")
 	return r
 }
 
-func (g *gen) statement(ctx *context, n *cc.Statement, trailer string, forceCompoundStmtBrace bool) (r *cc.JumpStatement) {
+func (g *gen) statement(ctx *context, n *cc.Statement, forceCompoundStmtBrace bool) (r *cc.JumpStatement) {
 	if ctx.switchCtx == inSwitchSeenBreak && n.Case != cc.StatementLabeled {
 		return nil
 	}
 
 	if forceCompoundStmtBrace {
-		g.w(" {\n")
+		g.w(" {")
 	}
 	switch n.Case {
 	case cc.StatementLabeled: // LabeledStatement
@@ -686,20 +665,19 @@ func (g *gen) statement(ctx *context, n *cc.Statement, trailer string, forceComp
 		g.compoundStatement(ctx, n.CompoundStatement, forceCompoundStmtBrace)
 	case cc.StatementExpr: // ExpressionStatement
 		g.expressionStatement(ctx, n.ExpressionStatement)
-		g.w("\n")
 	case cc.StatementSelection: // SelectionStatement
 		g.selectionStatement(ctx, n.SelectionStatement)
 	case cc.StatementIteration: // IterationStatement
 		g.iterationStatement(ctx, n.IterationStatement)
 	case cc.StatementJump: // JumpStatement
-		r = g.jumpStatement(ctx, n.JumpStatement, trailer)
+		r = g.jumpStatement(ctx, n.JumpStatement)
 	case cc.StatementAsm: // AsmStatement
 		panic(todo("", n.Position()))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 	if forceCompoundStmtBrace {
-		g.w("}\n")
+		g.w("}")
 	}
 	return r
 }
@@ -717,16 +695,16 @@ func (g *gen) labeledStatement(ctx *context, n *cc.LabeledStatement) {
 			case inSwitchFirst:
 				ctx.switchCtx = inSwitchCase
 			case inSwitchCase:
-				g.w("fallthrough\n")
+				g.w("\nfallthrough;")
 			case inSwitchSeenBreak:
 				ctx.switchCtx = inSwitchCase
 			default:
 				panic(todo("", n.Position(), ctx.switchCtx))
 			}
-			g.w("case ")
+			g.w("%scase ", comment("\n", n))
 			g.constantExpression(ctx, n.ConstantExpression, n.ConstantExpression.Operand.Type())
-			g.w(":\n")
-			g.statement(ctx, n.Statement, "", false)
+			g.w(":")
+			g.statement(ctx, n.Statement, false)
 		case cc.LabeledStatementRange: // "case" ConstantExpression "..." ConstantExpression ':' Statement
 			panic(todo("", n.Position(), n.Case))
 		case cc.LabeledStatementDefault: // "default" ':' Statement
@@ -734,14 +712,14 @@ func (g *gen) labeledStatement(ctx *context, n *cc.LabeledStatement) {
 			case inSwitchFirst:
 				ctx.switchCtx = inSwitchCase
 			case inSwitchCase:
-				g.w("fallthrough\n")
+				g.w("\nfallthrough;")
 			case inSwitchSeenBreak:
 				ctx.switchCtx = inSwitchCase
 			default:
 				panic(todo("", n.Position(), ctx.switchCtx))
 			}
-			g.w("default:\n")
-			g.statement(ctx, n.Statement, "", false)
+			g.w("%sdefault:", comment("\n", n))
+			g.statement(ctx, n.Statement, false)
 		default:
 			panic(todo("%v: internal error: %v", n.Position(), n.Case))
 		}
@@ -758,6 +736,7 @@ func (g *gen) selectionStatement(ctx *context, n *cc.SelectionStatement) {
 	case ctx.block.block.IsJumpTarget():
 		panic(todo(""))
 	default:
+		g.w("%s", comment("\n", n))
 		switch n.Case {
 		case cc.SelectionStatementIf: // "if" '(' Expression ')' Statement
 			panic(todo("", n.Position(), n.Case))
@@ -768,7 +747,7 @@ func (g *gen) selectionStatement(ctx *context, n *cc.SelectionStatement) {
 			ctx.switchCtx = inSwitchFirst
 			g.w("switch ")
 			g.expression(ctx, n.Expression, n.Expression.Operand.Type())
-			g.statement(ctx, n.Statement, "q\n", true)
+			g.statement(ctx, n.Statement, true)
 			ctx.switchCtx = sv
 		default:
 			panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -786,18 +765,19 @@ func (g *gen) iterationStatement(ctx *context, n *cc.IterationStatement) {
 	case ctx.block.block.IsJumpTarget():
 		panic(todo(""))
 	default:
+		g.w("%s", comment("\n", n))
 		switch n.Case {
 		case cc.IterationStatementWhile: // "while" '(' Expression ')' Statement
 			g.w("for ")
 			g.expression(ctx, n.Expression, n.Expression.Operand.Type())
 			g.w(" != 0 ")
-			g.statement(ctx, n.Statement, "", true)
+			g.statement(ctx, n.Statement, true)
 		case cc.IterationStatementDo: // "do" Statement "while" '(' Expression ')' ';'
 			v := ctx.scope.take("ok")
 			g.w("for %v := true; %[1]v; %[1]v = ", v)
 			g.expression(ctx, n.Expression, n.Expression.Operand.Type())
 			g.w(" != 0")
-			g.statement(ctx, n.Statement, "", true)
+			g.statement(ctx, n.Statement, true)
 		case cc.IterationStatementFor: // "for" '(' Expression ';' Expression ';' Expression ')' Statement
 			g.w("for ")
 			g.expression(ctx, n.Expression, void)
@@ -805,7 +785,7 @@ func (g *gen) iterationStatement(ctx *context, n *cc.IterationStatement) {
 			g.expression(ctx, n.Expression2, n.Expression2.Operand.Type())
 			g.w(" != 0; ")
 			g.expression(ctx, n.Expression3, void)
-			g.statement(ctx, n.Statement, "", true)
+			g.statement(ctx, n.Statement, true)
 		// case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
 		// 	panic(todo("", n.Position()))
 		default:
@@ -814,7 +794,8 @@ func (g *gen) iterationStatement(ctx *context, n *cc.IterationStatement) {
 	}
 }
 
-func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement, trailer string) (r *cc.JumpStatement) {
+func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement) (r *cc.JumpStatement) {
+	g.w("%s", comment("\n", n))
 	switch n.Case {
 	// case cc.JumpStatementGoto: // "goto" IDENTIFIER ';'
 	// 	panic(todo("", n.Position()))
@@ -832,12 +813,11 @@ func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement, trailer string) (
 				panic(todo("", n.Position(), ctx.switchCtx))
 			}
 		}
-		g.w("break%s", trailer) //TODO need .Context from cc
+		g.w("break")
 	case cc.JumpStatementReturn: // "return" Expression ';'
 		r = n
 		g.w("return ")
 		g.expression(ctx, n.Expression, ctx.rt)
-		g.w("%s", trailer)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -845,6 +825,7 @@ func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement, trailer string) (
 }
 
 func (g *gen) expressionStatement(ctx *context, n *cc.ExpressionStatement) {
+	g.w("%s", comment("\n", n))
 	// Expression AttributeSpecifierList ';'
 	g.expression(ctx, n.Expression, void)
 }
@@ -948,8 +929,6 @@ func (g *gen) declarator(ctx *context, d *cc.Declarator, t cc.Type) {
 	default:
 		panic(todo("", d.Position(), d.Name(), d.Linkage))
 	}
-
-	//TODO- g.w("%s", g.mangleDeclarator(ctx, d))
 }
 
 func convert(from, to cc.Type) string {
@@ -1457,9 +1436,9 @@ func (g *gen) intConst(src string, op cc.Operand, to cc.Type) {
 func (g *gen) functionDefinitionSignature(ctx *context, tld *tld) {
 	switch {
 	case ctx.mainSignatureForced:
-		g.w("%sfunc %s(tls *%sTLS, _ int32, _ uintptr) int32", docComment(ctx.fndef.DeclarationSpecifiers, ctx.fndef.Declarator), tld.name, g.task.crt)
+		g.w("%sfunc %s(tls *%sTLS, _ int32, _ uintptr) int32", comment("\n", ctx.fndef), tld.name, g.task.crt)
 	default:
-		g.w("%s", docComment(ctx.fndef.DeclarationSpecifiers, ctx.fndef.Declarator))
+		g.w("%s", comment("\n", ctx.fndef))
 		g.functionSignature(ctx, ctx.fndef.Declarator.Type(), tld.name)
 	}
 }
@@ -1485,39 +1464,18 @@ func (g *gen) functionSignature(ctx *context, t cc.Type, nm string) {
 	}
 }
 
-// func (g *gen) mangleDeclarator(ctx *context, d *cc.Declarator) string {
-// 	s := d.Name().String()
-// 	switch d.Linkage {
-// 	case cc.External:
-// 		panic(todo(""))
-// 		// if _, found := g.tlds[d]; found {
-// 		// 	return fmt.Sprintf("X%s", s)
-// 		// }
-//
-// 		// if imported := g.imports[s]; imported != nil {
-// 		// 	return fmt.Sprintf("%s.X%s", imported.name, s)
-// 		// }
-//
-// 		panic(todo("%q", s))
-// 	default:
-// 		panic(todo("", s, d.Linkage))
-// 	}
-// }
+// Return first non empty token separator within n or dflt otherwise.
+func comment(dflt string, n cc.Node) string {
+	if s := tokenSeparator(n); s != "" {
+		return s
+	}
 
-func docComment(n ...cc.Node) (r string) {
-	for _, v := range n {
-		if s := sep(v); s != "" {
-			r = s
-			break
-		}
-	}
-	if !strings.Contains(r, "\n") {
-		r += "\n"
-	}
-	return r
+	return dflt
 }
 
-func sep(n cc.Node) (r string) {
+// Return the preceding white space, including any comments, of the first token
+// of n.
+func tokenSeparator(n cc.Node) (r string) {
 	var tok cc.Token
 	cc.Inspect(n, func(n cc.Node, _ bool) bool {
 		if x, ok := n.(*cc.Token); ok {
@@ -1539,19 +1497,21 @@ func (g *gen) declaration(ctx *context, n *cc.Declaration) {
 			}
 
 			if tag := x.Token.Value; tag != 0 {
-				g.structs[tag].emit(g, docComment(n.DeclarationSpecifiers))
+				g.structs[tag].emit(g, n.DeclarationSpecifiers)
 			}
 			return false
 		})
 	}
 
 	// DeclarationSpecifiers InitDeclaratorList ';'
+	first := true
 	for list := n.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
-		g.initDeclarator(ctx, n.DeclarationSpecifiers, list.InitDeclarator)
+		g.initDeclarator(ctx, n.DeclarationSpecifiers, list.InitDeclarator, first)
+		first = false
 	}
 }
 
-func (g *gen) initDeclarator(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.InitDeclarator) {
+func (g *gen) initDeclarator(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.InitDeclarator, first bool) {
 	if ctx == nil {
 		g.tld(ctx, ds, n)
 		return
@@ -1563,21 +1523,25 @@ func (g *gen) initDeclarator(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.I
 		return
 	}
 
+	s := "\n"
+	if first {
+		s = comment(s, ds)
+	}
 	switch n.Case {
 	case cc.InitDeclaratorDecl: // Declarator AttributeSpecifierList
 		if ctx.block.topDecl {
 			return
 		}
 
-		g.w("var %s %s\n", local.name, g.typ(d.Type()))
+		g.w("%svar %s %s;", s, local.name, g.typ(d.Type()))
 	case cc.InitDeclaratorInit: // Declarator AttributeSpecifierList '=' Initializer
 		switch {
 		case ctx.block.topDecl:
 			panic(todo(""))
 		default:
-			g.w("%s := %s(", local.name, g.typ(d.Type()))
+			g.w("%s%s := %s(", s, local.name, g.typ(d.Type()))
 			g.initializer(ctx, n.Initializer, d.Type())
-			g.w(")\n")
+			g.w(");")
 		}
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))

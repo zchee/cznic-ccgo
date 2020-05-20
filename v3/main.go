@@ -12,6 +12,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -274,6 +275,11 @@ func (t *task) main() (err error) {
 	defer func() {
 		if e := f.Close(); e != nil && err == nil {
 			err = e
+			return
+		}
+
+		if out, e := exec.Command("gofmt", "-l", "-s", "-w", t.o).CombinedOutput(); e != nil && err == nil {
+			err = fmt.Errorf(strings.Join([]string{string(out), e.Error()}, ": "))
 		}
 	}()
 
