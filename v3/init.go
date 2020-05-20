@@ -11,7 +11,7 @@ import (
 func (g *gen) initializer(ctx *context, n *cc.Initializer, t cc.Type) {
 	switch n.Case {
 	case cc.InitializerExpr: // AssignmentExpression
-		g.assignmentExpression(ctx, n.AssignmentExpression, t)
+		g.assignmentExpression(ctx, n.AssignmentExpression, t, false, true)
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
 		panic(todo("", n.Position()))
 	default:

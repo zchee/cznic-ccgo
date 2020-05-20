@@ -69,6 +69,7 @@ const (
 type context struct {
 	block     *block
 	blocks    map[*cc.CompoundStatement]*block
+	bpName    string
 	fndef     *cc.FunctionDefinition
 	gen       *gen
 	ignore    map[*cc.Declarator]bool
@@ -175,7 +176,7 @@ func (ctx *context) staticAllocs(n *cc.CompoundStatement) {
 			}
 		}
 		if need != 0 {
-			ctx.vaLists[x] = ctx.off
+			ctx.vaLists[x] = roundup(ctx.off, 8)
 			ctx.off += need
 		}
 		return true
@@ -256,21 +257,25 @@ func (s *taggedStruct) emit(g *gen, ds *cc.DeclarationSpecifiers) {
 	}
 
 	s.emitted = true
-	g.w("%stype %s = %s;", comment("\n", ds), s.name, s.gotyp)
+	g.w("%stype %s = %s;\n\n", comment("\n", ds), s.name, s.gotyp)
 }
 
 type gen struct {
-	buf     bytes.Buffer
-	ds      data                 // Data segment
-	imports map[string]*imported // C name: import info
-	scope   scope
-	strings map[string]int                // string value: ts off
-	structs map[cc.StringID]*taggedStruct // key: C tag
-	task    *task
-	tlds    map[*cc.Declarator]*tld
-	ts      data // Text segment
-	tsName  string
-	tsNameP string
+	bpName   string
+	bss      uintptr // BSS segment size
+	bssName  string
+	bssNameP string
+	buf      bytes.Buffer
+	ds       data                 // Data segment
+	imports  map[string]*imported // C name: import info
+	scope    scope
+	strings  map[string]int                // string value: ts off
+	structs  map[cc.StringID]*taggedStruct // key: C tag
+	task     *task
+	tlds     map[*cc.Declarator]*tld
+	ts       data // Text segment
+	tsName   string
+	tsNameP  string
 
 	isMain bool
 }
@@ -302,6 +307,8 @@ func newGen(t *task) (*gen, error) {
 			}
 		}
 	}
+	g.bssName = g.scope.take("bss")
+	g.bssNameP = g.scope.take("bss")
 	g.tsNameP = g.scope.take("ts")
 	g.tsName = g.scope.take("ts")
 	return g, nil
@@ -532,9 +539,20 @@ var _ reflect.Kind
 func main() { %sStart(Xmain) }`, g.task.crt)
 	}
 	g.flushStructs()
+	g.flushBSS()
 	g.flushTS()
-	g.buf.WriteTo(g.task.out)
-	return nil
+	_, err := g.buf.WriteTo(g.task.out)
+	return err
+}
+
+func (g *gen) flushBSS() {
+	if g.bss == 0 {
+		return
+	}
+
+	n := roundup(g.bss, 8)
+	g.w("var %s [%d]uint64\n", g.bssNameP, n/8)
+	g.w("var %s = uintptr(unsafe.Pointer(&%s[0]))\n\n", g.bssName, g.bssNameP)
 }
 
 func (g *gen) flushStructs() {
@@ -600,8 +618,8 @@ func (g *gen) functionDefinition(n *cc.FunctionDefinition) {
 	g.functionDefinitionSignature(ctx, tld)
 	g.w(" ")
 	if need := ctx.off; need != 0 {
-		ctx.scope.take("bp")
-		g.w("{\nbp := tls.Alloc(%d)\n", need)
+		ctx.bpName = ctx.scope.take("bp")
+		g.w("{\n%s := tls.Alloc(%d)\n", ctx.bpName, need)
 		g.w("defer tls.Free(%d)\n", need)
 	}
 	g.compoundStatement(ctx, n.CompoundStatement, false)
@@ -637,16 +655,19 @@ func (g *gen) blockItem(ctx *context, n *cc.BlockItem) (r *cc.JumpStatement) {
 		g.declaration(ctx, n.Declaration)
 	case cc.BlockItemStmt: // Statement
 		r = g.statement(ctx, n.Statement, false)
+		g.w(";")
 	case cc.BlockItemLabel: // LabelDeclaration
 		panic(todo("", n.Position()))
+		g.w(";")
 	case cc.BlockItemFuncDef: // DeclarationSpecifiers Declarator CompoundStatement
 		panic(todo("", n.Position()))
+		g.w(";")
 	case cc.BlockItemPragma: // PragmaSTDC
 		panic(todo("", n.Position()))
+		g.w(";")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
-	g.w(";")
 	return r
 }
 
@@ -702,7 +723,7 @@ func (g *gen) labeledStatement(ctx *context, n *cc.LabeledStatement) {
 				panic(todo("", n.Position(), ctx.switchCtx))
 			}
 			g.w("%scase ", comment("\n", n))
-			g.constantExpression(ctx, n.ConstantExpression, n.ConstantExpression.Operand.Type())
+			g.constantExpression(ctx, n.ConstantExpression, n.ConstantExpression.Operand.Type(), false, true)
 			g.w(":")
 			g.statement(ctx, n.Statement, false)
 		case cc.LabeledStatementRange: // "case" ConstantExpression "..." ConstantExpression ':' Statement
@@ -726,9 +747,9 @@ func (g *gen) labeledStatement(ctx *context, n *cc.LabeledStatement) {
 	}
 }
 
-func (g *gen) constantExpression(ctx *context, n *cc.ConstantExpression, t cc.Type) {
+func (g *gen) constantExpression(ctx *context, n *cc.ConstantExpression, t cc.Type, asBool, outermost bool) {
 	// ConditionalExpression
-	g.conditionalExpression(ctx, n.ConditionalExpression, t)
+	g.conditionalExpression(ctx, n.ConditionalExpression, t, asBool, outermost)
 }
 
 func (g *gen) selectionStatement(ctx *context, n *cc.SelectionStatement) {
@@ -746,7 +767,7 @@ func (g *gen) selectionStatement(ctx *context, n *cc.SelectionStatement) {
 			sv := ctx.switchCtx
 			ctx.switchCtx = inSwitchFirst
 			g.w("switch ")
-			g.expression(ctx, n.Expression, n.Expression.Operand.Type())
+			g.expression(ctx, n.Expression, n.Expression.Operand.Type(), false, true)
 			g.statement(ctx, n.Statement, true)
 			ctx.switchCtx = sv
 		default:
@@ -769,22 +790,20 @@ func (g *gen) iterationStatement(ctx *context, n *cc.IterationStatement) {
 		switch n.Case {
 		case cc.IterationStatementWhile: // "while" '(' Expression ')' Statement
 			g.w("for ")
-			g.expression(ctx, n.Expression, n.Expression.Operand.Type())
-			g.w(" != 0 ")
+			g.expression(ctx, n.Expression, n.Expression.Operand.Type(), true, true)
 			g.statement(ctx, n.Statement, true)
 		case cc.IterationStatementDo: // "do" Statement "while" '(' Expression ')' ';'
 			v := ctx.scope.take("ok")
 			g.w("for %v := true; %[1]v; %[1]v = ", v)
-			g.expression(ctx, n.Expression, n.Expression.Operand.Type())
-			g.w(" != 0")
+			g.expression(ctx, n.Expression, n.Expression.Operand.Type(), true, true)
 			g.statement(ctx, n.Statement, true)
 		case cc.IterationStatementFor: // "for" '(' Expression ';' Expression ';' Expression ')' Statement
 			g.w("for ")
-			g.expression(ctx, n.Expression, void)
+			g.expression(ctx, n.Expression, void, false, true)
 			g.w("; ")
-			g.expression(ctx, n.Expression2, n.Expression2.Operand.Type())
-			g.w(" != 0; ")
-			g.expression(ctx, n.Expression3, void)
+			g.expression(ctx, n.Expression2, n.Expression2.Operand.Type(), true, true)
+			g.w("; ")
+			g.expression(ctx, n.Expression3, void, false, true)
 			g.statement(ctx, n.Statement, true)
 		// case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
 		// 	panic(todo("", n.Position()))
@@ -817,7 +836,7 @@ func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement) (r *cc.JumpStatem
 	case cc.JumpStatementReturn: // "return" Expression ';'
 		r = n
 		g.w("return ")
-		g.expression(ctx, n.Expression, ctx.rt)
+		g.expression(ctx, n.Expression, ctx.rt, false, true)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -827,13 +846,13 @@ func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement) (r *cc.JumpStatem
 func (g *gen) expressionStatement(ctx *context, n *cc.ExpressionStatement) {
 	g.w("%s", comment("\n", n))
 	// Expression AttributeSpecifierList ';'
-	g.expression(ctx, n.Expression, void)
+	g.expression(ctx, n.Expression, void, false, true)
 }
 
-func (g *gen) expression(ctx *context, n *cc.Expression, t cc.Type) {
+func (g *gen) expression(ctx *context, n *cc.Expression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.ExpressionAssign: // AssignmentExpression
-		g.assignmentExpression(ctx, n.AssignmentExpression, t)
+		g.assignmentExpression(ctx, n.AssignmentExpression, t, asBool, outermost)
 	case cc.ExpressionComma: // Expression ',' AssignmentExpression
 		panic(todo("", n.Position()))
 	default:
@@ -841,16 +860,16 @@ func (g *gen) expression(ctx *context, n *cc.Expression, t cc.Type) {
 	}
 }
 
-func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t cc.Type) {
+func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t cc.Type, asBool, outermost bool) {
 	switch {
 	case t.Kind() == cc.Void:
 		switch n.Case {
 		case cc.AssignmentExpressionCond: // ConditionalExpression
-			g.conditionalExpression(ctx, n.ConditionalExpression, t)
+			g.conditionalExpression(ctx, n.ConditionalExpression, t, asBool, outermost)
 		case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
 			g.unaryExpression(ctx, n.UnaryExpression, n.UnaryExpression.Operand.Type())
 			g.w(" = ")
-			g.assignmentExpression(ctx, n.AssignmentExpression, n.UnaryExpression.Operand.Type())
+			g.assignmentExpression(ctx, n.AssignmentExpression, n.UnaryExpression.Operand.Type(), false, true)
 		// case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
 		// 	panic(todo("", n.Position()))
 		// case cc.AssignmentExpressionDiv: // UnaryExpression "/=" AssignmentExpression
@@ -877,7 +896,7 @@ func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t c
 	default:
 		switch n.Case {
 		case cc.AssignmentExpressionCond: // ConditionalExpression
-			g.conditionalExpression(ctx, n.ConditionalExpression, t)
+			g.conditionalExpression(ctx, n.ConditionalExpression, t, asBool, outermost)
 		// case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
 		// 	panic(todo("", n.Position()))
 		// case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
@@ -913,18 +932,29 @@ func (g *gen) declarator(ctx *context, d *cc.Declarator, t cc.Type) {
 	case cc.None:
 		switch local := ctx.locals[d]; {
 		case local.isPinned:
-			panic(todo(""))
+			g.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", g.typ(d.Type()), ctx.bpName, nonZeroUintptr(local.off), local.name)
 		default:
 			g.w("%s", local.name)
 		}
 	case cc.External:
-		switch tld := g.tlds[d]; {
+		tld := g.tlds[d]
+		if d.Type().Kind() == cc.Function {
+			switch {
+			case tld != nil:
+				g.w("%s", tld.name)
+			default:
+				nm := d.Name()
+				imp := g.imports[nm.String()]
+				g.w("%sX%s", imp.qualifier, nm)
+			}
+			break
+		}
+
+		switch {
 		case tld != nil:
-			g.w("%s", tld.name)
+			g.w("(*%s)(unsafe.Pointer(%s))", g.typ(d.Type()), tld.name)
 		default:
-			nm := d.Name()
-			imp := g.imports[nm.String()]
-			g.w("%sX%s", imp.qualifier, nm)
+			panic(todo(""))
 		}
 	default:
 		panic(todo("", d.Position(), d.Name(), d.Linkage))
@@ -937,7 +967,7 @@ func convert(from, to cc.Type) string {
 	}
 
 	switch from.Kind() {
-	case cc.Function, cc.Struct, cc.Union, cc.Array:
+	case cc.Function, cc.Struct, cc.Union, cc.Array, cc.Ptr:
 		if from.Kind() == to.Kind() {
 			return ""
 		}
@@ -946,10 +976,10 @@ func convert(from, to cc.Type) string {
 	panic(todo("%q -> %q", from, to))
 }
 
-func (g *gen) conditionalExpression(ctx *context, n *cc.ConditionalExpression, t cc.Type) {
+func (g *gen) conditionalExpression(ctx *context, n *cc.ConditionalExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.ConditionalExpressionLOr: // LogicalOrExpression
-		g.logicalOrExpression(ctx, n.LogicalOrExpression, t)
+		g.logicalOrExpression(ctx, n.LogicalOrExpression, t, asBool, outermost)
 	case cc.ConditionalExpressionCond: // LogicalOrExpression '?' Expression ':' ConditionalExpression
 		panic(todo("", n.Position()))
 	default:
@@ -957,10 +987,10 @@ func (g *gen) conditionalExpression(ctx *context, n *cc.ConditionalExpression, t
 	}
 }
 
-func (g *gen) logicalOrExpression(ctx *context, n *cc.LogicalOrExpression, t cc.Type) {
+func (g *gen) logicalOrExpression(ctx *context, n *cc.LogicalOrExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.LogicalOrExpressionLAnd: // LogicalAndExpression
-		g.logicalAndExpression(ctx, n.LogicalAndExpression, t)
+		g.logicalAndExpression(ctx, n.LogicalAndExpression, t, asBool, outermost)
 	case cc.LogicalOrExpressionLOr: // LogicalOrExpression "||" LogicalAndExpression
 		panic(todo("", n.Position()))
 	default:
@@ -968,10 +998,10 @@ func (g *gen) logicalOrExpression(ctx *context, n *cc.LogicalOrExpression, t cc.
 	}
 }
 
-func (g *gen) logicalAndExpression(ctx *context, n *cc.LogicalAndExpression, t cc.Type) {
+func (g *gen) logicalAndExpression(ctx *context, n *cc.LogicalAndExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.LogicalAndExpressionOr: // InclusiveOrExpression
-		g.inclusiveOrExpression(ctx, n.InclusiveOrExpression, t)
+		g.inclusiveOrExpression(ctx, n.InclusiveOrExpression, t, asBool, outermost)
 	case cc.LogicalAndExpressionLAnd: // LogicalAndExpression "&&" InclusiveOrExpression
 		panic(todo("", n.Position()))
 	default:
@@ -979,10 +1009,10 @@ func (g *gen) logicalAndExpression(ctx *context, n *cc.LogicalAndExpression, t c
 	}
 }
 
-func (g *gen) inclusiveOrExpression(ctx *context, n *cc.InclusiveOrExpression, t cc.Type) {
+func (g *gen) inclusiveOrExpression(ctx *context, n *cc.InclusiveOrExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.InclusiveOrExpressionXor: // ExclusiveOrExpression
-		g.exclusiveOrExpression(ctx, n.ExclusiveOrExpression, t)
+		g.exclusiveOrExpression(ctx, n.ExclusiveOrExpression, t, asBool, outermost)
 	case cc.InclusiveOrExpressionOr: // InclusiveOrExpression '|' ExclusiveOrExpression
 		panic(todo("", n.Position()))
 	default:
@@ -990,10 +1020,10 @@ func (g *gen) inclusiveOrExpression(ctx *context, n *cc.InclusiveOrExpression, t
 	}
 }
 
-func (g *gen) exclusiveOrExpression(ctx *context, n *cc.ExclusiveOrExpression, t cc.Type) {
+func (g *gen) exclusiveOrExpression(ctx *context, n *cc.ExclusiveOrExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.ExclusiveOrExpressionAnd: // AndExpression
-		g.andExpression(ctx, n.AndExpression, t)
+		g.andExpression(ctx, n.AndExpression, t, asBool, outermost)
 	case cc.ExclusiveOrExpressionXor: // ExclusiveOrExpression '^' AndExpression
 		panic(todo("", n.Position()))
 	default:
@@ -1001,10 +1031,10 @@ func (g *gen) exclusiveOrExpression(ctx *context, n *cc.ExclusiveOrExpression, t
 	}
 }
 
-func (g *gen) andExpression(ctx *context, n *cc.AndExpression, t cc.Type) {
+func (g *gen) andExpression(ctx *context, n *cc.AndExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.AndExpressionEq: // EqualityExpression
-		g.equalityExpression(ctx, n.EqualityExpression, t)
+		g.equalityExpression(ctx, n.EqualityExpression, t, asBool, outermost)
 	case cc.AndExpressionAnd: // AndExpression '&' EqualityExpression
 		panic(todo("", n.Position()))
 	default:
@@ -1012,10 +1042,10 @@ func (g *gen) andExpression(ctx *context, n *cc.AndExpression, t cc.Type) {
 	}
 }
 
-func (g *gen) equalityExpression(ctx *context, n *cc.EqualityExpression, t cc.Type) {
+func (g *gen) equalityExpression(ctx *context, n *cc.EqualityExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.EqualityExpressionRel: // RelationalExpression
-		g.relationalExpression(ctx, n.RelationalExpression, t)
+		g.relationalExpression(ctx, n.RelationalExpression, t, asBool, outermost)
 	case cc.EqualityExpressionEq: // EqualityExpression "==" RelationalExpression
 		panic(todo("", n.Position()))
 	case cc.EqualityExpressionNeq: // EqualityExpression "!=" RelationalExpression
@@ -1025,31 +1055,34 @@ func (g *gen) equalityExpression(ctx *context, n *cc.EqualityExpression, t cc.Ty
 	}
 }
 
-func (g *gen) relationalExpression(ctx *context, n *cc.RelationalExpression, t cc.Type) {
+func (g *gen) relationalExpression(ctx *context, n *cc.RelationalExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.RelationalExpressionShift: // ShiftExpression
-		g.shiftExpression(ctx, n.ShiftExpression, t)
+		g.shiftExpression(ctx, n.ShiftExpression, t, outermost)
 	case cc.RelationalExpressionLt: // RelationalExpression '<' ShiftExpression
-		g.binaryRelationalExpression(ctx, n, " < ", t)
+		g.binaryRelationalExpression(ctx, n, " < ", t, asBool)
 	case cc.RelationalExpressionGt: // RelationalExpression '>' ShiftExpression
-		g.binaryRelationalExpression(ctx, n, " > ", t)
+		g.binaryRelationalExpression(ctx, n, " > ", t, asBool)
 	case cc.RelationalExpressionLeq: // RelationalExpression "<=" ShiftExpression
-		g.binaryRelationalExpression(ctx, n, " <= ", t)
+		g.binaryRelationalExpression(ctx, n, " <= ", t, asBool)
 	case cc.RelationalExpressionGeq: // RelationalExpression ">=" ShiftExpression
-		g.binaryRelationalExpression(ctx, n, " >= ", t)
+		g.binaryRelationalExpression(ctx, n, " >= ", t, asBool)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
-func (g *gen) binaryRelationalExpression(ctx *context, n *cc.RelationalExpression, oper string, t cc.Type) {
-	defer g.w("%s", convertOp(n.Operand, t))
+func (g *gen) binaryRelationalExpression(ctx *context, n *cc.RelationalExpression, oper string, t cc.Type, asBool bool) {
+	if !asBool {
+		defer g.w("%s", convertOp(n.Operand, t))
 
-	g.w("%sBool32(", g.task.crt)
-	g.relationalExpression(ctx, n.RelationalExpression, n.Promote())
+		g.w("%sBool32(", g.task.crt)
+
+		defer g.w(")")
+	}
+	g.relationalExpression(ctx, n.RelationalExpression, n.Promote(), asBool, false)
 	g.w("%s", oper)
-	g.shiftExpression(ctx, n.ShiftExpression, n.Promote())
-	g.w(")")
+	g.shiftExpression(ctx, n.ShiftExpression, n.Promote(), false)
 }
 
 func convertOp(op cc.Operand, to cc.Type) string {
@@ -1061,10 +1094,10 @@ func convertOp(op cc.Operand, to cc.Type) string {
 	panic(todo("%v %q -> %q", op.Value(), op.Type(), to))
 }
 
-func (g *gen) shiftExpression(ctx *context, n *cc.ShiftExpression, t cc.Type) {
+func (g *gen) shiftExpression(ctx *context, n *cc.ShiftExpression, t cc.Type, outermost bool) {
 	switch n.Case {
 	case cc.ShiftExpressionAdd: // AdditiveExpression
-		g.additiveExpression(ctx, n.AdditiveExpression, t)
+		g.additiveExpression(ctx, n.AdditiveExpression, t, outermost)
 	case cc.ShiftExpressionLsh: // ShiftExpression "<<" AdditiveExpression
 		panic(todo("", n.Position()))
 	case cc.ShiftExpressionRsh: // ShiftExpression ">>" AdditiveExpression
@@ -1074,53 +1107,61 @@ func (g *gen) shiftExpression(ctx *context, n *cc.ShiftExpression, t cc.Type) {
 	}
 }
 
-func (g *gen) additiveExpression(ctx *context, n *cc.AdditiveExpression, t cc.Type) {
+func (g *gen) additiveExpression(ctx *context, n *cc.AdditiveExpression, t cc.Type, outermost bool) {
 	switch n.Case {
 	case cc.AdditiveExpressionMul: // MultiplicativeExpression
-		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, t)
+		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, t, outermost)
 	case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
-		g.binaryAdditiveExpression(ctx, n, "+", t)
+		g.binaryAdditiveExpression(ctx, n, "+", t, outermost)
 	case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
-		g.binaryAdditiveExpression(ctx, n, "-", t)
+		g.binaryAdditiveExpression(ctx, n, "-", t, outermost)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
-func (g *gen) binaryAdditiveExpression(ctx *context, n *cc.AdditiveExpression, oper string, t cc.Type) {
-	g.w("(")
-	defer g.w("%s)", convertOp(n.Operand, t))
+func (g *gen) binaryAdditiveExpression(ctx *context, n *cc.AdditiveExpression, oper string, t cc.Type, outermost bool) {
+	if !outermost {
+		g.w("(")
+		defer g.w(")")
+	}
+
+	defer g.w("%s", convertOp(n.Operand, t))
 
 	switch {
 	case n.AdditiveExpression.Operand.Type().IsArithmeticType() && n.MultiplicativeExpression.Operand.Type().IsArithmeticType():
-		g.additiveExpression(ctx, n.AdditiveExpression, n.Promote())
+		g.additiveExpression(ctx, n.AdditiveExpression, n.Promote(), false)
 		g.w("%s", oper)
-		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote())
+		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote(), false)
 	default:
 		panic(todo(""))
 	}
 }
 
-func (g *gen) multiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, t cc.Type) {
+func (g *gen) multiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, t cc.Type, outermost bool) {
 	switch n.Case {
 	case cc.MultiplicativeExpressionCast: // CastExpression
 		g.castExpression(ctx, n.CastExpression, t)
 	case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
-		g.binaryMultiplicativeExpression(ctx, n, "*", t)
+		g.binaryMultiplicativeExpression(ctx, n, "*", t, outermost)
 	case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
-		g.binaryMultiplicativeExpression(ctx, n, "/", t)
+		g.binaryMultiplicativeExpression(ctx, n, "/", t, outermost)
 	case cc.MultiplicativeExpressionMod: // MultiplicativeExpression '%' CastExpression
-		g.binaryMultiplicativeExpression(ctx, n, "%", t)
+		g.binaryMultiplicativeExpression(ctx, n, "%", t, outermost)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
-func (g *gen) binaryMultiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, oper string, t cc.Type) {
-	g.w("(")
-	defer g.w("%s)", convertOp(n.Operand, t))
+func (g *gen) binaryMultiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, oper string, t cc.Type, outermost bool) {
+	if !outermost {
+		g.w("(")
+		defer g.w(")")
+	}
 
-	g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote())
+	defer g.w("%s", convertOp(n.Operand, t))
+
+	g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote(), outermost)
 	g.w("%s", oper)
 	g.castExpression(ctx, n.CastExpression, n.Promote())
 }
@@ -1140,37 +1181,52 @@ func (g *gen) unaryExpression(ctx *context, n *cc.UnaryExpression, t cc.Type) {
 	switch n.Case {
 	case cc.UnaryExpressionPostfix: // PostfixExpression
 		g.postfixExpression(ctx, n.PostfixExpression, t)
-		// case cc.UnaryExpressionInc: // "++" UnaryExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.UnaryExpressionDec: // "--" UnaryExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.UnaryExpressionAddrof: // '&' CastExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.UnaryExpressionDeref: // '*' CastExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.UnaryExpressionPlus: // '+' CastExpression
-		// 	panic(todo("", n.Position()))
+	case cc.UnaryExpressionInc: // "++" UnaryExpression
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionDec: // "--" UnaryExpression
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionAddrof: // '&' CastExpression
+		if d := n.CastExpression.Declarator(); d != nil {
+			if local := ctx.locals[d]; local != nil {
+				g.w("%s%s/* &%s */", ctx.bpName, nonZeroUintptr(local.off), local.name)
+				break
+			}
+
+			g.w("/*1171*/")
+			g.declarator(ctx, d, d.Type())
+			g.w("/*1173*/")
+			break
+		}
+
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionDeref: // '*' CastExpression
+		s := convert(n.CastExpression.Operand.Type().Elem(), t)
+		g.w("*(*%s)(unsafe.Pointer(", g.typ(n.Operand.Type()))
+		g.castExpression(ctx, n.CastExpression, n.CastExpression.Operand.Type())
+		g.w("))%s", s)
+	case cc.UnaryExpressionPlus: // '+' CastExpression
+		panic(todo("", n.Position()))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
 		g.w("-")
 		g.castExpression(ctx, n.CastExpression, t)
-	// case cc.UnaryExpressionCpl: // '~' CastExpression
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionNot: // '!' CastExpression
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionLabelAddr: // "&&" IDENTIFIER
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionAlignofExpr: // "_Alignof" UnaryExpression
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionAlignofType: // "_Alignof" '(' TypeName ')'
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionImag: // "__imag__" UnaryExpression
-	// 	panic(todo("", n.Position()))
-	// case cc.UnaryExpressionReal: // "__real__" UnaryExpression
-	// 	panic(todo("", n.Position()))
+	case cc.UnaryExpressionCpl: // '~' CastExpression
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionNot: // '!' CastExpression
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionLabelAddr: // "&&" IDENTIFIER
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionAlignofExpr: // "_Alignof" UnaryExpression
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionAlignofType: // "_Alignof" '(' TypeName ')'
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionImag: // "__imag__" UnaryExpression
+		panic(todo("", n.Position()))
+	case cc.UnaryExpressionReal: // "__real__" UnaryExpression
+		panic(todo("", n.Position()))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1183,7 +1239,7 @@ func (g *gen) postfixExpression(ctx *context, n *cc.PostfixExpression, t cc.Type
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
 		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
 		g.w("[")
-		g.expression(ctx, n.Expression, n.Expression.Operand.Type())
+		g.expression(ctx, n.Expression, n.Expression.Operand.Type(), false, true)
 		g.w("]")
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
 		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
@@ -1257,19 +1313,27 @@ func (g *gen) argumentExpressionList(ctx *context, pe *cc.PostfixExpression, n *
 		g.w(", ")
 		switch {
 		case i < len(params):
-			g.assignmentExpression(ctx, arg, arg.Promote())
+			g.assignmentExpression(ctx, arg, arg.Promote(), false, true)
 		case i == len(params):
-			g.w("%sVaList(bp+%d, ", g.task.crt, bpOff)
+			g.w("%sVaList(%s%s, ", g.task.crt, ctx.bpName, nonZeroUintptr(bpOff))
 			paren = ")"
 			fallthrough
 		default:
-			g.assignmentExpression(ctx, arg, arg.Promote())
+			g.assignmentExpression(ctx, arg, arg.Promote(), false, true)
 		}
 	}
 	if isVariadic && len(args) == len(params) {
 		g.w(", 0")
 	}
 	g.w("%s)", paren)
+}
+
+func nonZeroUintptr(n uintptr) string {
+	if n == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("%+d", n)
 }
 
 func (g *gen) primaryExpression(ctx *context, n *cc.PrimaryExpression, t cc.Type) {
@@ -1315,10 +1379,18 @@ func (g *gen) stringLiteral(v cc.Value) string {
 			g.ts.WriteByte(0)
 			g.strings[s] = off
 		}
-		return fmt.Sprintf("%s+%d", g.tsNameP, off)
+		return fmt.Sprintf("%s%s", g.tsNameP, nonZeroInt(off))
 	default:
 		panic(todo("%T", x))
 	}
+}
+
+func nonZeroInt(n int) string {
+	if n == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("%+d", n)
 }
 
 func (g *gen) charConst(src string, op cc.Operand, to cc.Type) {
@@ -1519,7 +1591,7 @@ func (g *gen) initDeclarator(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.I
 
 	d := n.Declarator
 	local := ctx.locals[d]
-	if local == nil { // Dead declarator
+	if local == nil { // Dead declaration.
 		return
 	}
 
@@ -1527,6 +1599,11 @@ func (g *gen) initDeclarator(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.I
 	if first {
 		s = comment(s, ds)
 	}
+	if local.isPinned {
+		g.w("%s// var %s %s at %s%s;", s, local.name, g.typ(d.Type()), ctx.bpName, nonZeroUintptr(local.off))
+		return
+	}
+
 	switch n.Case {
 	case cc.InitDeclaratorDecl: // Declarator AttributeSpecifierList
 		if ctx.block.topDecl {
@@ -1584,10 +1661,41 @@ func (g *gen) typ(t cc.Type) string {
 
 func (g *gen) tld(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.InitDeclarator) {
 	d := n.Declarator
-	tld := g.tlds[d]
+	tld := g.tlds[d] // Dead declaration.
 	if tld == nil {
 		return
 	}
 
-	panic(todo("", d.Position(), d.Name(), d.Type(), d.Linkage, d.Read, d.Write))
+	s := comment("\n", ds)
+	t := d.Type()
+	switch n.Case {
+	case cc.InitDeclaratorDecl: // Declarator AttributeSpecifierList
+		g.w("%svar %s = %s%s; // %v: %s\n", s, tld.name, g.bssName, nonZeroUintptr(g.allocBSS(t)), pos(n), g.typ(t))
+	// case cc.InitDeclaratorInit: // Declarator AttributeSpecifierList '=' Initializer
+	// 	switch {
+	// 	case ctx.block.topDecl:
+	// 		panic(todo(""))
+	// 	default:
+	// 		g.w("%s%s := %s(", s, local.name, g.typ(d.Type()))
+	// 		g.initializer(ctx, n.Initializer, d.Type())
+	// 		g.w(");")
+	// 	}
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+// Return n's position but with baseName(path)
+func pos(n cc.Node) (r token.Position) {
+	r = token.Position(n.Position())
+	if r.IsValid() {
+		r.Filename = filepath.Base(r.Filename)
+	}
+	return r
+}
+
+func (g *gen) allocBSS(t cc.Type) uintptr {
+	r := roundup(g.bss, uintptr(t.Align()))
+	g.bss = r + t.Size()
+	return r
 }
