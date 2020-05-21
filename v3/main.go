@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -84,24 +85,25 @@ type imported struct {
 }
 
 type task struct {
-	D             []string // -D
-	I             []string // -I
-	U             []string // -U
-	args          []string
-	asts          []*cc.AST
-	cfg           *cc.Config
-	crt           string
-	crtImportPath string // -ccgo-crt-import-path
-	goarch        string
-	goos          string
-	imports       []*imported
-	l             []string // -l
-	o             string   // -o
-	out           io.Writer
-	pkgName       string // -ccgo-pkgname
-	sources       []cc.Source
-	stderr        io.Writer
-	stdout        io.Writer
+	D               []string // -D
+	I               []string // -I
+	U               []string // -U
+	args            []string
+	asts            []*cc.AST
+	cfg             *cc.Config
+	crt             string
+	crtImportPath   string // -ccgo-crt-import-path
+	goarch          string
+	goos            string
+	ignoredIncludes string // -ccgo-ignored-includes
+	imports         []*imported
+	l               []string // -l
+	o               string   // -o
+	out             io.Writer
+	pkgName         string // -ccgo-pkgname
+	sources         []cc.Source
+	stderr          io.Writer
+	stdout          io.Writer
 
 	E bool // -E
 }
@@ -138,8 +140,9 @@ func (t *task) main() (err error) {
 	opts.Arg("D", true, func(arg, value string) error { t.D = append(t.D, value); return nil })
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
 	opts.Arg("U", true, func(arg, value string) error { t.U = append(t.U, value); return nil })
-	opts.Arg("ccgo-crt-import-path", true, func(arg, value string) error { t.crtImportPath = value; return nil })
-	opts.Arg("ccgo-pkgname", true, func(arg, value string) error { t.pkgName = value; return nil })
+	opts.Arg("ccgo-crt-import-path", false, func(arg, value string) error { t.crtImportPath = value; return nil })
+	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
+	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Arg("l", true, func(arg, value string) error {
 		value = strings.TrimSpace(value)
@@ -194,9 +197,16 @@ func (t *task) main() (err error) {
 		return err
 	}
 
+	var re *regexp.Regexp
+	if t.ignoredIncludes != "" {
+		if re, err = regexp.Compile(t.ignoredIncludes); err != nil {
+			return err
+		}
+	}
+
 	t.cfg = &cc.Config{
 		ABI:     abi,
-		Config3: cc.Config3{PreserveWhiteSpace: true},
+		Config3: cc.Config3{PreserveWhiteSpace: true, IgnoreInclude: re},
 	}
 	hostPredefined, hostIncludes, hostSysIncludes, err := cc.HostConfig("")
 	if err != nil {

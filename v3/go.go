@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"go/scanner"
 	"go/token"
 	"math"
 	"path/filepath"
@@ -266,7 +267,8 @@ type gen struct {
 	bssName  string
 	bssNameP string
 	buf      bytes.Buffer
-	ds       data                 // Data segment
+	ds       data // Data segment
+	errors   scanner.ErrorList
 	imports  map[string]*imported // C name: import info
 	scope    scope
 	strings  map[string]int                // string value: ts off
@@ -312,6 +314,65 @@ func newGen(t *task) (*gen, error) {
 	g.tsNameP = g.scope.take("ts")
 	g.tsName = g.scope.take("ts")
 	return g, nil
+}
+
+func (g *gen) err(n cc.Node, s string, args ...interface{}) {
+	g.errors.Add(token.Position(n.Position()), fmt.Sprintf(s, args...))
+}
+
+func (g *gen) Err() error {
+	if len(g.errors) == 0 {
+		return nil
+	}
+
+	var lpos token.Position
+	w := 0
+	for _, v := range g.errors {
+		if lpos.Filename != "" {
+			if v.Pos.Filename == lpos.Filename && v.Pos.Line == lpos.Line {
+				continue
+			}
+		}
+
+		g.errors[w] = v
+		w++
+		lpos = v.Pos
+	}
+	g.errors = g.errors[:w]
+	sort.Slice(g.errors, func(i, j int) bool {
+		a := g.errors[i]
+		b := g.errors[j]
+		if !a.Pos.IsValid() && b.Pos.IsValid() {
+			return true
+		}
+
+		if a.Pos.IsValid() && !b.Pos.IsValid() {
+			return false
+		}
+
+		if a.Pos.Filename < b.Pos.Filename {
+			return true
+		}
+
+		if a.Pos.Filename > b.Pos.Filename {
+			return false
+		}
+
+		if a.Pos.Line < b.Pos.Line {
+			return true
+		}
+
+		if a.Pos.Line > b.Pos.Line {
+			return false
+		}
+
+		return a.Pos.Column < b.Pos.Column
+	})
+	a := make([]string, 0, len(g.errors))
+	for _, v := range g.errors {
+		a = append(a, v.Error())
+	}
+	return fmt.Errorf("%s", strings.Join(a, "\n"))
 }
 
 func (g *gen) layout() error {
@@ -541,8 +602,11 @@ func main() { %sStart(Xmain) }`, g.task.crt)
 	g.flushStructs()
 	g.flushBSS()
 	g.flushTS()
-	_, err := g.buf.WriteTo(g.task.out)
-	return err
+	if _, err := g.buf.WriteTo(g.task.out); err != nil {
+		return err
+	}
+
+	return g.Err()
 }
 
 func (g *gen) flushBSS() {
@@ -1304,8 +1368,10 @@ func (g *gen) argumentExpressionList(ctx *context, pe *cc.PostfixExpression, n *
 		panic(todo(""))
 	}
 
+	va := true
 	if len(args) > len(params) && !isVariadic {
-		panic(todo(""))
+		g.err(pe, "too many arguments")
+		va = false
 	}
 
 	paren := ""
@@ -1314,7 +1380,7 @@ func (g *gen) argumentExpressionList(ctx *context, pe *cc.PostfixExpression, n *
 		switch {
 		case i < len(params):
 			g.assignmentExpression(ctx, arg, arg.Promote(), false, true)
-		case i == len(params):
+		case va && i == len(params):
 			g.w("%sVaList(%s%s, ", g.task.crt, ctx.bpName, nonZeroUintptr(bpOff))
 			paren = ")"
 			fallthrough
