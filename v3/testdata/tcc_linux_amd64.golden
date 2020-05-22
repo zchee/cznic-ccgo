@@ -12,6 +12,8 @@
 11_precedence.c
 12_hashdefine.c
 13_integer_literals.c
+14_if.c
+15_recursion.c
 16_nesting.c
 18_include.c
 20_pointer_comparison.c
@@ -20,6 +22,7 @@
 44_scoped_declarations.c
 64_macro_nesting.c
 71_macro_empty_arg.c
+72_long_long_constant.c
 81_types.c
 82_attribs_position.c
 84_hex-float.c

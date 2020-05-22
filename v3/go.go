@@ -822,9 +822,15 @@ func (g *gen) selectionStatement(ctx *context, n *cc.SelectionStatement) {
 		g.w("%s", comment("\n", n))
 		switch n.Case {
 		case cc.SelectionStatementIf: // "if" '(' Expression ')' Statement
-			panic(todo("", n.Position(), n.Case))
+			g.w("if ")
+			g.expression(ctx, n.Expression, n.Expression.Operand.Type(), true, true)
+			g.statement(ctx, n.Statement, true)
 		case cc.SelectionStatementIfElse: // "if" '(' Expression ')' Statement "else" Statement
-			panic(todo("", n.Position(), n.Case))
+			g.w("if ")
+			g.expression(ctx, n.Expression, n.Expression.Operand.Type(), true, true)
+			g.statement(ctx, n.Statement, true)
+			g.w(" else ")
+			g.statement(ctx, n.Statement2, true)
 		case cc.SelectionStatementSwitch: // "switch" '(' Expression ')' Statement
 			sv := ctx.switchCtx
 			ctx.switchCtx = inSwitchFirst
