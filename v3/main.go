@@ -302,12 +302,12 @@ func (t *task) main() (err error) {
 	}()
 
 	t.out = w
-	g, err := newGen(t)
+	p, err := newProject(t)
 	if err != nil {
 		return err
 	}
 
-	return g.main()
+	return p.main()
 }
 
 // Get exported symbols from package having import path 'path'.

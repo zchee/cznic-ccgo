@@ -8,10 +8,10 @@ import (
 	"modernc.org/cc/v3"
 )
 
-func (g *gen) initializer(ctx *context, n *cc.Initializer, t cc.Type) {
+func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 	switch n.Case {
 	case cc.InitializerExpr: // AssignmentExpression
-		g.assignmentExpression(ctx, n.AssignmentExpression, t, false, true)
+		p.assignmentExpression(f, n.AssignmentExpression, t, false, true)
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
 		panic(todo("", n.Position()))
 	default:
