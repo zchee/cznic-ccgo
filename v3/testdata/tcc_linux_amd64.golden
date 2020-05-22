@@ -8,9 +8,13 @@
 07_function.c
 08_while.c
 09_do_while.c
+10_pointer.c
+11_precedence.c
+12_hashdefine.c
 13_integer_literals.c
 16_nesting.c
 18_include.c
+20_pointer_comparison.c
 38_multiple_array_index.c
 41_hashif.c
 44_scoped_declarations.c

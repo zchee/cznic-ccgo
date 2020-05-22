@@ -55,7 +55,8 @@ type local struct {
 	name string
 	off  uintptr // If isPinned: bp+off
 
-	isPinned bool // Prevent this local from being placed in Go movable stack.
+	isPinned  bool // Prevent this local from being placed in Go movable stack.
+	undeclare bool // Never read.
 }
 
 type switchState int
@@ -73,7 +74,7 @@ type context struct {
 	bpName    string
 	fndef     *cc.FunctionDefinition
 	gen       *gen
-	ignore    map[*cc.Declarator]bool
+	ignore    map[*cc.Declarator]bool // Pseudo declarators
 	locals    map[*cc.Declarator]*local
 	off       uintptr         // bp+off allocs
 	params    []*cc.Parameter // May differ from what fndef says
@@ -215,11 +216,11 @@ func (ctx *context) renameLocals(n *cc.CompoundStatement) {
 	}
 	for _, item := range work {
 		d := item.d
-		if d.Read == 0 || !ctx.ignore[d] && d.IsStatic() {
+		if !ctx.ignore[d] && d.IsStatic() {
 			continue
 		}
 
-		local := &local{}
+		local := &local{undeclare: d.Read == 0}
 		ctx.locals[d] = local
 		if d.AddressTaken {
 			local.isPinned = true
@@ -928,7 +929,7 @@ func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t c
 		case cc.AssignmentExpressionCond: // ConditionalExpression
 			g.conditionalExpression(ctx, n.ConditionalExpression, t, asBool, outermost)
 		case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
-			g.unaryExpression(ctx, n.UnaryExpression, n.UnaryExpression.Operand.Type())
+			g.unaryExpression(ctx, n.UnaryExpression, n.UnaryExpression.Operand.Type(), false, outermost)
 			g.w(" = ")
 			g.assignmentExpression(ctx, n.AssignmentExpression, n.UnaryExpression.Operand.Type(), false, true)
 		case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
@@ -959,6 +960,22 @@ func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t c
 		case cc.AssignmentExpressionCond: // ConditionalExpression
 			g.conditionalExpression(ctx, n.ConditionalExpression, t, asBool, outermost)
 		case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
+			if d := n.UnaryExpression.Declarator(); d != nil {
+				if local := ctx.locals[d]; local != nil {
+					if local.isPinned {
+						panic(todo("", n.Position()))
+					}
+
+					s := convert(d.Type(), n.Operand.Type())
+					g.w("%sAssign%s(&%s, ", g.task.crt, g.helperType(d.Type()), local.name)
+					g.assignmentExpression(ctx, n.AssignmentExpression, n.UnaryExpression.Operand.Type(), false, true)
+					g.w(")%s", s)
+					break
+				}
+
+				panic(todo("", n.Position()))
+			}
+
 			panic(todo("", n.Position()))
 		case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
 			panic(todo("", n.Position()))
@@ -986,40 +1003,9 @@ func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t c
 	}
 }
 
-func (g *gen) declarator(ctx *context, d *cc.Declarator, t cc.Type) {
-	defer g.w("%s", convert(d.Type(), t))
-
-	switch d.Linkage {
-	case cc.None:
-		switch local := ctx.locals[d]; {
-		case local.isPinned:
-			g.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", g.typ(d.Type()), ctx.bpName, nonZeroUintptr(local.off), local.name)
-		default:
-			g.w("%s", local.name)
-		}
-	case cc.External:
-		tld := g.tlds[d]
-		if d.Type().Kind() == cc.Function {
-			switch {
-			case tld != nil:
-				g.w("%s", tld.name)
-			default:
-				nm := d.Name()
-				imp := g.imports[nm.String()]
-				g.w("%sX%s", imp.qualifier, nm)
-			}
-			break
-		}
-
-		switch {
-		case tld != nil:
-			g.w("(*%s)(unsafe.Pointer(%s))", g.typ(d.Type()), tld.name)
-		default:
-			panic(todo(""))
-		}
-	default:
-		panic(todo("", d.Position(), d.Name(), d.Linkage))
-	}
+func (g *gen) helperType(t cc.Type) string {
+	s := g.typ(t)
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func convert(from, to cc.Type) string {
@@ -1053,7 +1039,20 @@ func (g *gen) logicalOrExpression(ctx *context, n *cc.LogicalOrExpression, t cc.
 	case cc.LogicalOrExpressionLAnd: // LogicalAndExpression
 		g.logicalAndExpression(ctx, n.LogicalAndExpression, t, asBool, outermost)
 	case cc.LogicalOrExpressionLOr: // LogicalOrExpression "||" LogicalAndExpression
-		panic(todo("", n.Position()))
+		if !outermost {
+			g.w("(")
+			defer g.w(")")
+		}
+		if !asBool {
+			defer g.w("%s", convertOp(n.Operand, t))
+
+			g.w("%sBool32(", g.task.crt)
+
+			defer g.w(")")
+		}
+		g.logicalOrExpression(ctx, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), true, false)
+		g.w(" || ")
+		g.logicalAndExpression(ctx, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), true, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1064,7 +1063,20 @@ func (g *gen) logicalAndExpression(ctx *context, n *cc.LogicalAndExpression, t c
 	case cc.LogicalAndExpressionOr: // InclusiveOrExpression
 		g.inclusiveOrExpression(ctx, n.InclusiveOrExpression, t, asBool, outermost)
 	case cc.LogicalAndExpressionLAnd: // LogicalAndExpression "&&" InclusiveOrExpression
-		panic(todo("", n.Position()))
+		if !outermost {
+			g.w("(")
+			defer g.w(")")
+		}
+		if !asBool {
+			defer g.w("%s", convertOp(n.Operand, t))
+
+			g.w("%sBool32(", g.task.crt)
+
+			defer g.w(")")
+		}
+		g.logicalAndExpression(ctx, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), true, false)
+		g.w(" && ")
+		g.inclusiveOrExpression(ctx, n.InclusiveOrExpression, n.InclusiveOrExpression.Operand.Type(), true, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1075,7 +1087,20 @@ func (g *gen) inclusiveOrExpression(ctx *context, n *cc.InclusiveOrExpression, t
 	case cc.InclusiveOrExpressionXor: // ExclusiveOrExpression
 		g.exclusiveOrExpression(ctx, n.ExclusiveOrExpression, t, asBool, outermost)
 	case cc.InclusiveOrExpressionOr: // InclusiveOrExpression '|' ExclusiveOrExpression
-		panic(todo("", n.Position()))
+		if !outermost {
+			g.w("(")
+			defer g.w(")")
+		}
+		switch {
+		case asBool:
+			g.w("(")
+			defer g.w(") != 0")
+		default:
+			defer g.w("%s", convertOp(n.Operand, t))
+		}
+		g.inclusiveOrExpression(ctx, n.InclusiveOrExpression, n.Promote(), false, false)
+		g.w(" | ")
+		g.exclusiveOrExpression(ctx, n.ExclusiveOrExpression, n.Promote(), false, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1086,7 +1111,20 @@ func (g *gen) exclusiveOrExpression(ctx *context, n *cc.ExclusiveOrExpression, t
 	case cc.ExclusiveOrExpressionAnd: // AndExpression
 		g.andExpression(ctx, n.AndExpression, t, asBool, outermost)
 	case cc.ExclusiveOrExpressionXor: // ExclusiveOrExpression '^' AndExpression
-		panic(todo("", n.Position()))
+		if !outermost {
+			g.w("(")
+			defer g.w(")")
+		}
+		switch {
+		case asBool:
+			g.w("(")
+			defer g.w(") != 0")
+		default:
+			defer g.w("%s", convertOp(n.Operand, t))
+		}
+		g.exclusiveOrExpression(ctx, n.ExclusiveOrExpression, n.Promote(), false, false)
+		g.w(" ^ ")
+		g.andExpression(ctx, n.AndExpression, n.Promote(), false, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1097,7 +1135,20 @@ func (g *gen) andExpression(ctx *context, n *cc.AndExpression, t cc.Type, asBool
 	case cc.AndExpressionEq: // EqualityExpression
 		g.equalityExpression(ctx, n.EqualityExpression, t, asBool, outermost)
 	case cc.AndExpressionAnd: // AndExpression '&' EqualityExpression
-		panic(todo("", n.Position()))
+		if !outermost {
+			g.w("(")
+			defer g.w(")")
+		}
+		switch {
+		case asBool:
+			g.w("(")
+			defer g.w(") != 0")
+		default:
+			defer g.w("%s", convertOp(n.Operand, t))
+		}
+		g.andExpression(ctx, n.AndExpression, n.Promote(), false, false)
+		g.w(" & ")
+		g.equalityExpression(ctx, n.EqualityExpression, n.Promote(), false, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1108,18 +1159,31 @@ func (g *gen) equalityExpression(ctx *context, n *cc.EqualityExpression, t cc.Ty
 	case cc.EqualityExpressionRel: // RelationalExpression
 		g.relationalExpression(ctx, n.RelationalExpression, t, asBool, outermost)
 	case cc.EqualityExpressionEq: // EqualityExpression "==" RelationalExpression
-		panic(todo("", n.Position()))
+		g.binaryEqualityExpression(ctx, n, " == ", t, asBool)
 	case cc.EqualityExpressionNeq: // EqualityExpression "!=" RelationalExpression
-		panic(todo("", n.Position()))
+		g.binaryEqualityExpression(ctx, n, " != ", t, asBool)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
+func (g *gen) binaryEqualityExpression(ctx *context, n *cc.EqualityExpression, oper string, t cc.Type, asBool bool) {
+	if !asBool {
+		defer g.w("%s", convertOp(n.Operand, t))
+
+		g.w("%sBool32(", g.task.crt)
+
+		defer g.w(")")
+	}
+	g.equalityExpression(ctx, n.EqualityExpression, n.Promote(), false, false)
+	g.w("%s", oper)
+	g.relationalExpression(ctx, n.RelationalExpression, n.Promote(), false, false)
+}
+
 func (g *gen) relationalExpression(ctx *context, n *cc.RelationalExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.RelationalExpressionShift: // ShiftExpression
-		g.shiftExpression(ctx, n.ShiftExpression, t, outermost)
+		g.shiftExpression(ctx, n.ShiftExpression, t, asBool, outermost)
 	case cc.RelationalExpressionLt: // RelationalExpression '<' ShiftExpression
 		g.binaryRelationalExpression(ctx, n, " < ", t, asBool)
 	case cc.RelationalExpressionGt: // RelationalExpression '>' ShiftExpression
@@ -1141,9 +1205,9 @@ func (g *gen) binaryRelationalExpression(ctx *context, n *cc.RelationalExpressio
 
 		defer g.w(")")
 	}
-	g.relationalExpression(ctx, n.RelationalExpression, n.Promote(), asBool, false)
+	g.relationalExpression(ctx, n.RelationalExpression, n.Promote(), false, false)
 	g.w("%s", oper)
-	g.shiftExpression(ctx, n.ShiftExpression, n.Promote(), false)
+	g.shiftExpression(ctx, n.ShiftExpression, n.Promote(), false, false)
 }
 
 func convertOp(op cc.Operand, to cc.Type) string {
@@ -1155,82 +1219,107 @@ func convertOp(op cc.Operand, to cc.Type) string {
 	panic(todo("%v %q -> %q", op.Value(), op.Type(), to))
 }
 
-func (g *gen) shiftExpression(ctx *context, n *cc.ShiftExpression, t cc.Type, outermost bool) {
+func (g *gen) shiftExpression(ctx *context, n *cc.ShiftExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.ShiftExpressionAdd: // AdditiveExpression
-		g.additiveExpression(ctx, n.AdditiveExpression, t, outermost)
+		g.additiveExpression(ctx, n.AdditiveExpression, t, asBool, outermost)
 	case cc.ShiftExpressionLsh: // ShiftExpression "<<" AdditiveExpression
-		panic(todo("", n.Position()))
+		g.binaryShiftExpression(ctx, n, "<<", t, asBool, outermost)
 	case cc.ShiftExpressionRsh: // ShiftExpression ">>" AdditiveExpression
-		panic(todo("", n.Position()))
+		g.binaryShiftExpression(ctx, n, ">>", t, asBool, outermost)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
-func (g *gen) additiveExpression(ctx *context, n *cc.AdditiveExpression, t cc.Type, outermost bool) {
-	switch n.Case {
-	case cc.AdditiveExpressionMul: // MultiplicativeExpression
-		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, t, outermost)
-	case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
-		g.binaryAdditiveExpression(ctx, n, "+", t, outermost)
-	case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
-		g.binaryAdditiveExpression(ctx, n, "-", t, outermost)
-	default:
-		panic(todo("%v: internal error: %v", n.Position(), n.Case))
-	}
-}
-
-func (g *gen) binaryAdditiveExpression(ctx *context, n *cc.AdditiveExpression, oper string, t cc.Type, outermost bool) {
+func (g *gen) binaryShiftExpression(ctx *context, n *cc.ShiftExpression, oper string, t cc.Type, asBool, outermost bool) {
 	if !outermost {
 		g.w("(")
 		defer g.w(")")
 	}
+	switch {
+	case asBool:
+		g.w("(")
+		defer g.w(") != 0")
+	default:
+		defer g.w("%s", convertOp(n.Operand, t))
+	}
+	g.shiftExpression(ctx, n.ShiftExpression, n.Operand.Type(), false, false)
+	g.w("%s", oper)
+	g.additiveExpression(ctx, n.AdditiveExpression, n.Promote(), false, false)
+}
 
-	defer g.w("%s", convertOp(n.Operand, t))
+func (g *gen) additiveExpression(ctx *context, n *cc.AdditiveExpression, t cc.Type, asBool, outermost bool) {
+	switch n.Case {
+	case cc.AdditiveExpressionMul: // MultiplicativeExpression
+		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, t, asBool, outermost)
+	case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
+		g.binaryAdditiveExpression(ctx, n, "+", t, asBool, outermost)
+	case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
+		g.binaryAdditiveExpression(ctx, n, "-", t, asBool, outermost)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
 
+func (g *gen) binaryAdditiveExpression(ctx *context, n *cc.AdditiveExpression, oper string, t cc.Type, asBool, outermost bool) {
+	if !outermost {
+		g.w("(")
+		defer g.w(")")
+	}
+	switch {
+	case asBool:
+		g.w("(")
+		defer g.w(") != 0")
+	default:
+		defer g.w("%s", convertOp(n.Operand, t))
+	}
 	switch {
 	case n.AdditiveExpression.Operand.Type().IsArithmeticType() && n.MultiplicativeExpression.Operand.Type().IsArithmeticType():
-		g.additiveExpression(ctx, n.AdditiveExpression, n.Promote(), false)
+		g.additiveExpression(ctx, n.AdditiveExpression, n.Promote(), false, false)
 		g.w("%s", oper)
-		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote(), false)
+		g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote(), false, false)
 	default:
 		panic(todo(""))
 	}
 }
 
-func (g *gen) multiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, t cc.Type, outermost bool) {
+func (g *gen) multiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.MultiplicativeExpressionCast: // CastExpression
-		g.castExpression(ctx, n.CastExpression, t)
+		g.castExpression(ctx, n.CastExpression, t, asBool, outermost)
 	case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
-		g.binaryMultiplicativeExpression(ctx, n, "*", t, outermost)
+		g.binaryMultiplicativeExpression(ctx, n, "*", t, asBool, outermost)
 	case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
-		g.binaryMultiplicativeExpression(ctx, n, "/", t, outermost)
+		g.binaryMultiplicativeExpression(ctx, n, "/", t, asBool, outermost)
 	case cc.MultiplicativeExpressionMod: // MultiplicativeExpression '%' CastExpression
-		g.binaryMultiplicativeExpression(ctx, n, "%", t, outermost)
+		g.binaryMultiplicativeExpression(ctx, n, "%", t, asBool, outermost)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
-func (g *gen) binaryMultiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, oper string, t cc.Type, outermost bool) {
+func (g *gen) binaryMultiplicativeExpression(ctx *context, n *cc.MultiplicativeExpression, oper string, t cc.Type, asBool, outermost bool) {
 	if !outermost {
 		g.w("(")
 		defer g.w(")")
 	}
-
-	defer g.w("%s", convertOp(n.Operand, t))
-
-	g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote(), outermost)
+	switch {
+	case asBool:
+		g.w("(")
+		defer g.w(") != 0")
+	default:
+		defer g.w("%s", convertOp(n.Operand, t))
+	}
+	g.multiplicativeExpression(ctx, n.MultiplicativeExpression, n.Promote(), false, false)
 	g.w("%s", oper)
-	g.castExpression(ctx, n.CastExpression, n.Promote())
+	g.castExpression(ctx, n.CastExpression, n.Promote(), asBool, false)
 }
 
-func (g *gen) castExpression(ctx *context, n *cc.CastExpression, t cc.Type) {
+func (g *gen) castExpression(ctx *context, n *cc.CastExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.CastExpressionUnary: // UnaryExpression
-		g.unaryExpression(ctx, n.UnaryExpression, t)
+		g.unaryExpression(ctx, n.UnaryExpression, t, asBool, outermost)
 	case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
 		panic(todo("", n.Position()))
 	default:
@@ -1238,38 +1327,26 @@ func (g *gen) castExpression(ctx *context, n *cc.CastExpression, t cc.Type) {
 	}
 }
 
-func (g *gen) unaryExpression(ctx *context, n *cc.UnaryExpression, t cc.Type) {
+func (g *gen) unaryExpression(ctx *context, n *cc.UnaryExpression, t cc.Type, asBool, outermost bool) {
 	switch n.Case {
 	case cc.UnaryExpressionPostfix: // PostfixExpression
-		g.postfixExpression(ctx, n.PostfixExpression, t)
+		g.postfixExpression(ctx, n.PostfixExpression, t, asBool, outermost)
 	case cc.UnaryExpressionInc: // "++" UnaryExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionDec: // "--" UnaryExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
-		if d := n.CastExpression.Declarator(); d != nil {
-			if local := ctx.locals[d]; local != nil {
-				g.w("%s%s/* &%s */", ctx.bpName, nonZeroUintptr(local.off), local.name)
-				break
-			}
-
-			g.w("/*1171*/")
-			g.declarator(ctx, d, d.Type())
-			g.w("/*1173*/")
-			break
-		}
-
-		panic(todo("", n.Position()))
+		g.castExpressionAddrOf(ctx, n.CastExpression)
 	case cc.UnaryExpressionDeref: // '*' CastExpression
 		s := convert(n.CastExpression.Operand.Type().Elem(), t)
 		g.w("*(*%s)(unsafe.Pointer(", g.typ(n.Operand.Type()))
-		g.castExpression(ctx, n.CastExpression, n.CastExpression.Operand.Type())
+		g.castExpression(ctx, n.CastExpression, n.CastExpression.Operand.Type(), false, true)
 		g.w("))%s", s)
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
 		g.w("-")
-		g.castExpression(ctx, n.CastExpression, t)
+		g.castExpression(ctx, n.CastExpression, t, false, outermost)
 	case cc.UnaryExpressionCpl: // '~' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionNot: // '!' CastExpression
@@ -1293,23 +1370,316 @@ func (g *gen) unaryExpression(ctx *context, n *cc.UnaryExpression, t cc.Type) {
 	}
 }
 
-func (g *gen) postfixExpression(ctx *context, n *cc.PostfixExpression, t cc.Type) {
+func (g *gen) castExpressionAddrOf(ctx *context, n *cc.CastExpression) {
+	switch n.Case {
+	case cc.CastExpressionUnary: // UnaryExpression
+		g.unaryExpressionAddrOf(ctx, n.UnaryExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) unaryExpressionAddrOf(ctx *context, n *cc.UnaryExpression) {
+	switch n.Case {
+	case cc.UnaryExpressionPostfix: // PostfixExpression
+		g.postfixExpressionAddrOf(ctx, n.PostfixExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) postfixExpressionAddrOf(ctx *context, n *cc.PostfixExpression) {
 	switch n.Case {
 	case cc.PostfixExpressionPrimary: // PrimaryExpression
-		g.primaryExpression(ctx, n.PrimaryExpression, t)
+		g.primaryExpressionAddrOf(ctx, n.PrimaryExpression)
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
-		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
+		if d := n.PostfixExpression.Declarator(); d != nil {
+			t := d.Type()
+			var off uintptr
+			f, ok := t.FieldByName(n.Token2.Value)
+			if !ok {
+				g.err(&n.Token2, "uknown field: %s", n.Token2.Value)
+			} else {
+				off = f.Offset()
+			}
+
+			g.declaratorAddrOf(ctx, d)
+			g.w("%s /* &%s.%s */", nonZeroUintptr(off), d.Name(), n.Token2.Value)
+			return
+		}
+
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
+		panic(todo("", n.Position()))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) primaryExpression(ctx *context, n *cc.PrimaryExpression, t cc.Type, asBool, outermost bool) {
+	if asBool {
+		if !outermost {
+			g.w("(")
+			defer g.w(")")
+		}
+
+		defer g.w(" != 0")
+	}
+	switch n.Case {
+	case cc.PrimaryExpressionIdent: // IDENTIFIER
+		switch d := n.Declarator(); {
+		case d != nil:
+			g.declarator(ctx, d, t)
+		default:
+			panic(todo("", n.Position()))
+		}
+	case cc.PrimaryExpressionInt: // INTCONST
+		g.intConst(n.Token.Src.String(), n.Operand, t)
+	case cc.PrimaryExpressionFloat: // FLOATCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionEnum: // ENUMCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionChar: // CHARCONST
+		g.charConst(n.Token.Src.String(), n.Operand, t)
+	case cc.PrimaryExpressionLChar: // LONGCHARCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionString: // STRINGLITERAL
+		g.w("%s", g.stringLiteral(n.Operand.Value()))
+	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionExpr: // '(' Expression ')'
+		if !outermost {
+			g.w("(")
+			defer g.w(")")
+		}
+		g.expression(ctx, n.Expression, t, false, true)
+	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
+		panic(todo("", n.Position()))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) primaryExpressionAddrOf(ctx *context, n *cc.PrimaryExpression) {
+	switch n.Case {
+	case cc.PrimaryExpressionIdent: // IDENTIFIER
+		g.declaratorAddrOf(ctx, n.Declarator())
+	case cc.PrimaryExpressionExpr: // '(' Expression ')'
+		g.expressionAddrOf(ctx, n.Expression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) expressionAddrOf(ctx *context, n *cc.Expression) {
+	switch n.Case {
+	case cc.ExpressionAssign: // AssignmentExpression
+		g.assignmentExpressionAddrOf(ctx, n.AssignmentExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) assignmentExpressionAddrOf(ctx *context, n *cc.AssignmentExpression) {
+	switch n.Case {
+	case cc.AssignmentExpressionCond: // ConditionalExpression
+		g.conditionalExpressionAddrOf(ctx, n.ConditionalExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) conditionalExpressionAddrOf(ctx *context, n *cc.ConditionalExpression) {
+	switch n.Case {
+	case cc.ConditionalExpressionLOr: // LogicalOrExpression
+		g.logicalOrExpressionAddrOf(ctx, n.LogicalOrExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) logicalOrExpressionAddrOf(ctx *context, n *cc.LogicalOrExpression) {
+	switch n.Case {
+	case cc.LogicalOrExpressionLAnd: // LogicalAndExpression
+		g.logicalAndExpressionAddrOf(ctx, n.LogicalAndExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) logicalAndExpressionAddrOf(ctx *context, n *cc.LogicalAndExpression) {
+	switch n.Case {
+	case cc.LogicalAndExpressionOr: // InclusiveOrExpression
+		g.inclusiveOrExpressionAddrOf(ctx, n.InclusiveOrExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) inclusiveOrExpressionAddrOf(ctx *context, n *cc.InclusiveOrExpression) {
+	switch n.Case {
+	case cc.InclusiveOrExpressionXor: // ExclusiveOrExpression
+		g.exclusiveOrExpressionAddOf(ctx, n.ExclusiveOrExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) exclusiveOrExpressionAddOf(ctx *context, n *cc.ExclusiveOrExpression) {
+	switch n.Case {
+	case cc.ExclusiveOrExpressionAnd: // AndExpression
+		g.andExpressionAddrOf(ctx, n.AndExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) andExpressionAddrOf(ctx *context, n *cc.AndExpression) {
+	switch n.Case {
+	case cc.AndExpressionEq: // EqualityExpression
+		g.equalityExpressionAddrOf(ctx, n.EqualityExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) equalityExpressionAddrOf(ctx *context, n *cc.EqualityExpression) {
+	switch n.Case {
+	case cc.EqualityExpressionRel: // RelationalExpression
+		g.relationalExpressionAddrOf(ctx, n.RelationalExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) relationalExpressionAddrOf(ctx *context, n *cc.RelationalExpression) {
+	switch n.Case {
+	case cc.RelationalExpressionShift: // ShiftExpression
+		g.shiftExpressionAddrOf(ctx, n.ShiftExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) shiftExpressionAddrOf(ctx *context, n *cc.ShiftExpression) {
+	switch n.Case {
+	case cc.ShiftExpressionAdd: // AdditiveExpression
+		g.additiveExpressionAddrOf(ctx, n.AdditiveExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) additiveExpressionAddrOf(ctx *context, n *cc.AdditiveExpression) {
+	switch n.Case {
+	case cc.AdditiveExpressionMul: // MultiplicativeExpression
+		g.multiplicativeExpressionAddrOf(ctx, n.MultiplicativeExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) multiplicativeExpressionAddrOf(ctx *context, n *cc.MultiplicativeExpression) {
+	switch n.Case {
+	case cc.MultiplicativeExpressionCast: // CastExpression
+		g.castExpressionAddrOf(ctx, n.CastExpression)
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) declarator(ctx *context, d *cc.Declarator, t cc.Type) {
+	if local := ctx.locals[d]; local != nil {
+		if local.isPinned {
+			g.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", g.typ(d.Type()), ctx.bpName, nonZeroUintptr(local.off), local.name)
+			return
+		}
+
+		g.w("%s", local.name)
+		return
+	}
+
+	tld := g.tlds[d]
+	if d.Type().Kind() == cc.Function {
+		switch {
+		case tld != nil:
+			g.w("%s", tld.name)
+		default:
+			nm := d.Name()
+			imp := g.imports[nm.String()]
+			g.w("%sX%s", imp.qualifier, nm)
+		}
+		return
+	}
+	panic(todo("", d.Position()))
+}
+
+func (g *gen) declaratorAddrOf(ctx *context, d *cc.Declarator) {
+	if local := ctx.locals[d]; local != nil {
+		if local.isPinned {
+			g.w("%s%s/* &%s */", ctx.bpName, nonZeroUintptr(local.off), local.name)
+			return
+		}
+
+		panic(todo("", d.Position()))
+		return
+	}
+
+	tld := g.tlds[d]
+	g.w("%s", tld.name)
+}
+
+func (g *gen) declaratorForSelect(ctx *context, d *cc.Declarator) {
+	if local := ctx.locals[d]; local != nil {
+		if local.isPinned {
+			panic(todo("", d.Position()))
+		}
+
+		g.w("%s", local.name)
+		return
+	}
+
+	tld := g.tlds[d]
+	g.w("(*%s)(unsafe.Pointer(%s))", g.typ(d.Type()), tld.name)
+}
+
+func (g *gen) declaratorForPSelect(ctx *context, d *cc.Declarator) {
+	if local := ctx.locals[d]; local != nil {
+		if local.isPinned {
+			panic(todo("", d.Position()))
+			return
+		}
+
+		g.w("(*%s)(unsafe.Pointer(%s))", g.typ(d.Type().Elem()), local.name)
+		return
+	}
+
+	// tld := g.tlds[d]
+	panic(todo("", d.Position()))
+}
+
+func (g *gen) postfixExpression(ctx *context, n *cc.PostfixExpression, t cc.Type, asBool, outermost bool) {
+	switch n.Case {
+	case cc.PostfixExpressionPrimary: // PrimaryExpression
+		g.primaryExpression(ctx, n.PrimaryExpression, t, asBool, outermost)
+	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
+		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type(), false, false)
 		g.w("[")
 		g.expression(ctx, n.Expression, n.Expression.Operand.Type(), false, true)
 		g.w("]")
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
+		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type(), false, false)
 		g.argumentExpressionList(ctx, n.PostfixExpression, n.ArgumentExpressionList, ctx.vaLists[n])
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
-		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
+		g.postfixExpressionForSelect(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
 		g.w(".F%s", n.Token2.Value)
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
-		panic(todo("", n.Position()))
+		g.postfixExpressionForPSelect(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
+		g.w(".F%s", n.Token2.Value)
 	case cc.PostfixExpressionInc: // PostfixExpression "++"
 		g.incDecPostfixExpression(ctx, n, true, t)
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
@@ -1317,6 +1687,120 @@ func (g *gen) postfixExpression(ctx *context, n *cc.PostfixExpression, t cc.Type
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		panic(todo("", n.Position()))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", n.Position()))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) postfixExpressionForPSelect(ctx *context, n *cc.PostfixExpression, t cc.Type) {
+	switch n.Case {
+	case cc.PostfixExpressionPrimary: // PrimaryExpression
+		g.primaryExpressionForPSelect(ctx, n.PrimaryExpression, t)
+	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionInc: // PostfixExpression "++"
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionDec: // PostfixExpression "--"
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", n.Position()))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) primaryExpressionForPSelect(ctx *context, n *cc.PrimaryExpression, t cc.Type) {
+	switch n.Case {
+	case cc.PrimaryExpressionIdent: // IDENTIFIER
+		switch d := n.Declarator(); {
+		case d != nil:
+			g.declaratorForPSelect(ctx, d)
+		default:
+			panic(todo("", n.Position()))
+		}
+	case cc.PrimaryExpressionInt: // INTCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionFloat: // FLOATCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionEnum: // ENUMCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionChar: // CHARCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionLChar: // LONGCHARCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionString: // STRINGLITERAL
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionExpr: // '(' Expression ')'
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
+		panic(todo("", n.Position()))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) postfixExpressionForSelect(ctx *context, n *cc.PostfixExpression, t cc.Type) {
+	switch n.Case {
+	case cc.PostfixExpressionPrimary: // PrimaryExpression
+		g.primaryExpressionForSelect(ctx, n.PrimaryExpression, t)
+	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
+		g.postfixExpression(ctx, n, t, false, false)
+	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionInc: // PostfixExpression "++"
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionDec: // PostfixExpression "--"
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", n.Position()))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (g *gen) primaryExpressionForSelect(ctx *context, n *cc.PrimaryExpression, t cc.Type) {
+	switch n.Case {
+	case cc.PrimaryExpressionIdent: // IDENTIFIER
+		switch d := n.Declarator(); {
+		case d != nil:
+			g.declaratorForSelect(ctx, d)
+		default:
+			panic(todo("", n.Position()))
+		}
+	case cc.PrimaryExpressionInt: // INTCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionFloat: // FLOATCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionEnum: // ENUMCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionChar: // CHARCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionLChar: // LONGCHARCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionString: // STRINGLITERAL
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionExpr: // '(' Expression ')'
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
 		panic(todo("", n.Position()))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -1397,38 +1881,6 @@ func nonZeroUintptr(n uintptr) string {
 	}
 
 	return fmt.Sprintf("%+d", n)
-}
-
-func (g *gen) primaryExpression(ctx *context, n *cc.PrimaryExpression, t cc.Type) {
-	switch n.Case {
-	case cc.PrimaryExpressionIdent: // IDENTIFIER
-		switch d := n.Declarator(); {
-		case d != nil:
-			g.declarator(ctx, d, t)
-		default:
-			panic(todo("", n.Position()))
-		}
-	case cc.PrimaryExpressionInt: // INTCONST
-		g.intConst(n.Token.Src.String(), n.Operand, t)
-	case cc.PrimaryExpressionFloat: // FLOATCONST
-		panic(todo("", n.Position()))
-	case cc.PrimaryExpressionEnum: // ENUMCONST
-		panic(todo("", n.Position()))
-	case cc.PrimaryExpressionChar: // CHARCONST
-		g.charConst(n.Token.Src.String(), n.Operand, t)
-	case cc.PrimaryExpressionLChar: // LONGCHARCONST
-		panic(todo("", n.Position()))
-	case cc.PrimaryExpressionString: // STRINGLITERAL
-		g.w("%s", g.stringLiteral(n.Operand.Value()))
-	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
-		panic(todo("", n.Position()))
-	case cc.PrimaryExpressionExpr: // '(' Expression ')'
-		panic(todo("", n.Position()))
-	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo("", n.Position()))
-	default:
-		panic(todo("%v: internal error: %v", n.Position(), n.Case))
-	}
 }
 
 func (g *gen) stringLiteral(v cc.Value) string {
@@ -1671,12 +2123,23 @@ func (g *gen) initDeclarator(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.I
 		case ctx.block.topDecl:
 			panic(todo(""))
 		default:
-			g.w("%s%s := %s(", s, local.name, g.typ(d.Type()))
+			var paren string
+			g.w("%s%s := ", s, local.name)
+			switch d.Type().Kind() {
+			case cc.Ptr:
+				// ok
+			default:
+				g.w("%s(", g.typ(d.Type()))
+				paren = ")"
+			}
 			g.initializer(ctx, n.Initializer, d.Type())
-			g.w(");")
+			g.w("%s;", paren)
 		}
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+	if local.undeclare {
+		g.w("_ = %s;", local.name)
 	}
 }
 
