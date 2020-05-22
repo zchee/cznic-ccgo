@@ -62,9 +62,9 @@ type switchState int
 
 const (
 	_                 switchState = iota // Not in switch.
-	inSwitchFirst                        // Before seeing "case" or "default".
-	inSwitchCase                         // Or "default".
-	inSwitchSeenBreak                    // In switch "case"/"default" and seen "break".
+	inSwitchFirst                        // Before seeing "case/default".
+	inSwitchCase                         // Seen "case/default".
+	inSwitchSeenBreak                    // In switch "case/default" and seen "break".
 )
 
 type context struct {
@@ -262,35 +262,32 @@ func (s *taggedStruct) emit(g *gen, ds *cc.DeclarationSpecifiers) {
 }
 
 type gen struct {
-	bpName   string
-	bss      uintptr // BSS segment size
 	bssName  string
 	bssNameP string
+	bssSize  uintptr // BSS segment
 	buf      bytes.Buffer
-	ds       data // Data segment
+	ds       bytes.Buffer // Data segment
 	errors   scanner.ErrorList
 	imports  map[string]*imported // C name: import info
 	scope    scope
-	strings  map[string]int                // string value: ts off
 	structs  map[cc.StringID]*taggedStruct // key: C tag
 	task     *task
 	tlds     map[*cc.Declarator]*tld
-	ts       data // Text segment
+	ts       bytes.Buffer // Text segment
 	tsName   string
 	tsNameP  string
+	tsOffs   map[string]uintptr
 
 	isMain bool
 }
 
 func newGen(t *task) (*gen, error) {
 	g := &gen{
-		ds:      newData(),
 		imports: map[string]*imported{},
 		scope:   newScope(),
-		strings: map[string]int{},
+		tsOffs:  map[string]uintptr{},
 		task:    t,
 		tlds:    map[*cc.Declarator]*tld{},
-		ts:      newData(),
 	}
 	if err := g.layout(); err != nil {
 		return nil, err
@@ -610,11 +607,11 @@ func main() { %sStart(Xmain) }`, g.task.crt)
 }
 
 func (g *gen) flushBSS() {
-	if g.bss == 0 {
+	if g.bssSize == 0 {
 		return
 	}
 
-	n := roundup(g.bss, 8)
+	n := roundup(g.bssSize, 8)
 	g.w("var %s [%d]uint64\n", g.bssNameP, n/8)
 	g.w("var %s = uintptr(unsafe.Pointer(&%s[0]))\n\n", g.bssName, g.bssNameP)
 }
@@ -657,14 +654,14 @@ func (g *gen) externalDeclaration(n *cc.ExternalDeclaration) {
 		g.functionDefinition(n.FunctionDefinition)
 	case cc.ExternalDeclarationDecl: // Declaration
 		g.declaration(nil, n.Declaration)
-	// 	case cc.ExternalDeclarationAsm: // AsmFunctionDefinition
-	// 		panic(todo("", n.Position()))
-	// 	case cc.ExternalDeclarationAsmStmt: // AsmStatement
-	// 		panic(todo("", n.Position()))
-	// 	case cc.ExternalDeclarationEmpty: // ';'
-	// 		panic(todo("", n.Position()))
-	// 	case cc.ExternalDeclarationPragma: // PragmaSTDC
-	// 		panic(todo("", n.Position()))
+	case cc.ExternalDeclarationAsm: // AsmFunctionDefinition
+		panic(todo("", n.Position()))
+	case cc.ExternalDeclarationAsmStmt: // AsmStatement
+		panic(todo("", n.Position()))
+	case cc.ExternalDeclarationEmpty: // ';'
+		panic(todo("", n.Position()))
+	case cc.ExternalDeclarationPragma: // PragmaSTDC
+		panic(todo("", n.Position()))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -869,8 +866,8 @@ func (g *gen) iterationStatement(ctx *context, n *cc.IterationStatement) {
 			g.w("; ")
 			g.expression(ctx, n.Expression3, void, false, true)
 			g.statement(ctx, n.Statement, true)
-		// case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
-		// 	panic(todo("", n.Position()))
+		case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
+			panic(todo("", n.Position()))
 		default:
 			panic(todo("%v: internal error: %v", n.Position(), n.Case))
 		}
@@ -880,12 +877,12 @@ func (g *gen) iterationStatement(ctx *context, n *cc.IterationStatement) {
 func (g *gen) jumpStatement(ctx *context, n *cc.JumpStatement) (r *cc.JumpStatement) {
 	g.w("%s", comment("\n", n))
 	switch n.Case {
-	// case cc.JumpStatementGoto: // "goto" IDENTIFIER ';'
-	// 	panic(todo("", n.Position()))
-	// case cc.JumpStatementGotoExpr: // "goto" '*' Expression ';'
-	// 	panic(todo("", n.Position()))
-	// case cc.JumpStatementContinue: // "continue" ';'
-	// 	panic(todo("", n.Position()))
+	case cc.JumpStatementGoto: // "goto" IDENTIFIER ';'
+		panic(todo("", n.Position()))
+	case cc.JumpStatementGotoExpr: // "goto" '*' Expression ';'
+		panic(todo("", n.Position()))
+	case cc.JumpStatementContinue: // "continue" ';'
+		panic(todo("", n.Position()))
 	case cc.JumpStatementBreak: // "break" ';'
 		if _, ok := n.Context().(*cc.SelectionStatement); ok {
 			switch ctx.switchCtx {
@@ -934,26 +931,26 @@ func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t c
 			g.unaryExpression(ctx, n.UnaryExpression, n.UnaryExpression.Operand.Type())
 			g.w(" = ")
 			g.assignmentExpression(ctx, n.AssignmentExpression, n.UnaryExpression.Operand.Type(), false, true)
-		// case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionDiv: // UnaryExpression "/=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionMod: // UnaryExpression "%=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionAdd: // UnaryExpression "+=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionSub: // UnaryExpression "-=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionLsh: // UnaryExpression "<<=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionRsh: // UnaryExpression ">>=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionAnd: // UnaryExpression "&=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionXor: // UnaryExpression "^=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionOr: // UnaryExpression "|=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
+		case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionDiv: // UnaryExpression "/=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionMod: // UnaryExpression "%=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionAdd: // UnaryExpression "+=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionSub: // UnaryExpression "-=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionLsh: // UnaryExpression "<<=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionRsh: // UnaryExpression ">>=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionAnd: // UnaryExpression "&=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionXor: // UnaryExpression "^=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionOr: // UnaryExpression "|=" AssignmentExpression
+			panic(todo("", n.Position()))
 		default:
 			panic(todo("%v: internal error: %v", n.Position(), n.Case))
 		}
@@ -961,28 +958,28 @@ func (g *gen) assignmentExpression(ctx *context, n *cc.AssignmentExpression, t c
 		switch n.Case {
 		case cc.AssignmentExpressionCond: // ConditionalExpression
 			g.conditionalExpression(ctx, n.ConditionalExpression, t, asBool, outermost)
-		// case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionDiv: // UnaryExpression "/=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionMod: // UnaryExpression "%=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionAdd: // UnaryExpression "+=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionSub: // UnaryExpression "-=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionLsh: // UnaryExpression "<<=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionRsh: // UnaryExpression ">>=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionAnd: // UnaryExpression "&=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionXor: // UnaryExpression "^=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
-		// case cc.AssignmentExpressionOr: // UnaryExpression "|=" AssignmentExpression
-		// 	panic(todo("", n.Position()))
+		case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionDiv: // UnaryExpression "/=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionMod: // UnaryExpression "%=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionAdd: // UnaryExpression "+=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionSub: // UnaryExpression "-=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionLsh: // UnaryExpression "<<=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionRsh: // UnaryExpression ">>=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionAnd: // UnaryExpression "&=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionXor: // UnaryExpression "^=" AssignmentExpression
+			panic(todo("", n.Position()))
+		case cc.AssignmentExpressionOr: // UnaryExpression "|=" AssignmentExpression
+			panic(todo("", n.Position()))
 		default:
 			panic(todo("%v: internal error: %v", n.Position(), n.Case))
 		}
@@ -1311,16 +1308,16 @@ func (g *gen) postfixExpression(ctx *context, n *cc.PostfixExpression, t cc.Type
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 		g.postfixExpression(ctx, n.PostfixExpression, n.PostfixExpression.Operand.Type())
 		g.w(".F%s", n.Token2.Value)
-		// case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
-		// 	panic(todo("", n.Position()))
+	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+		panic(todo("", n.Position()))
 	case cc.PostfixExpressionInc: // PostfixExpression "++"
 		g.incDecPostfixExpression(ctx, n, true, t)
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
 		g.incDecPostfixExpression(ctx, n, false, t)
-	// case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
-	// 	panic(todo("", n.Position()))
-	// case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
-	// 	panic(todo("", n.Position()))
+	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
+		panic(todo("", n.Position()))
+	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", n.Position()))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1413,22 +1410,22 @@ func (g *gen) primaryExpression(ctx *context, n *cc.PrimaryExpression, t cc.Type
 		}
 	case cc.PrimaryExpressionInt: // INTCONST
 		g.intConst(n.Token.Src.String(), n.Operand, t)
-		// case cc.PrimaryExpressionFloat: // FLOATCONST
-		// 	panic(todo("", n.Position()))
-		// case cc.PrimaryExpressionEnum: // ENUMCONST
-		// 	panic(todo("", n.Position()))
+	case cc.PrimaryExpressionFloat: // FLOATCONST
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionEnum: // ENUMCONST
+		panic(todo("", n.Position()))
 	case cc.PrimaryExpressionChar: // CHARCONST
 		g.charConst(n.Token.Src.String(), n.Operand, t)
-	// case cc.PrimaryExpressionLChar: // LONGCHARCONST
-	// 	panic(todo("", n.Position()))
+	case cc.PrimaryExpressionLChar: // LONGCHARCONST
+		panic(todo("", n.Position()))
 	case cc.PrimaryExpressionString: // STRINGLITERAL
 		g.w("%s", g.stringLiteral(n.Operand.Value()))
-	// case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
-	// 	panic(todo("", n.Position()))
-	// case cc.PrimaryExpressionExpr: // '(' Expression ')'
-	// 	panic(todo("", n.Position()))
-	// case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-	// 	panic(todo("", n.Position()))
+	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionExpr: // '(' Expression ')'
+		panic(todo("", n.Position()))
+	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
+		panic(todo("", n.Position()))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1438,25 +1435,17 @@ func (g *gen) stringLiteral(v cc.Value) string {
 	switch x := v.(type) {
 	case cc.StringValue:
 		s := cc.StringID(x).String()
-		off, ok := g.strings[s]
+		off, ok := g.tsOffs[s]
 		if !ok {
-			off = g.ts.Len()
+			off = uintptr(g.ts.Len())
 			g.ts.WriteString(s)
 			g.ts.WriteByte(0)
-			g.strings[s] = off
+			g.tsOffs[s] = off
 		}
-		return fmt.Sprintf("%s%s", g.tsNameP, nonZeroInt(off))
+		return fmt.Sprintf("%s%s", g.tsNameP, nonZeroUintptr(off))
 	default:
 		panic(todo("%T", x))
 	}
-}
-
-func nonZeroInt(n int) string {
-	if n == 0 {
-		return ""
-	}
-
-	return fmt.Sprintf("%+d", n)
 }
 
 func (g *gen) charConst(src string, op cc.Operand, to cc.Type) {
@@ -1737,15 +1726,8 @@ func (g *gen) tld(ctx *context, ds *cc.DeclarationSpecifiers, n *cc.InitDeclarat
 	switch n.Case {
 	case cc.InitDeclaratorDecl: // Declarator AttributeSpecifierList
 		g.w("%svar %s = %s%s; // %v: %s\n", s, tld.name, g.bssName, nonZeroUintptr(g.allocBSS(t)), pos(n), g.typ(t))
-	// case cc.InitDeclaratorInit: // Declarator AttributeSpecifierList '=' Initializer
-	// 	switch {
-	// 	case ctx.block.topDecl:
-	// 		panic(todo(""))
-	// 	default:
-	// 		g.w("%s%s := %s(", s, local.name, g.typ(d.Type()))
-	// 		g.initializer(ctx, n.Initializer, d.Type())
-	// 		g.w(");")
-	// 	}
+	case cc.InitDeclaratorInit: // Declarator AttributeSpecifierList '=' Initializer
+		panic(todo(""))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1761,7 +1743,7 @@ func pos(n cc.Node) (r token.Position) {
 }
 
 func (g *gen) allocBSS(t cc.Type) uintptr {
-	r := roundup(g.bss, uintptr(t.Align()))
-	g.bss = r + t.Size()
+	r := roundup(g.bssSize, uintptr(t.Align()))
+	g.bssSize = r + t.Size()
 	return r
 }

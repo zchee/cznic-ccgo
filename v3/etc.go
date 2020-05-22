@@ -5,7 +5,6 @@
 package main // import "modernc.org/ccgo/v3"
 
 import (
-	"bytes"
 	"fmt"
 )
 
@@ -91,9 +90,3 @@ func (s scope) take(t string) string {
 		}
 	}
 }
-
-type data struct {
-	*bytes.Buffer
-}
-
-func newData() data { return data{bytes.NewBuffer(nil)} }
