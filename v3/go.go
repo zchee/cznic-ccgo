@@ -25,10 +25,6 @@ var (
 	oTraceW bool
 )
 
-type voidType struct {
-	cc.Type
-}
-
 type exprMode int
 
 const (
@@ -41,8 +37,6 @@ const (
 	exprValue            // foo
 	exprVoid             //
 )
-
-func (t *voidType) Kind() cc.Kind { return cc.Void }
 
 type block struct {
 	block  *cc.CompoundStatement
@@ -275,11 +269,7 @@ func (s *taggedStruct) emit(p *project, ds *cc.DeclarationSpecifiers) {
 }
 
 type project struct {
-	bssName  string
-	bssNameP string
-	bssSize  uintptr // BSS segment
-	buf      bytes.Buffer
-	//TODO ds       bytes.Buffer // Data segment
+	buf     bytes.Buffer
 	errors  scanner.ErrorList
 	imports map[string]*imported // C name: import info
 	scope   scope
@@ -319,8 +309,6 @@ func newProject(t *task) (*project, error) {
 			}
 		}
 	}
-	p.bssName = p.scope.take("bss")
-	p.bssNameP = p.scope.take("bss")
 	p.tsNameP = p.scope.take("ts")
 	p.tsName = p.scope.take("ts")
 	return p, nil
@@ -610,23 +598,12 @@ var _ reflect.Kind
 func main() { %sStart(Xmain) }`, p.task.crt)
 	}
 	p.flushStructs()
-	p.flushBSS()
 	p.flushTS()
 	if _, err := p.buf.WriteTo(p.task.out); err != nil {
 		return err
 	}
 
 	return p.Err()
-}
-
-func (p *project) flushBSS() {
-	if p.bssSize == 0 {
-		return
-	}
-
-	n := roundup(p.bssSize, 8)
-	p.w("var %s [%d]uint64\n", p.bssNameP, n/8)
-	p.w("var %s = uintptr(unsafe.Pointer(&%s[0]))\n\n", p.bssName, p.bssNameP)
 }
 
 func (p *project) flushStructs() {
@@ -1496,7 +1473,7 @@ func (p *project) declaratorAddrOf(f *function, d *cc.Declarator) {
 	}
 
 	tld := p.tlds[d]
-	p.w("%s", tld.name)
+	p.w("uintptr(unsafe.Pointer(&%s))", tld.name)
 }
 
 func (p *project) declaratorSelect(f *function, d *cc.Declarator) {
@@ -1510,7 +1487,7 @@ func (p *project) declaratorSelect(f *function, d *cc.Declarator) {
 	}
 
 	tld := p.tlds[d]
-	p.w("(*%s)(unsafe.Pointer(%s))", p.typ(d.Type()), tld.name)
+	p.w("%s", tld.name)
 }
 
 func (p *project) declaratorPSelect(f *function, d *cc.Declarator) {
@@ -1965,7 +1942,11 @@ func (p *project) tld(f *function, ds *cc.DeclarationSpecifiers, n *cc.InitDecla
 	t := d.Type()
 	switch n.Case {
 	case cc.InitDeclaratorDecl: // Declarator AttributeSpecifierList
-		p.w("%svar %s = %s%s; // %v: %s\n", s, tld.name, p.bssName, nonZeroUintptr(p.allocBSS(t)), pos(n), p.typ(t))
+		p.w("%svar %s %s; // %v:\n", s, tld.name, p.typ(t), pos(n))
+		switch t.Kind() {
+		case cc.Struct, cc.Union:
+			p.structs[t.Tag()].emit(p, nil)
+		}
 	case cc.InitDeclaratorInit: // Declarator AttributeSpecifierList '=' Initializer
 		panic(todo(""))
 	default:
@@ -1979,11 +1960,5 @@ func pos(n cc.Node) (r token.Position) {
 	if r.IsValid() {
 		r.Filename = filepath.Base(r.Filename)
 	}
-	return r
-}
-
-func (p *project) allocBSS(t cc.Type) uintptr {
-	r := roundup(p.bssSize, uintptr(t.Align()))
-	p.bssSize = r + t.Size()
 	return r
 }

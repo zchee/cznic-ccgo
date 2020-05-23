@@ -12,7 +12,7 @@ After this, assuming binaries built by the Go downloader are on your $PATH, you 
 
 on a C "Hello, World" program and get an interesting result.
 
-This directory also containds the older v2 and v1 versions. You almost certainly want the version in v3.
+This directory also contains the older v2 and v1 versions. You almost certainly want the version in v3.
 
 - Compile hello.c
 
