@@ -62,7 +62,7 @@ func trc(s string, args ...interface{}) string { //TODO-
 		s = fmt.Sprintf(s, args...)
 	}
 	_, fn, fl, _ := runtime.Caller(1)
-	r := fmt.Sprintf("%s:%d: TRC %s", fn, fl, s)
+	r := fmt.Sprintf("\n%s:%d: TRC %s", fn, fl, s)
 	fmt.Fprintf(os.Stdout, "%s\n", r)
 	os.Stdout.Sync()
 	return r

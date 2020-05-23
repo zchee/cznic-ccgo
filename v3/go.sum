@@ -2,7 +2,6 @@ github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/google/go-cmp v0.3.1 h1:Xye71clBPdm5HgqGwUkwhbynsUJZhDbS20FvLhQ2izg=
 github.com/google/go-cmp v0.3.1/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
-github.com/mattn/go-isatty v0.0.11/go.mod h1:PhnuNfih5lzO57/f3n+odYbM4JtupLOxQOAqxQCu2WE=
 github.com/mattn/go-isatty v0.0.12 h1:wuysRhFDzyxgEmMf5xjvJ2M9dZoWAXNNr5LSBS7uHXY=
 github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
 github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446/go.mod h1:uYEyJGbgTkfkS4+E/PavXkNJcbFIpEtjt2B0KDQ5+9M=
@@ -20,8 +19,6 @@ golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
-golang.org/x/sys v0.0.0-20191026070338-33540a1f6037/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
-golang.org/x/sys v0.0.0-20191218084908-4a24b4065292/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200116001909-b77594299b42/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200519105757-fe76b779f299 h1:DYfZAGf2WMFjMxbgTjaC+2HC7NkNAQs+6Q8b9WEB/F4=
 golang.org/x/sys v0.0.0-20200519105757-fe76b779f299/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
@@ -33,14 +30,10 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 h1:E7g+9GITq07hpfrRu66IVDexMakfv52eLZ2CXBWiKr4=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-modernc.org/cc/v3 v3.2.0 h1:g8eQU0Fv7185BVcX871Z6qhPAvmiArEOQjLwyIWxqD8=
-modernc.org/cc/v3 v3.2.0/go.mod h1:HeoKlFQ2EDE2ZKKqHH0djWUK2WPs5SYKBdZDVDUz78A=
-modernc.org/cc/v3 v3.3.0 h1:g+UuNs2NoqfOvN/L5RKuoRiLFCmOpHgXzt1Bm1ywCo4=
-modernc.org/cc/v3 v3.3.0/go.mod h1:HeoKlFQ2EDE2ZKKqHH0djWUK2WPs5SYKBdZDVDUz78A=
-modernc.org/crt/v2 v2.0.1-alpha.3 h1:fUwncKweDIyJJxv6GYq/LC+N7DWsvVAAXC0iY458n4c=
-modernc.org/crt/v2 v2.0.1-alpha.3/go.mod h1:K7tDS2XDAsVcX1puL+MEnzy8/E2kUh1GgV57DLtCNgg=
-modernc.org/crt/v3 v3.0.1 h1:05zWJvueMYAOMDgS32w7Os3lCYp+B0sZU9kj/M/Dbc4=
-modernc.org/crt/v3 v3.0.1/go.mod h1:6O6CpqmSt6ECXxNvpJU2PpWycHPaDDYosS4uMLCDk/M=
+modernc.org/cc/v3 v3.4.0 h1:C+Rab0B60EXpLXXJwaAAJs7NBA3+cX5WRDcDisbh3Zs=
+modernc.org/cc/v3 v3.4.0/go.mod h1:HeoKlFQ2EDE2ZKKqHH0djWUK2WPs5SYKBdZDVDUz78A=
+modernc.org/cc/v3 v3.4.1 h1:Ea+HtBoSxPu+9EPSAtAK0qqYcqbom/Ui4zWqT6HcEfY=
+modernc.org/cc/v3 v3.4.1/go.mod h1:HeoKlFQ2EDE2ZKKqHH0djWUK2WPs5SYKBdZDVDUz78A=
 modernc.org/crt/v3 v3.1.0 h1:5NsxWr8KK7dtbP8atVvptdeX+s2wZl4TUSM5A9EIcTc=
 modernc.org/crt/v3 v3.1.0/go.mod h1:jZ0M2dvOLID7IgZPGZ189WFLj+m5qEACQm84BoFsHF4=
 modernc.org/mathutil v1.0.0 h1:93vKjrJopTPrtTNpZ8XIovER7iCIH1QU7wNbOQXC60I=

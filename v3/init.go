@@ -11,7 +11,7 @@ import (
 func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 	switch n.Case {
 	case cc.InitializerExpr: // AssignmentExpression
-		p.assignmentExpression(f, n.AssignmentExpression, t, false, true)
+		p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, true)
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
 		panic(todo("", n.Position()))
 	default:
