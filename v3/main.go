@@ -70,22 +70,6 @@ func trc(s string, args ...interface{}) string { //TODO-
 	return r
 }
 
-func main() {
-	if err := newTask(os.Args, os.Stdout, os.Stderr).main(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
-type imported struct {
-	path      string              // Eg. "example.com/user/foo".
-	name      string              // Eg. "foo" from "package foo".
-	qualifier string              // Eg. "foo." or "foo2." if renamed due to name conflict.
-	exports   map[string]struct{} // Eg. {"New": {}, "Close": {}, ...}.
-
-	used bool
-}
-
 type task struct {
 	D               []string // -D
 	I               []string // -I
@@ -135,6 +119,99 @@ func env(name, deflt string) (r string) {
 		r = s
 	}
 	return r
+}
+
+// Get exported symbols from package having import path 'path'.
+func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("loading C exports from %s: %v", path, err)
+		}
+	}()
+
+	exports = map[string]struct{}{}
+	pkgs, err := packages.Load(
+		&packages.Config{
+			Mode: packages.NeedFiles,
+			Env:  append(os.Environ(), fmt.Sprintf("GOOS=%s", t.goos), fmt.Sprintf("GOARCH=%s", t.goarch)),
+		},
+		path,
+	)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if len(pkgs) != 1 {
+		return "", nil, fmt.Errorf("expected one package, loaded %d", len(pkgs))
+	}
+
+	pkg := pkgs[0]
+	if len(pkg.Errors) != 0 {
+		var a []string
+		for _, v := range pkg.Errors {
+			a = append(a, v.Error())
+		}
+		return "", nil, fmt.Errorf("%s", strings.Join(a, "\n"))
+	}
+	base := fmt.Sprintf("capi_%s_%s.go", t.goos, t.goarch)
+	var fn string
+	for _, v := range pkg.GoFiles {
+		if filepath.Base(v) == base {
+			fn = v
+			break
+		}
+	}
+	if fn == "" {
+		return "", nil, fmt.Errorf("file %s not found", base)
+	}
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, fn, nil, 0)
+	if err != nil {
+		return "", nil, err
+	}
+
+	obj, ok := file.Scope.Objects["CAPI"]
+	if !ok {
+		return "", nil, fmt.Errorf("CAPI not declared in %s", fn)
+	}
+
+	switch obj.Kind {
+	case ast.Var:
+		// ok
+	default:
+		return "", nil, fmt.Errorf("unexpected CAPI object kind: %v", obj.Kind)
+	}
+
+	spec, ok := obj.Decl.(*ast.ValueSpec)
+	if !ok {
+		return "", nil, fmt.Errorf("unexpected CAPI object type: %T", obj.Decl)
+	}
+
+	if len(spec.Values) != 1 {
+		return "", nil, fmt.Errorf("expected one CAPI expression, got %v", len(spec.Values))
+	}
+
+	ast.Inspect(spec.Values[0], func(n ast.Node) bool {
+		if x, ok := n.(*ast.BasicLit); ok {
+			var key string
+			if key, err = strconv.Unquote(x.Value); err != nil {
+				err = fmt.Errorf("invalid CAPI key value: %s", x.Value)
+				return false
+			}
+
+			exports[key] = struct{}{}
+		}
+		return true
+	})
+	return file.Name.String(), exports, err
+}
+
+func main() {
+	if err := newTask(os.Args, os.Stdout, os.Stderr).main(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 func (t *task) main() (err error) {
@@ -310,90 +387,4 @@ func (t *task) main() (err error) {
 	}
 
 	return p.main()
-}
-
-// Get exported symbols from package having import path 'path'.
-func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("loading C exports from %s: %v", path, err)
-		}
-	}()
-
-	exports = map[string]struct{}{}
-	pkgs, err := packages.Load(
-		&packages.Config{
-			Mode: packages.NeedFiles,
-			Env:  append(os.Environ(), fmt.Sprintf("GOOS=%s", t.goos), fmt.Sprintf("GOARCH=%s", t.goarch)),
-		},
-		path,
-	)
-	if err != nil {
-		return "", nil, err
-	}
-
-	if len(pkgs) != 1 {
-		return "", nil, fmt.Errorf("expected one package, loaded %d", len(pkgs))
-	}
-
-	pkg := pkgs[0]
-	if len(pkg.Errors) != 0 {
-		var a []string
-		for _, v := range pkg.Errors {
-			a = append(a, v.Error())
-		}
-		return "", nil, fmt.Errorf("%s", strings.Join(a, "\n"))
-	}
-	base := fmt.Sprintf("capi_%s_%s.go", t.goos, t.goarch)
-	var fn string
-	for _, v := range pkg.GoFiles {
-		if filepath.Base(v) == base {
-			fn = v
-			break
-		}
-	}
-	if fn == "" {
-		return "", nil, fmt.Errorf("file %s not found", base)
-	}
-
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, fn, nil, 0)
-	if err != nil {
-		return "", nil, err
-	}
-
-	obj, ok := file.Scope.Objects["CAPI"]
-	if !ok {
-		return "", nil, fmt.Errorf("CAPI not declared in %s", fn)
-	}
-
-	switch obj.Kind {
-	case ast.Var:
-		// ok
-	default:
-		return "", nil, fmt.Errorf("unexpected CAPI object kind: %v", obj.Kind)
-	}
-
-	spec, ok := obj.Decl.(*ast.ValueSpec)
-	if !ok {
-		return "", nil, fmt.Errorf("unexpected CAPI object type: %T", obj.Decl)
-	}
-
-	if len(spec.Values) != 1 {
-		return "", nil, fmt.Errorf("expected one CAPI expression, got %v", len(spec.Values))
-	}
-
-	ast.Inspect(spec.Values[0], func(n ast.Node) bool {
-		if x, ok := n.(*ast.BasicLit); ok {
-			var key string
-			if key, err = strconv.Unquote(x.Value); err != nil {
-				err = fmt.Errorf("invalid CAPI key value: %s", x.Value)
-				return false
-			}
-
-			exports[key] = struct{}{}
-		}
-		return true
-	})
-	return file.Name.String(), exports, err
 }

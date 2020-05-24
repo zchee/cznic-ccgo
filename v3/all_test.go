@@ -398,22 +398,30 @@ func TestTCC(t *testing.T) {
 func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 	const main = "main.go"
 	blacklist := map[string]struct{}{
-		"34_array_assignment.c":    {}, // gcc: 16:6: error: assignment to expression with array type
-		"60_errors_and_warnings.c": {}, // Not a standalone test. gcc fails.
-		"93_integer_promotion.c":   {}, // The expected output does not agree with gcc.
-		"95_bitfields.c":           {}, // Included from 95_bitfields_ms.c
-		"95_bitfields_ms.c":        {}, // The expected output does not agree with gcc.
-		"96_nodata_wanted.c":       {}, // Not a standalone test. gcc fails.
-		"99_fastcall.c":            {}, // 386 only
+		"34_array_assignment.c":       {}, // gcc: 16:6: error: assignment to expression with array type
+		"60_errors_and_warnings.c":    {}, // Not a standalone test. gcc fails.
+		"76_dollars_in_identifiers.c": {}, // `int $ = 10;` etc.
+		"77_push_pop_macro.c":         {}, //
+		"93_integer_promotion.c":      {}, // The expected output does not agree with gcc.
+		"95_bitfields.c":              {}, // Included from 95_bitfields_ms.c
+		"95_bitfields_ms.c":           {}, // The expected output does not agree with gcc.
+		"96_nodata_wanted.c":          {}, // Not a standalone test. gcc fails.
+		"99_fastcall.c":               {}, // 386 only
 
 		"40_stdio.c":                {}, //TODO
 		"42_function_pointer.c":     {}, //TODO
 		"46_grep.c":                 {}, //TODO
-		"73_arm64.c":                {}, //TODO struct varargs, not supported by QBE
+		"73_arm64.c":                {}, //TODO struct varargs
 		"75_array_in_struct_init.c": {}, //TODO flat struct initializer
+		"78_vla_label.c":            {}, //TODO VLA
+		"79_vla_continue.c":         {}, //TODO VLA
 		"80_flexarray.c":            {}, //TODO Flexible array member
 		"85_asm-outside-function.c": {}, //TODO
+		"87_dead_code.c":            {}, //TODO expression statement
+		"88_codeopt.c":              {}, //TODO expression statement
+		"89_nocode_wanted.c":        {}, //TODO expression statement
 		"90_struct-init.c":          {}, //TODO cc ... in designator
+		"92_enum_bitfield.c":        {}, //TODO bit fields
 		"94_generic.c":              {}, //TODO cc _Generic
 		"98_al_ax_extend.c":         {}, //TODO
 	}

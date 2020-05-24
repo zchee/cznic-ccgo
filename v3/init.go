@@ -13,7 +13,16 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 	case cc.InitializerExpr: // AssignmentExpression
 		p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, true)
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
-		panic(todo("", n.Position()))
+		defer p.w("%s", p.convert(n.Type(), t))
+		p.w("%s{", p.typ(n.Type()))
+		for list := n.InitializerList; list != nil; list = list.InitializerList {
+			if list.Designation != nil {
+				panic(todo(""))
+			}
+			p.initializer(f, list.Initializer, list.Initializer.Type())
+			p.w(", ")
+		}
+		p.w("}")
 	default:
 		panic(todo("internal error"))
 	}
