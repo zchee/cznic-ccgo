@@ -1104,7 +1104,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	f := newFunction(p, n)
 	p.functionDefinitionSignature(f, tld)
 	p.w(" ")
-	comment := fmt.Sprintf("// %v:", pos(d))
+	comment := fmt.Sprintf("/* %v: */", pos(d))
 	if need := f.off; need != 0 {
 		f.bpName = f.scope.take("bp")
 		p.w("{%s\n%s := %s.Alloc(%d)\n", comment, f.bpName, f.tlsName, need)
@@ -1126,23 +1126,17 @@ func (p *project) flushStaticTLDs() {
 func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, comment string, forceNoBraces bool) {
 	// '{' BlockItemList '}'
 	brace := (!n.IsJumpTarget() || n.Parent() == nil) && !forceNoBraces
-	nl := ""
 	if brace && (n.Parent() != nil || f.off == 0) {
 		p.w("{%s", comment)
-		nl = "\n"
 	}
 	f.block = f.blocks[n]
 	if f.block.topDecl {
-		p.w("%s", nl)
 		for _, v := range f.block.decls {
 			p.declaration(f, v, true)
 		}
 	}
 	var r *cc.JumpStatement
-	for list, first := n.BlockItemList, true; list != nil; list, first = list.BlockItemList, false {
-		if first && !strings.HasPrefix(tokenSeparator(list.BlockItem), "\n") {
-			p.w("%s", nl)
-		}
+	for list := n.BlockItemList; list != nil; list = list.BlockItemList {
 		r = p.blockItem(f, list.BlockItem)
 	}
 	if n.Parent() == nil && r == nil && f.rt.Kind() != cc.Void {
