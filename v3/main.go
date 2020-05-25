@@ -28,8 +28,27 @@ import (
 
 const (
 	builtin = `
-#undef __GNUC__
+#define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
+#define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
+
+#ifdef __PTRDIFF_TYPE__
+typedef __PTRDIFF_TYPE__ ptrdiff_t;
+#endif
+
+#ifdef __SIZE_TYPE__
+typedef __SIZE_TYPE__ size_t;
+#endif
+
+#ifdef __WCHAR_TYPE__
+typedef __WCHAR_TYPE__ wchar_t;
+#endif
+
 typedef void *__builtin_va_list;
+void *__ccgo_va_arg(void* ap);
+
+extern void exit(int);
+
+#undef __GNUC__
 `
 	defaultCrt = "modernc.org/crt/v3"
 )
@@ -291,6 +310,7 @@ func (t *task) main() (err error) {
 	if err != nil {
 		return err
 	}
+
 	var sources []cc.Source
 	if hostPredefined != "" {
 		sources = append(sources, cc.Source{Name: "<predefined>", Value: hostPredefined})

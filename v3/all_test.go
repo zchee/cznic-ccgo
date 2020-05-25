@@ -658,13 +658,13 @@ func TestGCCExec(t *testing.T) {
 
 	var files, ok int
 	const dir = "gcc/testsuite/gcc.c-torture/execute"
-	f, o := testGCCGoExec(g.w, t, filepath.Join(root, filepath.FromSlash(dir)), false)
+	f, o := testGCCExec(g.w, t, filepath.Join(root, filepath.FromSlash(dir)), false)
 	files += f
 	ok += o
 	t.Logf("files %s, ok %s", h(files), h(ok))
 }
 
-func testGCCGoExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
+func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
 	const main = "main.go"
 	blacklist := map[string]struct{}{}
 	wd, err := os.Getwd()
@@ -788,12 +788,6 @@ func testGCCGoExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok i
 		out = trim(out)
 		exp = trim(exp)
 
-		switch base := filepath.Base(path); base {
-		case "70_floating_point_literals.c": //TODO TCC binary extension
-			a := strings.Split(string(exp), "\n")
-			exp = []byte(strings.Join(a[:35], "\n"))
-		}
-
 		if !bytes.Equal(out, exp) {
 			if *oTrace {
 				fmt.Println(err)
@@ -809,4 +803,62 @@ func testGCCGoExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok i
 		t.Errorf("%v", err)
 	}
 	return files, ok
+}
+
+func TestSQLite(t *testing.T) {
+	root := filepath.Join(testWD, filepath.FromSlash(sqliteDir))
+	if _, err := os.Stat(root); err != nil {
+		t.Fatalf("Missing resources in %s. Please run 'go test -download' to fix.", root)
+	}
+
+	testSQLite(t, root)
+}
+
+func testSQLite(t *testing.T, dir string) {
+	const main = "main.go"
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Chdir(wd)
+
+	temp, err := ioutil.TempDir("", "ccgo-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(temp)
+
+	if err := os.Chdir(temp); err != nil {
+		t.Fatal(err)
+	}
+
+	ccgoArgs := []string{"ccgo", "-o", main, filepath.Join(dir, "shell.c"), filepath.Join(dir, "sqlite3.c")}
+	if !func() (r bool) {
+		defer func() {
+			if err := recover(); err != nil {
+				if *oStackTrace {
+					fmt.Printf("%s\n", stack())
+				}
+				if *oTrace {
+					fmt.Println(err)
+				}
+				t.Errorf("%v", err)
+				r = false
+			}
+		}()
+
+		if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
+			if *oTrace {
+				fmt.Println(err)
+			}
+			t.Errorf("%v", err)
+			return false
+		}
+
+		return true
+	}() {
+		return
+	}
 }

@@ -247,7 +247,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			return true
 		}
 
-		ft := x.PostfixExpression.Operand.Type()
+		ft := funcType(x.PostfixExpression.Operand.Type())
 		if !ft.IsVariadic() {
 			return true
 		}
@@ -286,6 +286,13 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		}
 		return true
 	})
+}
+
+func funcType(t cc.Type) cc.Type {
+	if t.Kind() == cc.Ptr {
+		t = t.Elem()
+	}
+	return t
 }
 
 func isArray(t cc.Type) bool { return t.Kind() == cc.Array && t.Len() != 0 }
@@ -378,6 +385,7 @@ func newDeclarator(name string) *cc.Declarator {
 type project struct {
 	buf         bytes.Buffer
 	errors      scanner.ErrorList
+	externs     map[cc.StringID]*tld
 	imports     map[string]*imported // C name: import info
 	scope       scope
 	staticQueue []*cc.InitDeclarator
@@ -402,6 +410,7 @@ func newProject(t *task) (*project, error) {
 	}
 
 	p := &project{
+		externs: map[cc.StringID]*tld{},
 		imports: map[string]*imported{},
 		scope:   newScope(),
 		task:    t,
@@ -616,7 +625,6 @@ func (p *project) typ(t cc.Type) string {
 
 func (p *project) layoutTLDs() error {
 	var a []*cc.Declarator
-	externs := map[cc.StringID]*tld{}
 	for _, v := range p.task.asts {
 		a = a[:0]
 		for k := range v.TLD {
@@ -638,11 +646,11 @@ func (p *project) layoutTLDs() error {
 			nm := d.Name()
 			switch d.Linkage {
 			case cc.External:
-				if _, ok := externs[nm]; !ok { // First definition.
+				if _, ok := p.externs[nm]; !ok { // First definition.
 					name := fmt.Sprintf("X%s", d.Name())
 					p.scope.take(name)
 					tld := &tld{name: name, hasInitilaizer: d.HasInitializer()}
-					externs[nm] = tld
+					p.externs[nm] = tld
 					p.tlds[d] = tld
 					break
 				}
@@ -942,8 +950,16 @@ func (p *project) declaratorPSelect(f *function, d *cc.Declarator) {
 		return
 	}
 
-	// tld := p.tlds[d]
-	panic(todo("", d.Position()))
+	tld := p.tlds[d]
+	if tld == nil {
+		tld = p.externs[d.Name()]
+	}
+	switch {
+	case tld != nil:
+		p.w("(*%s)(unsafe.Pointer(%s))", p.typ(d.Type().Elem()), tld.name)
+	default:
+		panic(todo(""))
+	}
 }
 
 func (p *project) declaratorSelect(f *function, d *cc.Declarator) {
@@ -958,7 +974,15 @@ func (p *project) declaratorSelect(f *function, d *cc.Declarator) {
 	}
 
 	tld := p.tlds[d]
-	p.w("%s", tld.name)
+	if tld == nil {
+		tld = p.externs[d.Name()]
+	}
+	switch {
+	case tld != nil:
+		p.w("%s", tld.name)
+	default:
+		panic(todo(""))
+	}
 }
 
 func (p *project) declaratorAddrOf(f *function, d *cc.Declarator) {
@@ -975,7 +999,15 @@ func (p *project) declaratorAddrOf(f *function, d *cc.Declarator) {
 	}
 
 	tld := p.tlds[d]
-	p.w("uintptr(unsafe.Pointer(&%s))", tld.name)
+	if tld == nil {
+		tld = p.externs[d.Name()]
+	}
+	switch {
+	case tld != nil:
+		p.w("uintptr(unsafe.Pointer(&%s))", tld.name)
+	default:
+		panic(todo(""))
+	}
 }
 
 func (p *project) declaratorValue(f *function, d *cc.Declarator, t cc.Type, flags flags) {
@@ -1002,12 +1034,20 @@ func (p *project) declaratorValue(f *function, d *cc.Declarator, t cc.Type, flag
 	}
 
 	tld := p.tlds[d]
+	if tld == nil {
+		tld = p.externs[d.Name()]
+	}
 	switch {
 	case tld != nil:
 		p.w("%s", tld.name)
 	default:
 		nm := d.Name()
 		imp := p.imports[nm.String()]
+		if imp == nil {
+			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			return
+		}
+
 		p.w("%sX%s", imp.qualifier, nm)
 	}
 }
@@ -1109,10 +1149,14 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 		f.bpName = f.scope.take("bp")
 		p.w("{%s\n%s := %s.Alloc(%d)\n", comment, f.bpName, f.tlsName, need)
 		p.w("defer %s.Free(%d)\n", f.tlsName, need)
+		for _, v := range d.Type().Parameters() {
+			if local := f.locals[v.Declarator()]; local != nil && local.isPinned { // Pin it.
+				p.w("*(*%s)(unsafe.Pointer(%s%s)) = %s\n", p.typ(v.Declarator().Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+			}
+		}
 		comment = ""
 	}
 	p.compoundStatement(f, n.CompoundStatement, comment, false)
-	p.w("\n\n")
 	p.flushStaticTLDs()
 }
 
@@ -1532,7 +1576,7 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags&^fOutermost)
 			p.w(" %s", oper)
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags&^fOutermost)
-		case lt.Kind() == cc.Ptr && rt.IsIntegerType(): // p + i
+		case lt.Kind() == cc.Ptr && rt.IsIntegerType(): // p +- i
 			p.additiveExpression(f, n.AdditiveExpression, lt, exprValue, flags&^fOutermost)
 			p.w("%s uintptr(", oper)
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, exprValue, flags&^fOutermost)
@@ -1540,10 +1584,26 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 			if sz := lt.Elem().Size(); sz != 1 {
 				p.w("*%d", sz)
 			}
-		case lt.IsIntegerType() && rt.Kind() == cc.Ptr: // i + p
+		case lt.Kind() == cc.Array && rt.IsIntegerType(): // p +- i
+			p.additiveExpression(f, n.AdditiveExpression, lt, exprAddrOf, flags&^fOutermost)
+			p.w("%s uintptr(", oper)
+			p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, exprValue, flags&^fOutermost)
+			p.w(")")
+			if sz := lt.Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
+		case lt.IsIntegerType() && rt.Kind() == cc.Ptr: // i +- p
 			panic(todo(""))
+		case lt.IsIntegerType() && rt.Kind() == cc.Array: // i +- p
+			panic(todo(""))
+		case lt.Kind() == cc.Ptr && rt.Kind() == cc.Ptr && oper == "-": // p - q
+			p.w("(")
+			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags&^fOutermost)
+			p.w(" %s", oper)
+			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags&^fOutermost)
+			p.w(")/%d", lt.Elem().Size())
 		default:
-			panic(todo("", lt, rt))
+			panic(todo("", n.Position(), lt, rt, oper))
 		}
 	default:
 		panic(todo("", mode))
@@ -1801,7 +1861,7 @@ func (p *project) postfixExpressionCall(f *function, n *cc.PostfixExpression, t 
 
 func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, n *cc.ArgumentExpressionList, bpOff uintptr) {
 	p.w("(%s", f.tlsName)
-	ft := pe.Operand.Type()
+	ft := funcType(pe.Operand.Type())
 	isVariadic := ft.IsVariadic()
 	params := ft.Parameters()
 	if len(params) == 1 && params[0].Type().Kind() == cc.Void {
@@ -1852,7 +1912,7 @@ func (p *project) postfixExpressionIndex(f *function, n *cc.PostfixExpression, t
 		defer p.w("%s", p.convert(n.Operand.Type(), t, flags))
 		d := n.PostfixExpression.Declarator()
 		switch {
-		case isArray(peType) && d == nil || !d.IsParameter:
+		case isArray(peType) && (d == nil || !d.IsParameter):
 			p.postfixExpression(f, n.PostfixExpression, peType, exprValue, flags&^fOutermost)
 			p.w("[")
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost)
@@ -1876,8 +1936,15 @@ func (p *project) postfixExpressionIndex(f *function, n *cc.PostfixExpression, t
 		if sz := peType.Decay().Elem().Size(); sz != 1 {
 			p.w("*%d", sz)
 		}
+	case exprBool:
+		if flags&fOutermost == 0 {
+			p.w("(")
+			defer p.w(")")
+		}
+		p.postfixExpression(f, n, t, exprValue, flags)
+		p.w(" != 0")
 	default:
-		panic(todo("", mode))
+		panic(todo("", n.Position(), mode))
 	}
 }
 
