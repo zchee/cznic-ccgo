@@ -59,3 +59,5 @@
 83_utf8_in_identifiers.c
 84_hex-float.c
 86_memory-model.c
+91_ptr_longlong_arith32.c
+97_utf8_string_literal.c
