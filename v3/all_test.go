@@ -86,6 +86,7 @@ var (
 	ntpsecDir = filepath.FromSlash("testdata/ntpsec-master")
 	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3300100")
 	tccDir    = filepath.FromSlash("testdata/tcc-0.9.27")
+	mjsonDir  = filepath.FromSlash("testdata/microjson-1.5")
 
 	testWD string
 
@@ -96,6 +97,7 @@ var (
 	}{
 		{gccDir, "http://mirror.koddos.net/gcc/releases/gcc-9.1.0/gcc-9.1.0.tar.gz", 118000, true},
 		{gpsdDir, "http://download-mirror.savannah.gnu.org/releases/gpsd/gpsd-3.20.tar.gz", 3600, false},
+		{mjsonDir, "https://gitlab.com/esr/microjson/-/archive/1.5/microjson-1.5.tar.gz", 22, false},
 		{ntpsecDir, "https://gitlab.com/NTPsec/ntpsec/-/archive/master/ntpsec-master.tar.gz", 2600, false},
 		{sqliteDir, "https://www.sqlite.org/2019/sqlite-amalgamation-3300100.zip", 2400, false},
 		{tccDir, "http://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2", 620, false},
@@ -835,6 +837,64 @@ func testSQLite(t *testing.T, dir string) {
 	}
 
 	ccgoArgs := []string{"ccgo", "-o", main, filepath.Join(dir, "shell.c"), filepath.Join(dir, "sqlite3.c")}
+	if !func() (r bool) {
+		defer func() {
+			if err := recover(); err != nil {
+				if *oStackTrace {
+					fmt.Printf("%s\n", stack())
+				}
+				if *oTrace {
+					fmt.Println(err)
+				}
+				t.Errorf("%v", err)
+				r = false
+			}
+		}()
+
+		if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
+			if *oTrace {
+				fmt.Println(err)
+			}
+			t.Errorf("%v", err)
+			return false
+		}
+
+		return true
+	}() {
+		return
+	}
+}
+
+func TestMjson(t *testing.T) {
+	root := filepath.Join(testWD, filepath.FromSlash(mjsonDir))
+	if _, err := os.Stat(root); err != nil {
+		t.Fatalf("Missing resources in %s. Please run 'go test -download' to fix.", root)
+	}
+
+	testMjson(t, root)
+}
+
+func testMjson(t *testing.T, dir string) {
+	const main = "main.go"
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Chdir(wd)
+
+	temp, err := ioutil.TempDir("", "ccgo-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(temp)
+
+	if err := os.Chdir(temp); err != nil {
+		t.Fatal(err)
+	}
+
+	ccgoArgs := []string{"ccgo", "-o", main, filepath.Join(dir, "mjson.c"), filepath.Join(dir, "test_microjson.c")}
 	if !func() (r bool) {
 		defer func() {
 			if err := recover(); err != nil {

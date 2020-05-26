@@ -28,9 +28,6 @@ import (
 
 const (
 	builtin = `
-#define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
-#define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
-
 #ifdef __PTRDIFF_TYPE__
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
 #endif
@@ -43,10 +40,21 @@ typedef __SIZE_TYPE__ size_t;
 typedef __WCHAR_TYPE__ wchar_t;
 #endif
 
-typedef void *__builtin_va_list;
-void *__ccgo_va_arg(void* ap);
+#define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
+#define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 
-extern void exit(int);
+
+typedef void *__builtin_va_list;
+
+double __builtin_fabs(double x);
+int __builtin_abs(int j);
+int __builtin_printf(const char *format, ...);
+int __builtin_strcmp(const char *s1, const char *s2);
+void *__builtin_memcpy(void *dest, const void *src, size_t n);
+void *__builtin_memset(void *s, int c, size_t n);
+void *__ccgo_va_arg(void* ap);
+void __builtin_abort(void);
+void __builtin_exit(int status);
 
 #undef __GNUC__
 `

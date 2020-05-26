@@ -8,7 +8,7 @@ import (
 	"modernc.org/cc/v3"
 )
 
-func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, flags flags) {
+func (p *project) initializer(f *function, n *cc.Initializer, t, s cc.Type, flags flags) {
 	switch n.Case {
 	case cc.InitializerExpr: // AssignmentExpression
 		et := n.AssignmentExpression.Operand.Type()
@@ -16,7 +16,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, flags f
 		case isArray(t) && isArray(et):
 			p.initializerExprArray(f, n, t, flags)
 		default:
-			p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, flags|fOutermost)
+			p.assignmentExpression(f, n.AssignmentExpression, t, s, exprValue, flags|fOutermost)
 		}
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
 		defer p.w("%s", p.convert(n.Type(), t, flags))
@@ -25,7 +25,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, flags f
 			if list.Designation != nil {
 				panic(todo(""))
 			}
-			p.initializer(f, list.Initializer, list.Initializer.Type(), flags|fOutermost)
+			p.initializer(f, list.Initializer, list.Initializer.Type(), nil, flags|fOutermost)
 			p.w(", ")
 		}
 		p.w("}")
