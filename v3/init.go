@@ -147,6 +147,10 @@ func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.
 
 		fld := t.FieldByIndex(idx)
 		ft := fld.Type()
+		if ft.IsBitFieldType() {
+			//TODO panic(todo("bit fields not supported"))
+		}
+
 		switch {
 		case isAggregateType(ft) && n.Initializer.Case != cc.InitializerInitList && ft.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
 			panic(todo("", n.Position(), t, ft))
@@ -169,6 +173,10 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 
 		fld := t.FieldByIndex(idx)
 		ft := fld.Type()
+		if ft.IsBitFieldType() {
+			//TODO panic(todo("bit fields not supported"))
+		}
+
 		switch {
 		case isAggregateType(ft) && n.Initializer.Case != cc.InitializerInitList && ft.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
 			panic(todo("", n.Position(), t, ft))

@@ -103,20 +103,24 @@ type tld struct {
 }
 
 type block struct {
-	block  *cc.CompoundStatement
-	decls  []*cc.Declaration // What to declare in this block.
-	params []*cc.Parameter
-	scope  scope
+	block      *cc.CompoundStatement
+	decls      []*cc.Declaration // What to declare in this block.
+	enumConsts map[cc.StringID]string
+	enumSpecs  map[*cc.EnumSpecifier]*enumSpec
+	params     []*cc.Parameter
+	parent     *block
+	scope      scope
 
 	isFlat  bool
 	topDecl bool // Declare locals at block start to avoid "jumps over declaration".
 }
 
-func newBlock(n *cc.CompoundStatement, decls []*cc.Declaration, params []*cc.Parameter, scope scope, topDecl bool) *block {
+func newBlock(parent *block, n *cc.CompoundStatement, decls []*cc.Declaration, params []*cc.Parameter, scope scope, topDecl bool) *block {
 	return &block{
 		block:   n,
 		decls:   decls,
 		params:  params,
+		parent:  parent,
 		scope:   scope,
 		topDecl: topDecl,
 	}
@@ -199,7 +203,7 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 		ignore:              ignore,
 	}
 	f.tlsName = f.scope.take("tls")
-	f.layoutLocals(n.CompoundStatement, params)
+	f.layoutLocals(nil, n.CompoundStatement, params)
 	var extern []cc.StringID
 	for _, v := range n.CompoundStatements() { // testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/scope-1.c
 		for _, v := range v.Declarations() {
@@ -374,10 +378,37 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 
 		work = append(work, item{nil, v.Declarator()})
 	}
+	var enumList []*cc.EnumSpecifier
+	enums := map[*cc.EnumSpecifier]*enumSpec{}
 	for _, decl := range block.decls {
 		ds := decl.DeclarationSpecifiers
+		cc.Inspect(ds, func(n cc.Node, entry bool) bool {
+			if !entry {
+				return true
+			}
+
+			x, ok := n.(*cc.EnumSpecifier)
+			if !ok || x.Case != cc.EnumSpecifierDef {
+				return true
+			}
+
+			enumList = append(enumList, x)
+			enums[x] = &enumSpec{decl: decl, spec: x}
+			return true
+		})
 		for list := decl.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
 			work = append(work, item{ds, list.InitDeclarator.Declarator})
+		}
+	}
+	if len(enums) != 0 {
+		block.enumSpecs = enums
+		block.enumConsts = map[cc.StringID]string{}
+		for _, v := range enumList {
+			for list := v.EnumeratorList; list != nil; list = list.EnumeratorList {
+				en := list.Enumerator
+				nm := en.Token.Value
+				block.enumConsts[nm] = block.scope.take(nm.String())
+			}
 		}
 	}
 	for _, item := range work {
@@ -405,11 +436,11 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 	}
 }
 
-func (f *function) layoutLocals(n *cc.CompoundStatement, params []*cc.Parameter) {
-	block := newBlock(n, n.Declarations(), params, f.project.newScope(), n.IsJumpTarget())
+func (f *function) layoutLocals(parent *block, n *cc.CompoundStatement, params []*cc.Parameter) {
+	block := newBlock(parent, n, n.Declarations(), params, f.project.newScope(), n.IsJumpTarget())
 	f.blocks[n] = block
 	for _, v := range n.Children() {
-		f.layoutLocals(v, nil)
+		f.layoutLocals(block, v, nil)
 		if len(v.LabeledStatements()) != 0 {
 			vb := f.blocks[v]
 			block.decls = append(block.decls, vb.decls...)
@@ -427,11 +458,33 @@ func newDeclarator(name string) *cc.Declarator {
 	}
 }
 
+type enumSpec struct {
+	decl *cc.Declaration
+	spec *cc.EnumSpecifier
+
+	emitted bool
+}
+
+func (n *enumSpec) emit(p *project, enumConsts map[cc.StringID]string) {
+	if n == nil || n.emitted {
+		return
+	}
+
+	n.emitted = true
+	p.w("%s", comment("\n", n.decl))
+	p.w("const ( /* %v: */", pos(n.decl))
+	for list := n.spec.EnumeratorList; list != nil; list = list.EnumeratorList {
+		en := list.Enumerator
+		p.w("%s%s = %v;", comment("\n", en), enumConsts[en.Token.Value], en.Operand.Value())
+	}
+	p.w(")")
+}
+
 type project struct {
 	ast         *cc.AST
 	buf         bytes.Buffer
 	enumConsts  map[cc.StringID]string
-	enumSpecs   []*cc.EnumSpecifier
+	enumSpecs   map[*cc.EnumSpecifier]*enumSpec
 	errors      scanner.ErrorList
 	externs     map[cc.StringID]*tld
 	imports     map[string]*imported // C name: import info
@@ -549,7 +602,8 @@ func (p *project) layout() error {
 
 func (p *project) layoutEnums() error {
 	m := map[cc.StringID]cc.Value{}
-	var enums []*cc.EnumSpecifier
+	var enumList []*cc.EnumSpecifier
+	enums := map[*cc.EnumSpecifier]*enumSpec{}
 	for _, v := range p.task.asts {
 		for list := v.TranslationUnit; list != nil; list = list.TranslationUnit {
 			decl := list.ExternalDeclaration
@@ -570,15 +624,20 @@ func (p *project) layoutEnums() error {
 					return true
 				}
 
-				enums = append(enums, x)
+				enumList = append(enumList, x)
+				enums[x] = &enumSpec{decl: decl.Declaration, spec: x}
 				for list := x.EnumeratorList; list != nil; list = list.EnumeratorList {
 					en := list.Enumerator
 					nm := en.Token.Value
 					v := en.Operand.Value()
-					if ex := m[nm]; ex != nil && ex != v { // Conflict, cannot use named enumeration constants.
-						enums = nil
-						m = nil
-						return false
+					if ex := m[nm]; ex != nil {
+						if ex != v { // Conflict, cannot use named enumeration constants.
+							enums = nil
+							m = nil
+							return false
+						}
+
+						continue
 					}
 
 					m[nm] = v
@@ -588,7 +647,7 @@ func (p *project) layoutEnums() error {
 		}
 	}
 
-	for _, v := range enums {
+	for _, v := range enumList {
 		for list := v.EnumeratorList; list != nil; list = list.EnumeratorList {
 			en := list.Enumerator
 			nm := en.Token.Value
@@ -684,7 +743,12 @@ func (p *project) structLiteral(t cc.Type) string {
 		b.WriteString("struct {")
 		for idx[0] = 0; idx[0] < nf; idx[0]++ {
 			f := t.FieldByIndex(idx)
-			fmt.Fprintf(&b, "%s %s;", p.fieldName(f.Name()), p.typ(f.Type()))
+			ft := f.Type()
+			if ft.IsBitFieldType() {
+				//TODO panic(todo("bit fields not supported"))
+			}
+
+			fmt.Fprintf(&b, "%s %s;", p.fieldName(f.Name()), p.typ(ft))
 			if f.Padding() != 0 {
 				fmt.Fprintf(&b, "_ [%d]byte;", f.Padding())
 			}
@@ -799,6 +863,10 @@ func (p *project) layoutTLDs() error {
 	for _, v := range p.task.asts {
 		a = a[:0]
 		for k := range v.TLD {
+			if k.IsTypedefName {
+				continue
+			}
+
 			a = append(a, k)
 		}
 		sort.Slice(a, func(i, j int) bool {
@@ -1019,18 +1087,25 @@ func (p *project) externalDeclaration(n *cc.ExternalDeclaration) {
 }
 
 func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
-	if n.InitDeclaratorList == nil {
-		cc.Inspect(n.DeclarationSpecifiers, func(m cc.Node, entry bool) bool {
-			x, ok := m.(*cc.StructOrUnionSpecifier)
-			if !ok {
-				return true
+	cc.Inspect(n.DeclarationSpecifiers, func(m cc.Node, entry bool) bool {
+		switch x := m.(type) {
+		case *cc.EnumSpecifier:
+			if f != nil {
+				f.block.enumSpecs[x].emit(p, f.block.enumConsts)
+				break
 			}
 
+			p.enumSpecs[x].emit(p, p.enumConsts)
+		case *cc.StructOrUnionSpecifier:
 			if tag := x.Token.Value; tag != 0 {
 				p.structs[tag].emit(p, n.DeclarationSpecifiers)
 			}
-			return false
-		})
+		}
+		return true
+	})
+
+	if n.InitDeclaratorList == nil || n.InitDeclaratorList.InitDeclarator.Declarator.IsTypedefName {
+		return
 	}
 
 	// DeclarationSpecifiers InitDeclaratorList ';'
@@ -1623,7 +1698,7 @@ func (p *project) logicalOrExpression(f *function, n *cc.LogicalOrExpression, t,
 func (p *project) binaryLogicalOrExpression(f *function, n *cc.LogicalOrExpression, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.booleanBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), nil, exprBool, flags&^fOutermost)
-	p.w(" || ")
+	p.w(" ||%s", comment(" ", &n.Token))
 	p.logicalAndExpression(f, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), nil, exprBool, flags&^fOutermost)
 }
 
@@ -1657,7 +1732,7 @@ func (p *project) logicalAndExpression(f *function, n *cc.LogicalAndExpression, 
 func (p *project) binaryLogicalAndExpression(f *function, n *cc.LogicalAndExpression, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.booleanBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.logicalAndExpression(f, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), nil, exprBool, flags&^fOutermost)
-	p.w(" && ")
+	p.w(" &&%s", comment(" ", &n.Token))
 	p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.InclusiveOrExpression.Operand.Type(), nil, exprBool, flags&^fOutermost)
 }
 
@@ -1675,7 +1750,7 @@ func (p *project) inclusiveOrExpression(f *function, n *cc.InclusiveOrExpression
 func (p *project) binaryInclusiveOrExpression(f *function, n *cc.InclusiveOrExpression, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.artithmeticBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-	p.w(" | ")
+	p.w(" |%s", comment(" ", &n.Token))
 	p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 }
 
@@ -1709,7 +1784,7 @@ func (p *project) exclusiveOrExpression(f *function, n *cc.ExclusiveOrExpression
 func (p *project) binaryExclusiveOrExpression(f *function, n *cc.ExclusiveOrExpression, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.artithmeticBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-	p.w(" ^ ")
+	p.w(" ^%s", comment(" ", &n.Token))
 	p.andExpression(f, n.AndExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 }
 
@@ -1727,7 +1802,7 @@ func (p *project) andExpression(f *function, n *cc.AndExpression, t, s cc.Type, 
 func (p *project) binaryAndExpression(f *function, n *cc.AndExpression, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.artithmeticBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.andExpression(f, n.AndExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-	p.w(" & ")
+	p.w(" &%s", comment(" ", &n.Token))
 	p.equalityExpression(f, n.EqualityExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 }
 
@@ -1747,7 +1822,7 @@ func (p *project) equalityExpression(f *function, n *cc.EqualityExpression, t, s
 func (p *project) binaryEqualityExpression(f *function, n *cc.EqualityExpression, oper string, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.booleanBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.equalityExpression(f, n.EqualityExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-	p.w("%s", oper)
+	p.w(" %s%s", oper, comment(" ", &n.Token))
 	p.relationalExpression(f, n.RelationalExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 }
 
@@ -1771,7 +1846,7 @@ func (p *project) relationalExpression(f *function, n *cc.RelationalExpression, 
 func (p *project) binaryRelationalExpression(f *function, n *cc.RelationalExpression, oper string, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.booleanBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.relationalExpression(f, n.RelationalExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-	p.w("%s", oper)
+	p.w(" %s%s", oper, comment(" ", &n.Token))
 	p.shiftExpression(f, n.ShiftExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 }
 
@@ -1791,7 +1866,7 @@ func (p *project) shiftExpression(f *function, n *cc.ShiftExpression, t, s cc.Ty
 func (p *project) binaryShiftExpression(f *function, n *cc.ShiftExpression, oper string, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.artithmeticBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), nil, exprValue, flags&^fOutermost)
-	p.w("%s", oper)
+	p.w(" %s%s", oper, comment(" ", &n.Token))
 	p.additiveExpression(f, n.AdditiveExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 }
 
@@ -1817,11 +1892,11 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 		switch {
 		case lt.IsArithmeticType() && rt.IsArithmeticType():
 			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-			p.w(" %s", oper)
+			p.w(" %s%s", oper, comment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 		case lt.Kind() == cc.Ptr && rt.IsIntegerType(): // p +- i
 			p.additiveExpression(f, n.AdditiveExpression, lt, nil, exprValue, flags&^fOutermost)
-			p.w("%s uintptr(", oper)
+			p.w(" %s%s uintptr(", oper, comment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, nil, exprValue, flags&^fOutermost)
 			p.w(")")
 			if sz := lt.Elem().Size(); sz != 1 {
@@ -1829,7 +1904,7 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 			}
 		case lt.Kind() == cc.Array && rt.IsIntegerType(): // p +- i
 			p.additiveExpression(f, n.AdditiveExpression, lt, nil, exprAddrOf, flags&^fOutermost)
-			p.w("%s uintptr(", oper)
+			p.w(" %s%s uintptr(", oper, comment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, nil, exprValue, flags&^fOutermost)
 			p.w(")")
 			if sz := lt.Elem().Size(); sz != 1 {
@@ -1842,7 +1917,7 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 		case lt.Kind() == cc.Ptr && rt.Kind() == cc.Ptr && oper == "-": // p - q
 			p.w("(")
 			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-			p.w(" %s", oper)
+			p.w(" %s%s", oper, comment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 			p.w(")/%d", lt.Elem().Size())
 		default:
@@ -1871,7 +1946,7 @@ func (p *project) multiplicativeExpression(f *function, n *cc.MultiplicativeExpr
 func (p *project) binaryMultiplicativeExpression(f *function, n *cc.MultiplicativeExpression, oper string, t cc.Type, mode exprMode, flags flags) {
 	defer p.w("%s", p.artithmeticBinaryExpression(n.Operand.Type(), t, &mode, flags))
 	p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
-	p.w("%s", oper)
+	p.w(" %s%s", oper, comment(" ", &n.Token))
 	p.castExpression(f, n.CastExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 }
 
@@ -1921,7 +1996,9 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 		p.w(" -")
 		p.castExpression(f, n.CastExpression, n.Operand.Type(), s, exprValue, flags|fUnaryMinus&^fOutermost)
 	case cc.UnaryExpressionCpl: // '~' CastExpression
-		panic(todo("", pos(n)))
+		defer p.w("%s", p.convert(n.Operand.Type(), t, flags))
+		p.w(" ^")
+		p.castExpression(f, n.CastExpression, n.Operand.Type(), s, exprValue, flags|fUnaryMinus&^fOutermost)
 	case cc.UnaryExpressionNot: // '!' CastExpression
 		switch mode {
 		case exprValue:
@@ -2106,6 +2183,10 @@ func (p *project) postfixExpressionPSelect(f *function, n *cc.PostfixExpression,
 func (p *project) fldOff(t cc.Type, tok cc.Token) {
 	var off uintptr
 	fld, ok := t.FieldByName(tok.Value)
+	if fld.Type().IsBitFieldType() {
+		//TODO panic(todo("bit fields not supported"))
+	}
+
 	if !ok {
 		p.err(&tok, "uknown field: %s", tok.Value)
 	} else {
@@ -2128,6 +2209,10 @@ func (p *project) postfixExpressionSelect(f *function, n *cc.PostfixExpression, 
 		switch {
 		case pe.Kind() == cc.Union:
 			fld, ok := pe.FieldByName(n.Token2.Value)
+			if fld.Type().IsBitFieldType() {
+				//TODO panic(todo("bit fields not supported"))
+			}
+
 			if !ok {
 				p.err(&n.Token2, "uknown field: %s", n.Token2.Value)
 				return
@@ -2281,9 +2366,19 @@ func (p *project) primaryExpression(f *function, n *cc.PrimaryExpression, t, s c
 	case cc.PrimaryExpressionFloat: // FLOATCONST
 		p.floatConst(n.Token.Src.String(), n.Operand, t)
 	case cc.PrimaryExpressionEnum: // ENUMCONST
-		//TODO if s := p.enumConsts[n.Token.Value]; s != "" {
-		//TODO 	panic(todo(""))
-		//TODO }
+		if f != nil {
+			for block := f.block; block != nil; block = block.parent {
+				if s := block.enumConsts[n.Token.Value]; s != "" {
+					p.w("%s", s)
+					return
+				}
+			}
+		}
+
+		if s := p.enumConsts[n.Token.Value]; s != "" {
+			p.w("%s", s)
+			return
+		}
 
 		p.intConst("", n.Operand, t, flags)
 	case cc.PrimaryExpressionChar: // CHARCONST
