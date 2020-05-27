@@ -10,48 +10,49 @@ import (
 
 var (
 	reservedNames = map[string]bool{
-		"bool":        true, // ccgo can use
-		"break":       true, // keyword
-		"case":        true, // keyword
-		"chan":        true, // keyword
-		"const":       true, // keyword
-		"continue":    true, // keyword
-		"default":     true, // keyword
-		"defer":       true, // keyword
-		"else":        true, // keyword
-		"fallthrough": true, // keyword
-		"false":       true, // ccgo can use
-		"float32":     true, // ccgo can use
-		"float64":     true, // ccgo can use
-		"for":         true, // keyword
-		"func":        true, // keyword
-		"go":          true, // keyword
-		"goto":        true, // keyword
-		"if":          true, // keyword
-		"import":      true, // keyword
-		"int16":       true, // ccgo can use
-		"int32":       true, // ccgo can use
-		"int64":       true, // ccgo can use
-		"int8":        true, // ccgo can use
-		"interface":   true, // keyword
-		"map":         true, // keyword
-		"math":        true, // package name
-		"nil":         true, // ccgo can use
-		"package":     true, // keyword
-		"range":       true, // keyword
-		"return":      true, // keyword
-		"select":      true, // keyword
-		"struct":      true, // keyword
-		"switch":      true, // keyword
-		"true":        true, // ccgo can use
-		"type":        true, // keyword
-		"uint16":      true, // ccgo can use
-		"uint32":      true, // ccgo can use
-		"uint64":      true, // ccgo can use
-		"uint8":       true, // ccgo can use
-		"uintptr":     true, // ccgo can use
-		"unsafe":      true, // package name
-		"var":         true, // keyword
+		"bool":        false, // ccgo can use
+		"break":       true,  // keyword
+		"case":        true,  // keyword
+		"chan":        true,  // keyword
+		"const":       true,  // keyword
+		"continue":    true,  // keyword
+		"default":     true,  // keyword
+		"defer":       true,  // keyword
+		"else":        true,  // keyword
+		"fallthrough": true,  // keyword
+		"false":       false, // ccgo can use
+		"float32":     false, // ccgo can use
+		"float64":     false, // ccgo can use
+		"for":         true,  // keyword
+		"func":        true,  // keyword
+		"go":          true,  // keyword
+		"goto":        true,  // keyword
+		"if":          true,  // keyword
+		"import":      true,  // keyword
+		"init":        false, // special name
+		"int16":       false, // ccgo can use
+		"int32":       false, // ccgo can use
+		"int64":       false, // ccgo can use
+		"int8":        false, // ccgo can use
+		"interface":   true,  // keyword
+		"map":         true,  // keyword
+		"math":        false, // package name
+		"nil":         false, // ccgo can use
+		"package":     true,  // keyword
+		"range":       true,  // keyword
+		"return":      true,  // keyword
+		"select":      true,  // keyword
+		"struct":      true,  // keyword
+		"switch":      true,  // keyword
+		"true":        false, // ccgo can use
+		"type":        true,  // keyword
+		"uint16":      false, // ccgo can use
+		"uint32":      false, // ccgo can use
+		"uint64":      false, // ccgo can use
+		"uint8":       false, // ccgo can use
+		"uintptr":     false, // ccgo can use
+		"unsafe":      false, // package name
+		"var":         true,  // keyword
 	}
 )
 
@@ -66,6 +67,10 @@ func newScope() scope {
 }
 
 func (s scope) taken(t string) {
+	if t == "" {
+		panic(todo("internal error"))
+	}
+
 	if _, ok := s[t]; ok {
 		panic(todo("internal error"))
 	}
@@ -74,6 +79,10 @@ func (s scope) taken(t string) {
 }
 
 func (s scope) take(t string) string {
+	if t == "" {
+		panic(todo("internal error"))
+	}
+
 	n, ok := s[t]
 	if !ok {
 		s[t] = 0

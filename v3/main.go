@@ -106,6 +106,8 @@ type task struct {
 	cfg             *cc.Config
 	crt             string
 	crtImportPath   string // -ccgo-crt-import-path
+	exportExtern    string // -ccgo-export-extern
+	exportFields    string // -ccgo-export-fields
 	goarch          string
 	goos            string
 	ignoredIncludes string // -ccgo-ignored-includes
@@ -118,7 +120,9 @@ type task struct {
 	stderr          io.Writer
 	stdout          io.Writer
 
-	E bool // -E
+	E                 bool // -E
+	exportExternValid bool // -ccgo-export-extern present
+	exportFieldsValid bool // -ccgo-export-fields present
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -247,8 +251,10 @@ func (t *task) main() (err error) {
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
 	opts.Arg("U", true, func(arg, value string) error { t.U = append(t.U, value); return nil })
 	opts.Arg("ccgo-crt-import-path", false, func(arg, value string) error { t.crtImportPath = value; return nil })
-	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
+	opts.Arg("ccgo-export-extern", false, func(arg, value string) error { t.exportExtern = value; t.exportExternValid = true; return nil })
+	opts.Arg("ccgo-export-fields", false, func(arg, value string) error { t.exportFields = value; t.exportFieldsValid = true; return nil })
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
+	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Arg("l", true, func(arg, value string) error {
 		value = strings.TrimSpace(value)

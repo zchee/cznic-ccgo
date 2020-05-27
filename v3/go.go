@@ -112,12 +112,12 @@ type block struct {
 	topDecl bool // Declare locals at block start to avoid "jumps over declaration".
 }
 
-func newBlock(n *cc.CompoundStatement, decls []*cc.Declaration, params []*cc.Parameter, topDecl bool) *block {
+func newBlock(n *cc.CompoundStatement, decls []*cc.Declaration, params []*cc.Parameter, scope scope, topDecl bool) *block {
 	return &block{
 		block:   n,
 		decls:   decls,
 		params:  params,
-		scope:   newScope(),
+		scope:   scope,
 		topDecl: topDecl,
 	}
 }
@@ -151,7 +151,8 @@ type function struct {
 	locals     map[*cc.Declarator]*local
 	off        uintptr         // bp+off allocs
 	params     []*cc.Parameter // May differ from what fndef says
-	rt         cc.Type         // May differ from what fndef says
+	project    *project
+	rt         cc.Type // May differ from what fndef says
 	scope      scope
 	switchCtx  switchState
 	tlsName    string
@@ -191,8 +192,9 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 		locals:              map[*cc.Declarator]*local{},
 		mainSignatureForced: mainSignatureForced,
 		params:              params,
+		project:             p,
 		rt:                  rt,
-		scope:               newScope(),
+		scope:               p.newScope(),
 		vaLists:             map[*cc.PostfixExpression]uintptr{},
 		ignore:              ignore,
 	}
@@ -387,7 +389,7 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 }
 
 func (f *function) layoutLocals(n *cc.CompoundStatement, params []*cc.Parameter) {
-	block := newBlock(n, n.Declarations(), params, n.IsJumpTarget())
+	block := newBlock(n, n.Declarations(), params, f.project.newScope(), n.IsJumpTarget())
 	f.blocks[n] = block
 	for _, v := range n.Children() {
 		f.layoutLocals(v, nil)
@@ -409,10 +411,14 @@ func newDeclarator(name string) *cc.Declarator {
 }
 
 type project struct {
+	ast         *cc.AST
 	buf         bytes.Buffer
+	enumConsts  map[cc.StringID]string
+	enumSpecs   []*cc.EnumSpecifier
 	errors      scanner.ErrorList
 	externs     map[cc.StringID]*tld
 	imports     map[string]*imported // C name: import info
+	mainName    string
 	scope       scope
 	staticQueue []*cc.InitDeclarator
 	structs     map[cc.StringID]*taggedStruct // key: C tag
@@ -436,13 +442,14 @@ func newProject(t *task) (*project, error) {
 	}
 
 	p := &project{
-		externs: map[cc.StringID]*tld{},
-		imports: map[string]*imported{},
-		scope:   newScope(),
-		task:    t,
-		tlds:    map[*cc.Declarator]*tld{},
-		ts4Offs: map[cc.StringID]uintptr{},
-		tsOffs:  map[cc.StringID]uintptr{},
+		enumConsts: map[cc.StringID]string{},
+		externs:    map[cc.StringID]*tld{},
+		imports:    map[string]*imported{},
+		scope:      newScope(),
+		task:       t,
+		tlds:       map[*cc.Declarator]*tld{},
+		ts4Offs:    map[cc.StringID]uintptr{},
+		tsOffs:     map[cc.StringID]uintptr{},
 	}
 	if err := p.layout(); err != nil {
 		return nil, err
@@ -466,6 +473,37 @@ func newProject(t *task) (*project, error) {
 	p.ts4NameP = p.scope.take("wtext")
 	p.ts4Name = p.scope.take("wtext")
 	return p, nil
+}
+
+func (p *project) newScope() scope {
+	s := newScope()
+
+	//TODO It should be enough to narrow this to only the conflicting names.
+	var a []string
+	for k := range p.scope { // testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/scope-1.c
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, k := range a {
+		s.take(k)
+	}
+	var b []cc.StringID
+	for k := range p.structs {
+		b = append(b, k)
+	}
+	sort.Slice(b, func(i, j int) bool { return b[i].String() < b[j].String() })
+	for _, k := range b {
+		s.take(p.structs[k].name)
+	}
+	b = b[:0]
+	for k := range p.enumConsts {
+		b = append(b, k)
+	}
+	sort.Slice(b, func(i, j int) bool { return b[i].String() < b[j].String() })
+	for _, k := range b {
+		s.take(p.enumConsts[k])
+	}
+	return s
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
@@ -495,7 +533,63 @@ func (p *project) layout() error {
 		return err
 	}
 
+	if err := p.layoutEnums(); err != nil {
+		return err
+	}
+
 	return p.layoutStaticLocals()
+}
+
+func (p *project) layoutEnums() error {
+	m := map[cc.StringID]cc.Value{}
+	var enums []*cc.EnumSpecifier
+	for _, v := range p.task.asts {
+		for list := v.TranslationUnit; list != nil; list = list.TranslationUnit {
+			decl := list.ExternalDeclaration
+			switch decl.Case {
+			case cc.ExternalDeclarationDecl: // Declaration
+				// ok
+			default:
+				continue
+			}
+
+			cc.Inspect(decl.Declaration.DeclarationSpecifiers, func(n cc.Node, entry bool) bool {
+				if !entry {
+					return true
+				}
+
+				x, ok := n.(*cc.EnumSpecifier)
+				if !ok || x.Case != cc.EnumSpecifierDef {
+					return true
+				}
+
+				enums = append(enums, x)
+				for list := x.EnumeratorList; list != nil; list = list.EnumeratorList {
+					en := list.Enumerator
+					nm := en.Token.Value
+					v := en.Operand.Value()
+					if ex := m[nm]; ex != nil && ex != v { // Conflict, cannot use named enumeration constants.
+						enums = nil
+						m = nil
+						return false
+					}
+
+					m[nm] = v
+				}
+				return true
+			})
+		}
+	}
+
+	for _, v := range enums {
+		for list := v.EnumeratorList; list != nil; list = list.EnumeratorList {
+			en := list.Enumerator
+			nm := en.Token.Value
+			p.enumConsts[nm] = p.scope.take(nm.String())
+		}
+	}
+	p.enumSpecs = enums
+	return nil
 }
 
 func (p *project) layoutStaticLocals() error {
@@ -527,22 +621,30 @@ func (p *project) layoutStaticLocals() error {
 
 func (p *project) layoutStructs() error {
 	m := map[cc.StringID]*taggedStruct{}
+	var tags []cc.StringID
 	for _, v := range p.task.asts {
 		for tag, v := range v.StructTypes {
+			tags = append(tags, tag)
 			s := m[tag]
 			if s == nil {
-				m[tag] = &taggedStruct{name: p.scope.take("S" + tag.String()), ctyp: v}
+				m[tag] = &taggedStruct{ctyp: v}
 				continue
 			}
 
-			if v.String() != s.ctyp.String() { // Conflict, cannot use named struct/union types.
+			if v.String() != s.ctyp.String() { // Conflict, cannot use named struct/union types w/o tag renaming
 				return nil
 			}
 		}
 	}
 
 	p.structs = m
-	for _, v := range m {
+	sort.Slice(tags, func(i, j int) bool { return tags[i].String() < tags[j].String() })
+	for _, k := range tags {
+		v := m[k]
+		v.name = p.scope.take(k.String())
+	}
+	for _, k := range tags {
+		v := m[k]
 		v.gotyp = p.structType(v.ctyp)
 	}
 	return nil
@@ -575,7 +677,7 @@ func (p *project) structLiteral(t cc.Type) string {
 		b.WriteString("struct {")
 		for idx[0] = 0; idx[0] < nf; idx[0]++ {
 			f := t.FieldByIndex(idx)
-			fmt.Fprintf(&b, "F%s %s;", f.Name(), p.typ(f.Type()))
+			fmt.Fprintf(&b, "%s %s;", p.fieldName(f.Name()), p.typ(f.Type()))
 			if f.Padding() != 0 {
 				fmt.Fprintf(&b, "_ [%d]byte;", f.Padding())
 			}
@@ -611,6 +713,23 @@ func (p *project) structLiteral(t cc.Type) string {
 	return b.String()
 }
 
+func (p *project) fieldName(id cc.StringID) string {
+	if !p.task.exportFieldsValid {
+		s := id.String()
+		if !reservedNames[s] {
+			return s
+		}
+
+		return "__" + s
+	}
+
+	if s := p.task.exportFields; s != "" {
+		return s + id.String()
+	}
+
+	return capitalize(id.String())
+}
+
 func (p *project) typ(t cc.Type) string {
 	var b strings.Builder
 	if t.IsIntegerType() {
@@ -631,7 +750,7 @@ func (p *project) typ(t cc.Type) string {
 	case cc.Array:
 		n := t.Len()
 		if n == 0 {
-			panic(todo(""))
+			panic(todo("", t))
 		}
 
 		fmt.Fprintf(&b, "[%d]%s", n, p.typ(t.Elem()))
@@ -639,6 +758,10 @@ func (p *project) typ(t cc.Type) string {
 	case cc.Struct, cc.Union:
 		if tag := t.Tag(); tag != 0 {
 			if s := p.structs[tag]; s != nil {
+				if s.name == "" {
+					panic(todo("internal error %q", tag))
+				}
+
 				return s.name
 			}
 		}
@@ -650,6 +773,21 @@ func (p *project) typ(t cc.Type) string {
 }
 
 func (p *project) layoutTLDs() error {
+	const (
+		doNotExport = iota
+		exportCapitalize
+		exportPrefix
+	)
+
+	var export int
+	if p.task.exportExternValid {
+		switch {
+		case p.task.exportExtern != "":
+			export = exportPrefix
+		default:
+			export = exportCapitalize
+		}
+	}
 	var a []*cc.Declarator
 	for _, v := range p.task.asts {
 		a = a[:0]
@@ -664,6 +802,7 @@ func (p *project) layoutTLDs() error {
 			if d.Name() == idMain && d.Linkage == cc.External {
 				isMain = true
 				p.isMain = true
+				p.scope.take("main")
 			}
 			if !isMain && (d.Read == 0 && d.Write == 0 || d.IsExtern()) || d.IsFunctionPrototype() {
 				continue
@@ -673,8 +812,19 @@ func (p *project) layoutTLDs() error {
 			switch d.Linkage {
 			case cc.External:
 				if _, ok := p.externs[nm]; !ok { // First definition.
-					name := fmt.Sprintf("X%s", d.Name())
-					p.scope.take(name)
+					name := d.Name().String()
+					switch export {
+					case doNotExport:
+						// nop
+					case exportCapitalize:
+						name = capitalize(name)
+					case exportPrefix:
+						name = p.task.exportExtern + name
+					}
+					name = p.scope.take(name)
+					if isMain {
+						p.mainName = name
+					}
 					tld := &tld{name: name, hasInitilaizer: d.HasInitializer()}
 					p.externs[nm] = tld
 					p.tlds[d] = tld
@@ -694,6 +844,11 @@ func (p *project) layoutTLDs() error {
 		}
 	}
 	return nil
+}
+
+func capitalize(s string) string {
+	a := []rune(s)
+	return strings.ToUpper(string(a[0])) + string(a[1:])
 }
 
 func (p *project) main() error {
@@ -731,7 +886,7 @@ var _ reflect.Kind
 `)
 	if p.isMain {
 		p.o(`
-func main() { %sStart(Xmain) }`, p.task.crt)
+func main() { %sStart(%s) }`, p.task.crt, p.mainName)
 	}
 	p.flushStructs()
 	p.flushTS()
@@ -830,6 +985,7 @@ func (p *project) flushStructs() {
 }
 
 func (p *project) oneAST(ast *cc.AST) {
+	p.ast = ast
 	for list := ast.TranslationUnit; list != nil; list = list.TranslationUnit {
 		p.externalDeclaration(list.ExternalDeclaration)
 	}
@@ -885,6 +1041,10 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 	}
 
 	d := n.Declarator
+	if d.IsExtern() {
+		return
+	}
+
 	if tld := p.tlds[d]; tld != nil { // static local
 		p.staticQueue = append(p.staticQueue, n)
 		return
@@ -913,7 +1073,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 				}
 			default:
 				p.w("%s = ", local.name)
-				p.initializer(f, n.Initializer, d.Type(), nil, fOutermost)
+				p.initializer(f, n.Initializer, d.Type())
 				p.w(";")
 			}
 			return
@@ -924,11 +1084,15 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 		case local.isPinned:
 			p.declarator(f, d, d.Type(), nil, exprLValue, fOutermost)
 			p.w(" = ")
-			p.initializer(f, n.Initializer, d.Type(), nil, fOutermost)
+			p.initializer(f, n.Initializer, d.Type())
 			p.w(";")
 		default:
-			p.w("var %s %s = ", local.name, p.typ(d.Type()))
-			p.initializer(f, n.Initializer, d.Type(), nil, fOutermost)
+			p.w("var %s ", local.name)
+			if !isAggregateType(d.Type()) {
+				p.w("%s ", p.typ(d.Type()))
+			}
+			p.w("= ")
+			p.initializer(f, n.Initializer, d.Type())
 			p.w(";")
 		}
 	default:
@@ -1029,7 +1193,7 @@ func (p *project) declaratorSelect(f *function, d *cc.Declarator, s cc.Type) {
 func (p *project) declaratorAddrOf(f *function, d *cc.Declarator) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
-			if local.isPinned {
+			if local.isPinned || d.IsParameter && d.Type().Kind() == cc.Array {
 				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
@@ -1186,9 +1350,13 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string) {
 			break
 		}
 
-		p.w("%svar %s %s = ", sep, tld.name, p.typ(d.Type()))
-		p.initializer(f, n.Initializer, d.Type(), nil, fOutermost)
-		p.w(";\t// %v", pos(d))
+		p.w("%svar %s ", sep, tld.name)
+		if !isAggregateType(d.Type()) {
+			p.w("%s ", p.typ(d.Type()))
+		}
+		p.w("= ")
+		p.initializer(f, n.Initializer, d.Type())
+		p.w("; /* %v */", pos(d))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1422,13 +1590,13 @@ func (p *project) conditionalExpression(f *function, n *cc.ConditionalExpression
 	case cc.ConditionalExpressionLOr: // LogicalOrExpression
 		p.logicalOrExpression(f, n.LogicalOrExpression, t, s, mode, flags)
 	case cc.ConditionalExpressionCond: // LogicalOrExpression '?' Expression ':' ConditionalExpression
-		p.w(" func(b bool) %s { if b { return ", p.typ(t))
+		p.w(" func() %s { if ", p.typ(t))
+		p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), nil, exprBool, flags|fOutermost)
+		p.w(" { return ")
 		p.expression(f, n.Expression, n.Operand.Type(), nil, exprValue, flags|fOutermost)
 		p.w("}; return ")
 		p.conditionalExpression(f, n.ConditionalExpression, n.Operand.Type(), nil, exprValue, flags|fOutermost)
-		p.w("}(")
-		p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), nil, exprBool, flags|fOutermost)
-		p.w(")")
+		p.w("}()")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -1810,9 +1978,9 @@ func (p *project) unaryExpressionPreIncDec(f *function, n *cc.UnaryExpression, o
 			return
 		}
 
-		panic(todo("", pos(n)))
+		panic(todo("", pos(n), ut))
 	default:
-		panic(todo("", pos(n)))
+		panic(todo("", pos(n), mode))
 	}
 }
 
@@ -1912,7 +2080,7 @@ func (p *project) postfixExpressionPSelect(f *function, n *cc.PostfixExpression,
 
 		defer p.w("%s", p.convert(n.Operand.Type(), t, flags))
 		p.postfixExpression(f, n.PostfixExpression, peType, s, exprPSelect, flags)
-		p.w(".F%s", n.Token2.Value)
+		p.w(".%s", p.fieldName(n.Token2.Value))
 	case exprAddrOf:
 		p.postfixExpression(f, n.PostfixExpression, peType, s, exprValue, flags)
 		p.fldOff(peType.Elem(), n.Token2)
@@ -1961,7 +2129,7 @@ func (p *project) postfixExpressionSelect(f *function, n *cc.PostfixExpression, 
 			p.postfixExpression(f, n.PostfixExpression, pe, fld.Type(), exprSelect, flags&^fOutermost)
 		default:
 			p.postfixExpression(f, n.PostfixExpression, pe, s, exprSelect, flags&^fOutermost)
-			p.w(".F%s", n.Token2.Value)
+			p.w(".%s", p.fieldName(n.Token2.Value))
 		}
 	default:
 		panic(todo("", pos(n), mode))
@@ -2106,7 +2274,11 @@ func (p *project) primaryExpression(f *function, n *cc.PrimaryExpression, t, s c
 	case cc.PrimaryExpressionFloat: // FLOATCONST
 		p.floatConst(n.Token.Src.String(), n.Operand, t)
 	case cc.PrimaryExpressionEnum: // ENUMCONST
-		p.intConst(n.Token.Src.String(), n.Operand, t, flags)
+		//TODO if s := p.enumConsts[n.Token.Value]; s != "" {
+		//TODO 	panic(todo(""))
+		//TODO }
+
+		p.intConst("", n.Operand, t, flags)
 	case cc.PrimaryExpressionChar: // CHARCONST
 		p.charConst(n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionLChar: // LONGCHARCONST
@@ -2302,6 +2474,8 @@ func (p *project) intConst(src string, op cc.Operand, to cc.Type, flags flags) {
 			panic(todo(""))
 		}
 
+		on = uint64(x)
+	case cc.Uint64Value:
 		on = uint64(x)
 	default:
 		panic(todo("%T(%v)", x, x))
@@ -2597,10 +2771,18 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 				nm = local.name
 			}
 		}
-		p.w(", %s %s", nm, p.typ(v.Type()))
+		p.w(", %s %s", nm, p.paramTyp(v.Type()))
 	}
 	p.w(")")
 	if rt := t.Result(); rt != nil && rt.Kind() != cc.Void {
 		p.w(" %s", p.typ(rt))
 	}
+}
+
+func (p *project) paramTyp(t cc.Type) string {
+	if t.Kind() == cc.Array {
+		return "uintptr"
+	}
+
+	return p.typ(t)
 }

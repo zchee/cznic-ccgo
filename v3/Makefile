@@ -21,7 +21,7 @@ all:
 	misspell *.go
 	staticcheck | grep -v 'lexer\.go' || true
 	maligned || true
-	grep -n files log 
+	grep -n 'files.*, ok' log 
 	grep -n 'FAIL\|PASS' log 
 	go version
 	date 2>&1 | tee -a log

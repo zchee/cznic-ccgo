@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -24,8 +25,10 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
@@ -921,4 +924,230 @@ func testMjson(t *testing.T, dir string) {
 	}() {
 		return
 	}
+}
+
+type compCertResult struct {
+	compiler string
+	test     string
+	run      time.Duration
+	k        float64
+
+	compileOK bool
+	execOK    bool
+	resultOK  bool
+}
+
+func (r *compCertResult) String() string {
+	var s string
+	if r.k != 0 {
+		s = fmt.Sprintf("%8.3f", r.k)
+		if r.k == 1 {
+			s += " *"
+		}
+	}
+	return fmt.Sprintf("%10v%15v%10.3fms%6v%6v%6v%s", r.compiler, r.test, float64(r.run)/float64(time.Millisecond), r.compileOK, r.execOK, r.resultOK, s)
+}
+
+func TestCompCert(t *testing.T) {
+	const root = "testdata/CompCert-3.6/test/c"
+
+	b, err := ioutil.ReadFile(filepath.FromSlash(root + "/Results/knucleotide-input.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.FromSlash(root)
+	m, err := filepath.Glob(filepath.Join(dir, "*.c"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i, v := range m {
+		v, err := filepath.Abs(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		m[i] = v
+	}
+
+	rdir, err := filepath.Abs(filepath.FromSlash(root + "/Results"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Chdir(wd)
+
+	temp, err := ioutil.TempDir("", "ccgo-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(temp)
+
+	if err := os.Chdir(temp); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Mkdir("Results", 0770); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ioutil.WriteFile(filepath.FromSlash("Results/knucleotide-input.txt"), b, 0660); err != nil {
+		t.Fatal(err)
+	}
+
+	var r []*compCertResult
+	t.Run("gcc", func(t *testing.T) { r = append(r, testCompCertGcc(t, m, 5, rdir)...) })
+	t.Run("ccgo", func(t *testing.T) { r = append(r, testCompCertCcgo(t, m, 5, rdir)...) })
+	consider := map[string]struct{}{}
+	for _, v := range r {
+		consider[v.test] = struct{}{}
+	}
+	for _, v := range r {
+		if ok := v.compileOK && v.execOK && v.resultOK; !ok {
+			delete(consider, v.test)
+		}
+	}
+	times := map[string]time.Duration{}
+	tests := map[string][]*compCertResult{}
+	for _, v := range r {
+		if _, ok := consider[v.test]; !ok {
+			continue
+		}
+
+		times[v.compiler] += v.run
+		tests[v.test] = append(tests[v.test], v)
+	}
+	for _, a := range tests {
+		if len(a) < 2 {
+			continue
+		}
+		min := time.Duration(-1)
+		for _, v := range a {
+			if min < 0 || v.run < min {
+				min = v.run
+			}
+		}
+		for _, v := range a {
+			v.k = float64(v.run) / float64(min)
+		}
+	}
+	t.Log("  compiler           test    T         comp  exec match    coef")
+	for _, v := range r {
+		t.Log(v)
+	}
+	var a []string
+	for k := range times {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	t.Logf("Considered tests: %d/%d", len(consider), len(m))
+	min := time.Duration(-1)
+	for _, v := range times {
+		if min < 0 || v < min {
+			min = v
+		}
+	}
+	for _, k := range a {
+		t.Logf("%10s%15v %6.3f", k, times[k], float64(times[k])/float64(min))
+	}
+}
+
+func testCompCertGcc(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
+	const nm = "gcc"
+next:
+	for _, fn := range files {
+		base := filepath.Base(fn)
+		if *oTrace {
+			fmt.Println(base)
+		}
+		bin := nm + "-" + base + ".out"
+		out, err := exec.Command("gcc", "-O", "-o", bin, fn, "-lm").CombinedOutput()
+		if err != nil {
+			t.Errorf("%s: %s:\n%s", base, err, out)
+			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
+			continue
+		}
+
+		t0 := time.Now()
+		for i := 0; i < N; i++ {
+			if out, err = exec.Command("./" + bin).CombinedOutput(); err != nil {
+				t.Errorf("%s: %s:\n%s", base, err, out)
+				r = append(r, &compCertResult{nm, base, 0, 0, true, false, false})
+				continue next
+			}
+		}
+		d := time.Since(t0) / time.Duration(N)
+		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
+	}
+	return r
+}
+
+func checkResult(t *testing.T, out []byte, base, rdir string) bool {
+	base = base[:len(base)-len(filepath.Ext(base))]
+	b, err := ioutil.ReadFile(filepath.Join(rdir, base))
+	if err != nil {
+		t.Errorf("%v: %v", base, err)
+		return false
+	}
+
+	if !bytes.Equal(out, b) {
+		t.Logf("got\n%s", hex.Dump(out))
+		t.Logf("exp\n%s", hex.Dump(b))
+		t.Errorf("%v: result differs", base)
+		return false
+	}
+
+	return true
+}
+
+func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
+	const nm = "ccgo"
+next:
+	for _, fn := range files {
+		base := filepath.Base(fn)
+		if *oTrace {
+			fmt.Println(base)
+		}
+		src := nm + "-" + base + ".go"
+		bin := nm + "-" + base + ".out"
+		if err := func() (err error) {
+			defer func() {
+				if e := recover(); e != nil && err == nil {
+					err = fmt.Errorf("%v", e)
+				}
+			}()
+			return newTask([]string{"ccgo", "-o", src, fn}, nil, nil).main()
+		}(); err != nil {
+			t.Errorf("%s: %s:", base, err)
+			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
+			continue
+		}
+
+		if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
+			t.Errorf("%s: %s:\n%s", base, err, out)
+			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
+			continue next
+		}
+
+		var out []byte
+		t0 := time.Now()
+		for i := 0; i < N; i++ {
+			var err error
+			if out, err = exec.Command("./" + bin).CombinedOutput(); err != nil {
+				t.Errorf("%s: %s:\n%s", base, err, out)
+				r = append(r, &compCertResult{nm, base, 0, 0, true, false, false})
+				continue next
+			}
+		}
+		d := time.Since(t0) / time.Duration(N)
+		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
+	}
+	return r
 }
