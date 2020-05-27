@@ -200,6 +200,23 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 	}
 	f.tlsName = f.scope.take("tls")
 	f.layoutLocals(n.CompoundStatement, params)
+	var extern []cc.StringID
+	for _, v := range n.CompoundStatements() { // testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/scope-1.c
+		for _, v := range v.Declarations() {
+			for list := v.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
+				if d := list.InitDeclarator.Declarator; d != nil && d.IsExtern() {
+					extern = append(extern, d.Name())
+				}
+			}
+		}
+	}
+	for _, v := range n.CompoundStatements() {
+		block := f.blocks[v]
+		for _, v := range extern {
+			tld := f.project.externs[v]
+			block.scope.take(tld.name)
+		}
+	}
 	for _, v := range n.CompoundStatements() {
 		f.layoutBlocks(v)
 	}
@@ -477,16 +494,6 @@ func newProject(t *task) (*project, error) {
 
 func (p *project) newScope() scope {
 	s := newScope()
-
-	//TODO It should be enough to narrow this to only the conflicting names.
-	var a []string
-	for k := range p.scope { // testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/scope-1.c
-		a = append(a, k)
-	}
-	sort.Strings(a)
-	for _, k := range a {
-		s.take(k)
-	}
 	var b []cc.StringID
 	for k := range p.structs {
 		b = append(b, k)
@@ -693,13 +700,13 @@ func (p *project) structLiteral(t cc.Type) string {
 
 		switch al {
 		case 1:
-			fmt.Fprintf(&b, "U [%d]byte;", sz)
+			fmt.Fprintf(&b, "_ [%d]byte;", sz)
 		case 2:
-			fmt.Fprintf(&b, "U [%d]int16;", sz/2)
+			fmt.Fprintf(&b, "_ [%d]int16;", sz/2)
 		case 4:
-			fmt.Fprintf(&b, "U [%d]int32;", sz/4)
+			fmt.Fprintf(&b, "_ [%d]int32;", sz/4)
 		case 8:
-			fmt.Fprintf(&b, "U [%d]int64;", sz/8)
+			fmt.Fprintf(&b, "_ [%d]int64;", sz/8)
 		default:
 			panic(todo("", al))
 		}
