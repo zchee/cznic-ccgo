@@ -8,6 +8,8 @@ grep=--include=*.go
 ngrep='TODOOK\|internalError\|testdata'
 
 all:
+	touch log
+	cp log log-0
 	date
 	go version 2>&1 | tee log
 	./unconvert.sh
