@@ -42,8 +42,7 @@ const (
 type flags byte
 
 const (
-	fOutermost  flags = 1 << iota
-	fUnaryMinus       //TODO-
+	fOutermost flags = 1 << iota
 	fIntLiteral
 	fForceConv
 )
@@ -1610,7 +1609,7 @@ func (p *project) convertInt(op cc.Operand, to cc.Type, flags flags) string {
 					return ")"
 				case 8:
 					if x <= math.MaxInt64 {
-						p.w("int32(")
+						p.w("int64(")
 						return ")"
 					}
 
@@ -2234,7 +2233,7 @@ func (p *project) castExpression(f *function, n *cc.CastExpression, t, s cc.Type
 				defer p.w("%s", p.convertType(tn, t, flags|fForceConv))
 				p.castExpression(f, n.CastExpression, tn, s, exprValue, flags)
 			default:
-				defer p.w("%s", p.convertType(tn, t, flags|fUnaryMinus))
+				defer p.w("%s", p.convertType(tn, t, flags))
 				p.castExpression(f, n.CastExpression, tn, s, exprValue, flags)
 			}
 			return
@@ -2271,17 +2270,17 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 	case cc.UnaryExpressionMinus: // '-' CastExpression
 		defer p.w("%s", p.convert(n.Operand, t, flags))
 		p.w(" -")
-		p.castExpression(f, n.CastExpression, n.Operand.Type(), s, exprValue, flags|fUnaryMinus&^fOutermost)
+		p.castExpression(f, n.CastExpression, n.Operand.Type(), s, exprValue, flags)
 	case cc.UnaryExpressionCpl: // '~' CastExpression
 		switch {
 		case isNonNegativeInt(n.CastExpression.Operand) && isUnsigned(n.CastExpression.Operand.Type()):
 			p.w("^")
 			defer p.w("%s", p.convert(n.CastExpression.Operand, t, flags|fForceConv))
-			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), s, exprValue, flags|fUnaryMinus|fOutermost)
+			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), s, exprValue, flags|fOutermost)
 		default:
 			defer p.w("%s", p.convert(n.Operand, t, flags))
 			p.w(" ^")
-			p.castExpression(f, n.CastExpression, n.Operand.Type(), s, exprValue, flags|fUnaryMinus&^fOutermost)
+			p.castExpression(f, n.CastExpression, n.Operand.Type(), s, exprValue, flags)
 		}
 	case cc.UnaryExpressionNot: // '!' CastExpression
 		switch mode {
@@ -2297,16 +2296,25 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 			panic(todo("", pos(n), mode))
 		}
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
-		if ut := n.UnaryExpression.Operand.Type(); isArray(ut) {
-			defer p.w("%s", p.convert(nil, t, flags))
-			p.w("%d", ut.Len()*ut.Elem().Size())
+		defer p.w("%s", p.convert(nil, t, flags))
+		t := n.UnaryExpression.Operand.Type()
+		if isArray(t) {
+			p.w("%d", t.Len()*t.Elem().Size())
 			break
 		}
 
-		defer p.w("%s", p.convert(nil, t, flags))
-		p.w("%s(unsafe.Sizeof(", p.typ(t))
-		p.unaryExpression(f, n.UnaryExpression, n.UnaryExpression.Operand.Type(), s, exprValue, flags|fOutermost)
-		p.w("))")
+		s := "(0)"
+		if !t.IsArithmeticType() {
+			switch t.Kind() {
+			case cc.Ptr:
+				// ok
+			case cc.Struct, cc.Union:
+				s = "{}"
+			default:
+				panic(todo("", t.Kind()))
+			}
+		}
+		p.w("unsafe.Sizeof(%s%s)", p.typ(t), s)
 	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
 		defer p.w("%s", p.convert(nil, t, flags))
 		t := n.TypeName.Type()
