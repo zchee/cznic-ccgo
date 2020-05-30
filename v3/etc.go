@@ -6,6 +6,8 @@ package main // import "modernc.org/ccgo/v3"
 
 import (
 	"fmt"
+	"math"
+	"math/big"
 )
 
 var (
@@ -54,6 +56,13 @@ var (
 		"unsafe":      false, // package name
 		"var":         true,  // keyword
 	}
+
+	maxInt32  = big.NewInt(math.MaxInt32)
+	maxInt64  = big.NewInt(math.MaxInt64)
+	maxUint32 = big.NewInt(math.MaxUint32)
+	maxUint64 = big.NewInt(0).SetUint64(math.MaxUint64)
+	minInt32  = big.NewInt(math.MinInt32)
+	minInt64  = big.NewInt(math.MinInt64)
 )
 
 type scope map[string]int

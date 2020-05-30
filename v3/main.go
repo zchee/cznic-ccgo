@@ -134,6 +134,7 @@ func newTask(args []string, stdout, stderr io.Writer) *task {
 	}
 	return &task{
 		args:          args,
+		cfg:           &cc.Config{},
 		crt:           "crt.",
 		crtImportPath: defaultCrt,
 		goarch:        env("GOARCH", runtime.GOARCH),
@@ -256,6 +257,7 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
+	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
 	opts.Arg("l", true, func(arg, value string) error {
 		value = strings.TrimSpace(value)
 		a := strings.Split(value, ",")
@@ -316,10 +318,8 @@ func (t *task) main() (err error) {
 		}
 	}
 
-	t.cfg = &cc.Config{
-		ABI:     abi,
-		Config3: cc.Config3{PreserveWhiteSpace: true, IgnoreInclude: re},
-	}
+	t.cfg.ABI = abi
+	t.cfg.Config3 = cc.Config3{PreserveWhiteSpace: true, IgnoreInclude: re}
 	hostPredefined, hostIncludes, hostSysIncludes, err := cc.HostConfig("")
 	if err != nil {
 		return err

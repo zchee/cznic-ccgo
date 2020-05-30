@@ -748,7 +748,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 				}
 			}()
 
-			ccgoArgs = append(ccgoArgs, path)
+			ccgoArgs = append(ccgoArgs, path, "-ccgo-long-double-is-double")
 			if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
 				if *oTrace {
 					fmt.Println(err)
@@ -897,7 +897,7 @@ func testMjson(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 
-	ccgoArgs := []string{"ccgo", "-o", main, filepath.Join(dir, "mjson.c"), filepath.Join(dir, "test_microjson.c")}
+	ccgoArgs := []string{"ccgo", "-o", main, "-ccgo-long-double-is-double", filepath.Join(dir, "mjson.c"), filepath.Join(dir, "test_microjson.c")}
 	if !func() (r bool) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -1061,12 +1061,20 @@ func TestCompCert(t *testing.T) {
 
 func testCompCertGcc(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
 	const nm = "gcc"
+	var re *regexp.Regexp
+	if s := *oRE; s != "" {
+		re = regexp.MustCompile(s)
+	}
 next:
 	for _, fn := range files {
 		base := filepath.Base(fn)
 		if *oTrace {
 			fmt.Println(base)
 		}
+		if re != nil && !re.MatchString(base) {
+			continue
+		}
+
 		bin := nm + "-" + base + ".out"
 		out, err := exec.Command("gcc", "-O", "-o", bin, fn, "-lm").CombinedOutput()
 		if err != nil {
@@ -1109,11 +1117,18 @@ func checkResult(t *testing.T, out []byte, base, rdir string) bool {
 
 func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
 	const nm = "ccgo"
+	var re *regexp.Regexp
+	if s := *oRE; s != "" {
+		re = regexp.MustCompile(s)
+	}
 next:
 	for _, fn := range files {
 		base := filepath.Base(fn)
 		if *oTrace {
 			fmt.Println(base)
+		}
+		if re != nil && !re.MatchString(base) {
+			continue
 		}
 		src := nm + "-" + base + ".go"
 		bin := nm + "-" + base + ".out"
@@ -1123,7 +1138,7 @@ next:
 					err = fmt.Errorf("%v", e)
 				}
 			}()
-			return newTask([]string{"ccgo", "-o", src, fn}, nil, nil).main()
+			return newTask([]string{"ccgo", "-o", src, fn, "-ccgo-long-double-is-double"}, nil, nil).main()
 		}(); err != nil {
 			t.Errorf("%s: %s:", base, err)
 			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
