@@ -671,7 +671,14 @@ func TestGCCExec(t *testing.T) {
 
 func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
 	const main = "main.go"
-	blacklist := map[string]struct{}{}
+	blacklist := map[string]struct{}{
+		"20010904-1.c": {}, // __attribute__((aligned(32)))
+		"20010904-2.c": {}, // __attribute__((aligned(32)))
+		"20021127-1.c": {}, // gcc specific optimization
+
+		"20040411-1.c": {}, //TODO VLA
+		"20040423-1.c": {}, //TODO VLA
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -839,7 +846,14 @@ func testSQLite(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 
-	ccgoArgs := []string{"ccgo", "-o", main, filepath.Join(dir, "shell.c"), filepath.Join(dir, "sqlite3.c")}
+	ccgoArgs := []string{
+		"ccgo",
+		"-DLONGDOUBLE_TYPE=double",
+		"-ccgo-long-double-is-double", // stddef.h
+		"-o", main,
+		filepath.Join(dir, "shell.c"),
+		filepath.Join(dir, "sqlite3.c"),
+	}
 	if !func() (r bool) {
 		defer func() {
 			if err := recover(); err != nil {

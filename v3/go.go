@@ -22,7 +22,11 @@ import (
 )
 
 var (
-	idMain  = cc.String("main")
+	idMain    = cc.String("main")
+	idVaArg   = cc.String("__ccgo_va_arg")
+	idVaList  = cc.String("va_list")
+	idVaStart = cc.String("__ccgo_va_start")
+
 	oTraceG bool
 	oTraceW bool
 )
@@ -30,22 +34,22 @@ var (
 type exprMode int
 
 const (
-	_           exprMode = iota
-	exprAddrOf           // &foo as uinptr
-	exprBool             // foo != 0
-	exprLValue           // foo in foo = bar
-	exprPSelect          // foo in foo->bar
-	exprPointer          // &foo as unsafe.Pointer
-	exprSelect           // foo in foo.bar
-	exprValue            // foo
-	exprVoid             //
+	_              exprMode = iota
+	exprAddrOf              // &foo as uinptr
+	exprBool                // foo != 0
+	exprCall                // foo in foo(bar)
+	exprLValue              // foo in foo = bar
+	exprPSelect             // foo in foo->bar
+	exprSelect              // foo in foo.bar
+	exprValue               // foo
+	exprVoid                //
+	exprVoidSingle          // C: a, b -> Go: func() { a; b }()
 )
 
 type flags byte
 
 const (
 	fOutermost flags = 1 << iota
-	fIntLiteral
 	fForceConv
 	fForceRuntimeConv
 )
@@ -134,8 +138,8 @@ type local struct {
 	name string
 	off  uintptr // If isPinned: bp+off
 
+	forceRead bool // Possibly never read.
 	isPinned  bool // Prevent this local from being placed in Go movable stack.
-	undeclare bool // Never read.
 }
 
 type switchState int
@@ -153,6 +157,7 @@ type function struct {
 	bpName     string
 	fndef      *cc.FunctionDefinition
 	gen        *project
+	ifCtx      cc.Node
 	ignore     map[*cc.Declarator]bool // Pseudo declarators
 	labelNames map[cc.StringID]string
 	labels     scope
@@ -165,6 +170,8 @@ type function struct {
 	switchCtx  switchState
 	tlsName    string
 	vaLists    map[*cc.PostfixExpression]uintptr
+	vaName     string
+	vaType     cc.Type
 
 	mainSignatureForced bool
 }
@@ -207,6 +214,9 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 		ignore:              ignore,
 	}
 	f.tlsName = f.scope.take("tls")
+	if t.IsVariadic() {
+		f.vaName = f.scope.take("va")
+	}
 	f.layoutLocals(nil, n.CompoundStatement, params)
 	var extern []cc.StringID
 	for _, v := range n.CompoundStatements() { // testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/scope-1.c
@@ -260,13 +270,27 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		}
 
 		switch x := n.(type) {
+		case *cc.Declarator:
+			if x.Type().Kind() == cc.Array && x.Type().IsVLA() {
+				f.project.err(x, "VLAs not supported")
+			}
 		case *cc.AssignmentExpression:
 			switch x.Case {
-			case cc.AssignmentExpressionAssign: // foo = bar
+			case cc.AssignmentExpressionAssign: // foo = bar;
 				if d := x.AssignmentExpression.Declarator(); d != nil { // bar
-					if isArray(d.Type()) && !d.IsParameter {
+					if f.project.isArrayDeclarator(d) {
 						f.pin(d)
 					}
+				}
+			case cc.AssignmentExpressionCond:
+				// nop
+			default: // assign op
+				if d := x.UnaryExpression.Declarator(); d != nil {
+					break
+				}
+
+				if d := x.UnaryExpression.Operand.Declarator(); d != nil { // eg foo in foo[bar] = 42;
+					f.pin(d)
 				}
 			}
 		case *cc.Initializer:
@@ -274,7 +298,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 				break
 			}
 
-			if d := x.AssignmentExpression.Declarator(); d != nil && isArray(d.Type()) {
+			if d := x.AssignmentExpression.Declarator(); d != nil && f.project.isArrayDeclarator(d) {
 				f.pin(d)
 			}
 		}
@@ -287,7 +311,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		ft := funcType(x.PostfixExpression.Operand.Type())
 		for list := x.ArgumentExpressionList; list != nil; list = list.ArgumentExpressionList {
 			if d := list.AssignmentExpression.Declarator(); d != nil {
-				if isArray(d.Type()) && !d.IsParameter {
+				if f.project.isArrayDeclarator(d) {
 					f.pin(d)
 				}
 			}
@@ -311,7 +335,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			}
 
 			switch t.Kind() {
-			case cc.Array, cc.Ptr, cc.Double, cc.Float:
+			case cc.Array, cc.Ptr, cc.Double, cc.Float, cc.Function:
 				need += 8
 			default:
 				panic(todo("", pos(x), t, t.Kind()))
@@ -347,7 +371,40 @@ func funcType(t cc.Type) cc.Type {
 	return t
 }
 
-func isArray(t cc.Type) bool { return t.Kind() == cc.Array }
+type declarator interface {
+	Declarator() *cc.Declarator
+	cc.Node
+}
+
+func (p *project) isArrayDeclarator(d *cc.Declarator) bool {
+	if d.Type().Kind() == cc.Array {
+		if d.Type().IsVLA() {
+			p.err(d, "VLAs not supported")
+			return false
+		}
+
+		return !d.IsParameter
+	}
+
+	return false
+}
+
+func (p *project) isArray(n declarator, t cc.Type) bool {
+	if t.Kind() != cc.Array {
+		return false
+	}
+
+	if t.IsVLA() {
+		p.err(n, "VLAs not supported")
+		return false
+	}
+
+	if d := n.Declarator(); d != nil {
+		return !d.IsParameter
+	}
+
+	return true
+}
 
 func roundup(n, to uintptr) uintptr {
 	if r := n % to; r != 0 {
@@ -424,13 +481,20 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 			}
 		}
 	}
+	block.scope.take(f.tlsName)
+	if f.vaName != "" {
+		block.scope.take(f.vaName)
+	}
 	for _, item := range work {
 		d := item.d
 		if !f.ignore[d] && d.IsStatic() {
 			continue
 		}
 
-		local := &local{undeclare: d.Read == 0}
+		local := &local{forceRead: d.Read == 0}
+		if t := d.Type(); t != nil && t.Name() == idVaList {
+			local.forceRead = true
+		}
 		f.locals[d] = local
 		if d.AddressTaken {
 			f.pin(d)
@@ -580,7 +644,12 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
-	p.errors.Add(token.Position(n.Position()), fmt.Sprintf(s, args...))
+	switch {
+	case n == nil:
+		p.errors.Add(token.Position{}, fmt.Sprintf(s, args...))
+	default:
+		p.errors.Add(token.Position(n.Position()), fmt.Sprintf(s, args...))
+	}
 }
 
 func (p *project) o(s string, args ...interface{}) {
@@ -758,7 +827,7 @@ func (p *project) structLiteral(t cc.Type) string {
 			f := t.FieldByIndex(idx)
 			ft := f.Type()
 			if ft.IsBitFieldType() {
-				//TODO panic(todo("bit fields not supported"))
+				//TODO
 			}
 
 			fmt.Fprintf(&b, "%s %s;", p.fieldName(f.Name()), p.typ(ft))
@@ -836,10 +905,6 @@ func (p *project) typ(t cc.Type) string {
 		return "float32"
 	case cc.Array:
 		n := t.Len()
-		//TODO- if n == 0 && t.LenExpr().Operand.Value() == nil {
-		//TODO- 	panic(todo("", t))
-		//TODO- }
-
 		fmt.Fprintf(&b, "[%d]%s", n, p.typ(t.Elem()))
 		return b.String()
 	case cc.Struct, cc.Union:
@@ -1174,7 +1239,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 			switch {
 			case topDecl:
 				p.initDeclaratorDecl(f, n, sep)
-				if local.undeclare {
+				if local.forceRead {
 					p.w("_ = %s;", local.name)
 				}
 			default:
@@ -1204,7 +1269,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
-	if local.undeclare {
+	if local.forceRead {
 		p.w("_ = %s;", local.name)
 	}
 }
@@ -1241,26 +1306,73 @@ func (p *project) declarator(f *function, d *cc.Declarator, t, s cc.Type, mode e
 	case exprValue, exprLValue:
 		p.declaratorValue(f, d, t, flags)
 	case exprAddrOf:
-		p.declaratorAddrOf(f, d)
-	case exprPointer:
-		p.declaratorPointer(f, d)
+		p.declaratorAddrOf(f, d, t)
 	case exprSelect:
 		p.declaratorSelect(f, d, s)
 	case exprPSelect:
-		p.declaratorPSelect(f, d)
+		p.declaratorPSelect(f, d, s)
+	case exprCall:
+		p.declaratorCall(f, d)
 	default:
 		panic(todo("", d.Position(), d.Name(), t, mode))
 	}
 }
 
-func (p *project) declaratorPSelect(f *function, d *cc.Declarator) {
+func (p *project) declaratorCall(f *function, d *cc.Declarator) {
+	t := d.Type()
+	switch t.Kind() {
+	case cc.Function:
+		p.declaratorValue(f, d, t, 0)
+	case cc.Ptr:
+		t = t.Elem()
+		if t.Kind() == cc.Function {
+			if local := f.locals[d]; local != nil {
+				if local.isPinned {
+					panic(todo(""))
+				}
+
+				p.w("(*(*")
+				p.functionSignature(f, t, "")
+				p.w(")(unsafe.Pointer(&%s)))", local.name)
+				return
+			}
+
+			tld := p.tlds[d]
+			if tld == nil {
+				tld = p.externs[d.Name()]
+			}
+			switch {
+			case tld != nil:
+				panic(todo(""))
+			default:
+				nm := d.Name()
+				imp := p.imports[nm.String()]
+				if imp == nil {
+					p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+					return
+				}
+
+				panic(todo(""))
+			}
+		}
+
+		panic(todo("", pos(d), t))
+	default:
+		panic(todo("", pos(d), t))
+	}
+}
+
+func (p *project) declaratorPSelect(f *function, d *cc.Declarator, s cc.Type) {
 	if d.Type().Kind() == cc.Union {
 		panic(todo("", pos(d)))
 	}
 
 	if local := f.locals[d]; local != nil {
 		if local.isPinned {
-			panic(todo("", d.Position()))
+			if s == nil {
+				s = d.Type()
+			}
+			p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(s), f.bpName, nonZeroUintptr(local.off), local.name)
 			return
 		}
 
@@ -1314,9 +1426,16 @@ func (p *project) declaratorSelect(f *function, d *cc.Declarator, s cc.Type) {
 	}
 }
 
-func (p *project) declaratorAddrOf(f *function, d *cc.Declarator) {
+func (p *project) declaratorAddrOf(f *function, d *cc.Declarator, t cc.Type) {
+	if t != nil && t.Kind() != cc.Ptr {
+		defer p.w("%s", p.convertType(d.Type(), t, 0))
+	}
 	if f != nil {
 		if local := f.locals[d]; local != nil {
+			if d.Type().Kind() == cc.Function {
+				panic(todo(""))
+			}
+
 			if local.isPinned {
 				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
@@ -1327,7 +1446,7 @@ func (p *project) declaratorAddrOf(f *function, d *cc.Declarator) {
 				return
 			}
 
-			panic(todo("", pos(d)))
+			panic(todo("", pos(d), d.Type()))
 			return
 		}
 	}
@@ -1338,37 +1457,35 @@ func (p *project) declaratorAddrOf(f *function, d *cc.Declarator) {
 	}
 	switch {
 	case tld != nil:
+		if d.Type().Kind() == cc.Function {
+			p.w("*(*uintptr)(unsafe.Pointer(&struct{f ")
+			p.functionSignature(f, d.Type(), "")
+			p.w("}{%s}))", tld.name)
+			return
+		}
+
 		p.w("uintptr(unsafe.Pointer(&%s))", tld.name)
 	default:
-		panic(todo(""))
-	}
-}
-
-func (p *project) declaratorPointer(f *function, d *cc.Declarator) {
-	if f != nil {
-		if local := f.locals[d]; local != nil {
-			panic(todo("", pos(d)))
+		nm := d.Name()
+		imp := p.imports[nm.String()]
+		if imp == nil {
+			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			return
 		}
-	}
 
-	tld := p.tlds[d]
-	if tld == nil {
-		tld = p.externs[d.Name()]
-	}
-	switch {
-	case tld != nil:
-		p.w("unsafe.Pointer(&%s)", tld.name)
-	default:
-		panic(todo(""))
+		if d.Type().Kind() == cc.Function {
+			p.w("*(*uintptr)(unsafe.Pointer(&struct{f ")
+			p.functionSignature(f, d.Type(), "")
+			p.w("}{%sX%s}))", imp.qualifier, nm)
+			return
+		}
+
+		panic(todo("", pos(d), d.Name()))
 	}
 }
 
 func (p *project) declaratorValue(f *function, d *cc.Declarator, t cc.Type, flags flags) {
-	if d.Type().Kind() == cc.Union {
-		panic(todo("", pos(d)))
-	}
-
-	if d.Type().IsArithmeticType() {
+	if d.Type().IsScalarType() {
 		defer p.w("%s", p.convertType(d.Type(), t, flags))
 	}
 	if f != nil {
@@ -1406,10 +1523,6 @@ func (p *project) declaratorValue(f *function, d *cc.Declarator, t cc.Type, flag
 	}
 	switch {
 	case tld != nil:
-		if d.Type().Kind() == cc.Union {
-			panic(todo("", pos(d)))
-		}
-
 		p.w("%s", tld.name)
 	default:
 		nm := d.Name()
@@ -1480,13 +1593,32 @@ func (p *project) convert(op cc.Operand, to cc.Type, flags flags) string {
 	}
 
 	switch from.Kind() {
-	case cc.Function, cc.Struct, cc.Union, cc.Array, cc.Ptr:
+	case cc.Ptr:
 		if !force && from.Kind() == to.Kind() {
 			return ""
 		}
+
+		if to.IsIntegerType() {
+			p.w("%s(", p.typ(to))
+			return ")"
+		}
+
+		panic(todo("%q -> %q", from, to))
+	case cc.Function, cc.Struct, cc.Union:
+		if !force && from.Kind() == to.Kind() {
+			return ""
+		}
+
+		panic(todo("%q -> %q", from, to))
 	case cc.Double, cc.Float:
 		p.w("%s(", p.typ(to))
 		return ")"
+	case cc.Array:
+		if !force && from.Kind() == to.Kind() {
+			return ""
+		}
+
+		panic(todo("%q -> %q", from, to))
 	}
 
 	panic(todo("%q -> %q", from, to))
@@ -1494,10 +1626,6 @@ func (p *project) convert(op cc.Operand, to cc.Type, flags flags) string {
 
 func (p *project) convertInt(op cc.Operand, to cc.Type, flags flags) string {
 	force := flags&fForceConv != 0
-	if !force && flags&fIntLiteral != 0 {
-		return ""
-	}
-
 	value := op.Value()
 	if value == nil || !to.IsIntegerType() {
 		if to.IsScalarType() {
@@ -1665,29 +1793,44 @@ func (p *project) convertInt(op cc.Operand, to cc.Type, flags flags) string {
 			case cc.Uint64Value:
 				switch to.Size() {
 				case 1:
-					switch {
-					case !force && from.Size() == 1:
-						return ""
-					default:
-						p.w("uint8(")
-						return ")"
+					if x <= math.MaxUint8 {
+						switch {
+						case !force && from.Size() == 1:
+							return ""
+						default:
+							p.w("uint8(")
+							return ")"
+						}
 					}
+
+					p.w("%sUint8FromUint%d(", p.task.crt, from.Size()*8)
+					return ")"
 				case 2:
-					switch {
-					case !force && from.Size() == 2:
-						return ""
-					default:
-						p.w("uint16(")
-						return ")"
+					if x <= math.MaxUint16 {
+						switch {
+						case !force && from.Size() == 2:
+							return ""
+						default:
+							p.w("uint16(")
+							return ")"
+						}
 					}
+
+					p.w("%sUint16FromUint%d(", p.task.crt, from.Size()*8)
+					return ")"
 				case 4:
-					switch {
-					case !force && from.Size() == 4:
-						return ""
-					default:
-						p.w("uint32(")
-						return ")"
+					if x <= math.MaxUint32 {
+						switch {
+						case !force && from.Size() == 4:
+							return ""
+						default:
+							p.w("uint32(")
+							return ")"
+						}
 					}
+
+					p.w("%sUint32FromUint%d(", p.task.crt, from.Size()*8)
+					return ")"
 				case 8:
 					switch {
 					case !force && from.Size() == 8:
@@ -1724,7 +1867,7 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string) {
 	t := d.Type()
 	if d.IsTypedefName {
 		if t.Kind() != cc.Void {
-			p.w("%stype %s = %s;", sep, tld.name, p.typ(t))
+			p.w("%stype %s = %s; /* %v */", sep, tld.name, p.typ(t), pos(n))
 		}
 		return
 	}
@@ -1868,7 +2011,7 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 
 func (p *project) jumpStatement(f *function, n *cc.JumpStatement) (r *cc.JumpStatement) {
 	p.w("%s", comment("\n", n))
-	if _, ok := n.Context().(*cc.SelectionStatement); ok {
+	if _, ok := n.Context().(*cc.SelectionStatement); ok && f.ifCtx == nil {
 		switch f.switchCtx {
 		case inSwitchCase:
 			f.switchCtx = inSwitchSeenBreak
@@ -1911,6 +2054,10 @@ func (p *project) expression(f *function, n *cc.Expression, t, s cc.Type, mode e
 			p.expression(f, n.Expression, t, s, mode, flags)
 			p.w(";")
 			p.assignmentExpression(f, n.AssignmentExpression, t, s, mode, flags)
+		case exprVoidSingle:
+			p.w(" func() {")
+			p.expression(f, n, t, s, exprVoid, flags)
+			p.w("}()")
 		default:
 			panic(todo("", pos(n), mode))
 		}
@@ -1921,7 +2068,7 @@ func (p *project) expression(f *function, n *cc.Expression, t, s cc.Type, mode e
 
 func (p *project) assignmentExpression(f *function, n *cc.AssignmentExpression, t, s cc.Type, mode exprMode, flags flags) {
 	switch mode {
-	case exprVoid:
+	case exprVoid, exprVoidSingle:
 		p.voidAssignmentExpression(f, n, t, mode, flags)
 	case exprBool:
 		switch n.Case {
@@ -1941,12 +2088,21 @@ func (p *project) assignmentExpression(f *function, n *cc.AssignmentExpression, 
 			p.conditionalExpression(f, n.ConditionalExpression, t, s, mode, flags)
 		case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
 			if d := n.UnaryExpression.Declarator(); d != nil {
+				if !d.Type().IsScalarType() {
+					panic(todo(""))
+				}
+
 				if local := f.locals[d]; local != nil {
 					if local.isPinned {
-						panic(todo("", pos(n)))
+						defer p.w(")%s", p.convertType(d.Type(), t, flags))
+						p.w("%sAssignPtr%s(", p.task.crt, p.helperType(d.Type()))
+						p.w("%s%s /* %s */", f.bpName, nonZeroUintptr(local.off), local.name)
+						p.w(", ")
+						p.assignmentExpression(f, n.AssignmentExpression, n.UnaryExpression.Operand.Type(), nil, exprValue, flags|fOutermost)
+						break
 					}
 
-					defer p.w(")%s", p.convertType(d.Type(), n.Operand.Type(), flags))
+					defer p.w(")%s", p.convertType(d.Type(), t, flags))
 					p.w("%sAssign%s(&%s, ", p.task.crt, p.helperType(d.Type()), local.name)
 					p.assignmentExpression(f, n.AssignmentExpression, n.UnaryExpression.Operand.Type(), nil, exprValue, flags|fOutermost)
 					break
@@ -1955,7 +2111,7 @@ func (p *project) assignmentExpression(f *function, n *cc.AssignmentExpression, 
 				panic(todo("", pos(n)))
 			}
 
-			defer p.w(")%s", p.convertType(n.UnaryExpression.Operand.Type(), n.Operand.Type(), flags))
+			defer p.w(")%s", p.convertType(n.UnaryExpression.Operand.Type(), t, flags))
 			p.w("%sAssignPtr%s(", p.task.crt, p.helperType(n.UnaryExpression.Operand.Type()))
 			p.unaryExpression(f, n.UnaryExpression, n.UnaryExpression.Operand.Type(), s, exprAddrOf, flags)
 			p.w(", ")
@@ -2265,7 +2421,7 @@ func (p *project) binaryShiftExpression(f *function, n *cc.ShiftExpression, oper
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), nil, exprValue, flags|fOutermost|fForceRuntimeConv)
 		p.w(" %s%s", oper, comment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), nil, exprValue, flags|fOutermost|fForceRuntimeConv)
-	case isConstInteger(n.ShiftExpression.Operand) && n.ShiftExpression.Operand.Type().Size() > 4:
+	case isConstInteger(n.ShiftExpression.Operand) && n.ShiftExpression.Operand.Type().Size() >= 4:
 		s := p.convert(nil, n.ShiftExpression.Operand.Type(), 0)
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), nil, exprValue, flags|fOutermost)
 		p.w("%s %s%s", s, oper, comment(" ", &n.Token))
@@ -2357,9 +2513,9 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 			panic(todo(""))
 		case lt.Kind() == cc.Ptr && rt.Kind() == cc.Ptr && oper == "-": // p - q
 			p.w("(")
-			p.additiveExpression(f, n.AdditiveExpression, lt, nil, exprValue, flags&^fOutermost)
+			p.additiveExpression(f, n.AdditiveExpression, p.ast.PtrdiffType, nil, exprValue, flags&^fOutermost)
 			p.w(" %s%s", oper, comment(" ", &n.Token))
-			p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, nil, exprValue, flags&^fOutermost)
+			p.multiplicativeExpression(f, n.MultiplicativeExpression, p.ast.PtrdiffType, nil, exprValue, flags&^fOutermost)
 			p.w(")/%d", lt.Elem().Size())
 		default:
 			panic(todo("", n.Position(), lt, rt, oper))
@@ -2487,22 +2643,42 @@ func (p *project) castExpression(f *function, n *cc.CastExpression, t, s cc.Type
 	case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
 		op := n.CastExpression.Operand
 		tn := n.TypeName.Type()
+		if f != nil && op.Type().Kind() == cc.Ptr { // void *__ccgo_va_arg(__builtin_va_list ap);
+			sv := f.vaType
+			f.vaType = tn
+			defer func() { f.vaType = sv }()
+		}
+		// trc("%v: %v -> %v -> %v", pos(n), n.CastExpression.Operand.Type(), tn, n.Operand.Type()) //TODO-
 		switch {
+		case op.Type().Kind() == cc.Array && tn.Kind() == cc.Ptr:
+			if mode != exprVoid {
+				defer p.w("%s", p.convertType(tn, t, flags))
+			}
+			p.castExpression(f, n.CastExpression, op.Type(), s, exprAddrOf, flags)
 		case op.Type().Kind() == cc.Ptr && tn.IsArithmeticType():
-			defer p.w("%s", p.convertType(nil, t, flags|fForceConv))
+			if mode != exprVoid {
+				defer p.w("%s", p.convertType(nil, t, flags|fForceConv))
+			}
 			p.castExpression(f, n.CastExpression, op.Type(), s, mode, flags)
 		case tn.IsArithmeticType():
 			switch {
 			case isNegativeInt(op) && isUnsigned(t):
-				defer p.w("%s", p.convertType(tn, t, flags|fForceConv))
+				if mode != exprVoid {
+					defer p.w("%s", p.convertType(tn, t, flags|fForceConv))
+				}
 				p.castExpression(f, n.CastExpression, tn, s, exprValue, flags|fOutermost)
 			default:
-				defer p.w("%s", p.convertType(tn, t, flags))
+				if mode != exprVoid {
+					defer p.w("%s", p.convertType(tn, t, flags))
+				}
 				p.castExpression(f, n.CastExpression, tn, s, exprValue, flags)
 			}
 		default:
 			switch tn.Kind() {
 			case cc.Ptr:
+				if mode != exprVoid {
+					defer p.w("%s", p.convertType(tn, t, flags))
+				}
 				p.castExpression(f, n.CastExpression, tn, s, mode, flags)
 			case cc.Void:
 				p.castExpression(f, n.CastExpression, tn, s, exprVoid, flags)
@@ -2524,7 +2700,7 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 	case cc.UnaryExpressionDec: // "--" UnaryExpression
 		p.unaryExpressionPreIncDec(f, n, "--", "-=", t, s, mode, flags)
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
-		p.castExpression(f, n.CastExpression, nil, nil, exprAddrOf, flags&^fOutermost)
+		p.castExpression(f, n.CastExpression, t, nil, exprAddrOf, flags&^fOutermost)
 	case cc.UnaryExpressionDeref: // '*' CastExpression
 		p.unaryExpressionDeref(f, n, t, s, mode, flags)
 	case cc.UnaryExpressionPlus: // '+' CastExpression
@@ -2555,7 +2731,7 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 	case cc.UnaryExpressionNot: // '!' CastExpression
 		switch mode {
 		case exprValue:
-			p.w("%sBool32(!(", p.task.crt)
+			p.w("%sBool%s(!(", p.task.crt, p.helperType(t))
 			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), s, exprBool, flags|fOutermost)
 			p.w("))")
 		case exprBool:
@@ -2568,7 +2744,7 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
 		defer p.w("%s", p.convert(nil, t, flags))
 		t := n.UnaryExpression.Operand.Type()
-		if isArray(t) {
+		if p.isArray(n.UnaryExpression, t) {
 			p.w("%d", t.Len()*t.Elem().Size())
 			break
 		}
@@ -2588,7 +2764,7 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
 		defer p.w("%s", p.convert(nil, t, flags))
 		t := n.TypeName.Type()
-		if isArray(t) {
+		if t.Kind() == cc.Array {
 			p.w("%d", t.Len()*t.Elem().Size())
 			break
 		}
@@ -2615,7 +2791,7 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 
 		defer p.w("%s", p.convert(nil, t, flags))
 		t := n.UnaryExpression.Operand.Type()
-		if isArray(t) {
+		if p.isArray(n.UnaryExpression, t) {
 			p.w("%d", t.Len()*t.Elem().Size())
 			break
 		}
@@ -2640,7 +2816,7 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 
 		defer p.w("%s", p.convert(nil, t, flags))
 		t := n.TypeName.Type()
-		if isArray(t) {
+		if t.Kind() == cc.Array {
 			p.w("%d", t.Len()*t.Elem().Size())
 			break
 		}
@@ -2701,7 +2877,7 @@ func isNonNegativeInt(op cc.Operand) bool {
 func (p *project) unaryExpressionPreIncDec(f *function, n *cc.UnaryExpression, oper, oper2 string, t, s cc.Type, mode exprMode, flags flags) {
 	ut := n.UnaryExpression.Operand.Type()
 	switch mode {
-	case exprVoid:
+	case exprVoid, exprVoidSingle:
 		p.unaryExpression(f, n.UnaryExpression, n.UnaryExpression.Operand.Type(), s, exprLValue, flags)
 		if ut.IsIntegerType() || ut.Kind() == cc.Ptr && p.incDelta(n, ut) == 1 {
 			p.w("%s", oper)
@@ -2714,7 +2890,7 @@ func (p *project) unaryExpressionPreIncDec(f *function, n *cc.UnaryExpression, o
 		}
 
 		panic(todo("", pos(n), ut))
-	case exprValue:
+	case exprValue, exprLValue:
 		defer p.w("%s", p.convert(n.UnaryExpression.Operand, t, flags))
 		x := "Dec"
 		if oper == "++" {
@@ -2723,6 +2899,13 @@ func (p *project) unaryExpressionPreIncDec(f *function, n *cc.UnaryExpression, o
 		p.w("%sPre%s%s(&", p.task.crt, x, p.helperType(ut))
 		p.unaryExpression(f, n.UnaryExpression, ut, s, exprLValue, flags)
 		p.w(", %d)", p.incDelta(n.PostfixExpression, ut))
+	case exprBool:
+		if flags&fOutermost == 0 {
+			p.w("(")
+			defer p.w(")")
+		}
+		p.unaryExpression(f, n, t, s, exprValue, flags)
+		p.w(" != 0")
 	default:
 		panic(todo("", pos(n), mode))
 	}
@@ -2739,10 +2922,11 @@ func (p *project) unaryExpressionDeref(f *function, n *cc.UnaryExpression, t, s 
 		p.w(" != 0")
 	case exprValue, exprLValue:
 		switch {
-		case isArray(n.CastExpression.Operand.Type()):
+		case p.isArray(n.CastExpression, n.CastExpression.Operand.Type()):
 			defer p.w(")%s", p.convertType(n.CastExpression.Operand.Type().Elem(), t, flags))
-			p.w("*(*%s)(", p.typ(n.Operand.Type()))
-			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), s, exprPointer, flags|fOutermost)
+			p.w("*(*%s)(unsafe.Pointer(", p.typ(n.Operand.Type()))
+			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), s, exprAddrOf, flags|fOutermost)
+			p.w(")")
 		default:
 			defer p.w("))%s", p.convertType(n.CastExpression.Operand.Type().Elem(), t, flags))
 			p.w("*(*%s)(unsafe.Pointer(", p.typ(n.Operand.Type()))
@@ -2783,7 +2967,7 @@ func (p *project) postfixExpression(f *function, n *cc.PostfixExpression, t, s c
 func (p *project) postPostfixExpressionIncDec(f *function, n *cc.PostfixExpression, oper, oper2 string, t, s cc.Type, mode exprMode, flags flags) {
 	peType := n.PostfixExpression.Operand.Type()
 	switch mode {
-	case exprVoid:
+	case exprVoid, exprVoidSingle:
 		p.postfixExpression(f, n.PostfixExpression, peType, s, exprLValue, flags)
 		if peType.IsIntegerType() || peType.Kind() == cc.Ptr && p.incDelta(n, peType) == 1 {
 			p.w("%s", oper)
@@ -2832,14 +3016,19 @@ func (p *project) incDelta(n cc.Node, t cc.Type) uintptr {
 func (p *project) postfixExpressionPSelect(f *function, n *cc.PostfixExpression, t, s cc.Type, mode exprMode, flags flags) {
 	peType := n.PostfixExpression.Operand.Type()
 	switch mode {
-	case exprValue, exprLValue, exprSelect, exprPSelect:
+	case exprValue, exprLValue, exprSelect, exprPSelect, exprCall:
 		if peType.Kind() == cc.Union {
 			panic(todo("", pos(n)))
 		}
 
-		defer p.w("%s", p.convert(n.Operand, t, flags))
-		p.postfixExpression(f, n.PostfixExpression, peType, s, exprPSelect, flags)
-		p.w(".%s", p.fieldName(n.Token2.Value))
+		switch {
+		case n.Operand.Type().Kind() == cc.Array && t.Kind() == cc.Ptr:
+			p.postfixExpression(f, n, t, s, exprAddrOf, flags)
+		default:
+			defer p.w("%s", p.convert(n.Operand, t, flags))
+			p.postfixExpression(f, n.PostfixExpression, peType, s, exprPSelect, flags)
+			p.w(".%s", p.fieldName(n.Token2.Value))
+		}
 	case exprAddrOf:
 		p.postfixExpression(f, n.PostfixExpression, peType, s, exprValue, flags)
 		p.fldOff(peType.Elem(), n.Token2)
@@ -2859,7 +3048,7 @@ func (p *project) fldOff(t cc.Type, tok cc.Token) {
 	var off uintptr
 	fld, ok := t.FieldByName(tok.Value)
 	if fld.Type().IsBitFieldType() {
-		//TODO panic(todo("bit fields not supported"))
+		//TODO
 	}
 
 	if !ok {
@@ -2879,13 +3068,13 @@ func (p *project) postfixExpressionSelect(f *function, n *cc.PostfixExpression, 
 	case exprAddrOf:
 		p.postfixExpression(f, n.PostfixExpression, nil, s, mode, flags)
 		p.fldOff(pe, n.Token2)
-	case exprValue, exprLValue, exprSelect, exprPSelect:
+	case exprValue, exprLValue, exprSelect, exprPSelect, exprCall:
 		defer p.w("%s", p.convert(n.Operand, t, flags))
 		switch {
 		case pe.Kind() == cc.Union:
 			fld, ok := pe.FieldByName(n.Token2.Value)
 			if fld.Type().IsBitFieldType() {
-				//TODO panic(todo("bit fields not supported"))
+				//TODO
 			}
 
 			if !ok {
@@ -2911,6 +3100,26 @@ func (p *project) postfixExpressionSelect(f *function, n *cc.PostfixExpression, 
 }
 
 func (p *project) postfixExpressionCall(f *function, n *cc.PostfixExpression, t, s cc.Type, mode exprMode, flags flags) {
+	switch d := n.PostfixExpression.Declarator(); {
+	case d != nil:
+		switch d.Name() {
+		case idVaStart:
+			lhs := n.ArgumentExpressionList.AssignmentExpression
+			p.assignmentExpression(f, lhs, lhs.Operand.Type(), nil, exprLValue, flags)
+			p.w(" = %s", f.vaName)
+			return
+		case idVaArg:
+			if !f.vaType.IsScalarType() {
+				panic(todo("", f.vaType))
+			}
+
+			lhs := n.ArgumentExpressionList.AssignmentExpression
+			p.w("%sVa%s(&", p.task.crt, p.helperType(f.vaType))
+			p.assignmentExpression(f, lhs, lhs.Operand.Type(), nil, exprLValue, flags)
+			p.w(")")
+			return
+		}
+	}
 	switch mode {
 	case exprVoid:
 		// ok
@@ -2920,13 +3129,13 @@ func (p *project) postfixExpressionCall(f *function, n *cc.PostfixExpression, t,
 			defer p.w(")")
 		}
 		defer p.w(" != 0")
-	case exprValue:
+	case exprValue, exprLValue:
 		defer p.w("%s", p.convert(n.Operand, t, flags))
 	default:
 		panic(todo("", n.Position(), mode))
 	}
 	peType := n.PostfixExpression.Operand.Type()
-	p.postfixExpression(f, n.PostfixExpression, peType, s, exprValue, flags&^fOutermost)
+	p.postfixExpression(f, n.PostfixExpression, peType, s, exprCall, flags&^fOutermost)
 	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, f.vaLists[n])
 }
 
@@ -2956,7 +3165,7 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 	for i, arg := range args {
 		p.w(", ")
 		mode := exprValue
-		if at := arg.Operand.Type(); isArray(at) {
+		if at := arg.Operand.Type(); p.isArray(arg, at) {
 			mode = exprAddrOf
 		}
 		switch {
@@ -2981,9 +3190,8 @@ func (p *project) postfixExpressionIndex(f *function, n *cc.PostfixExpression, t
 	switch mode {
 	case exprSelect, exprLValue, exprValue:
 		defer p.w("%s", p.convert(n.Operand, t, flags))
-		d := n.PostfixExpression.Declarator()
 		switch {
-		case isArray(peType) && (d == nil || !d.IsParameter):
+		case p.isArray(n.PostfixExpression, peType):
 			p.postfixExpression(f, n.PostfixExpression, peType, s, exprValue, flags&^fOutermost)
 			p.w("[")
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), s, exprValue, flags|fOutermost)
@@ -3059,10 +3267,15 @@ func (p *project) primaryExpression(f *function, n *cc.PrimaryExpression, t, s c
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
 		switch d := n.Declarator(); {
 		case d != nil:
-			if mode == exprValue && isArray(d.Type()) && t.Kind() == cc.Ptr {
-				mode = exprAddrOf
+			switch {
+			case
+				mode == exprValue && p.isArrayDeclarator(d) && t.Kind() == cc.Ptr,
+				mode == exprValue && d.Type().Kind() == cc.Function:
+
+				p.declarator(f, d, t, s, exprAddrOf, flags)
+			default:
+				p.declarator(f, d, t, s, mode, flags)
 			}
-			p.declarator(f, d, t, s, mode, flags)
 		default:
 			panic(todo("", pos(n)))
 		}
@@ -3095,14 +3308,28 @@ func (p *project) primaryExpression(f *function, n *cc.PrimaryExpression, t, s c
 	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
 		panic(todo("%v: %T", n.Position(), n.Operand.Value()))
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
-		p.w("(")
-		defer p.w(")")
+		if mode != exprVoid {
+			p.w("(")
+			defer p.w(")")
+		}
 		p.expression(f, n.Expression, t, s, mode, flags|fOutermost)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
 		p.err(n, "expression statements not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
+}
+
+func (p *project) stringLiteralString(s string) string {
+	id := cc.String(s)
+	off, ok := p.tsOffs[id]
+	if !ok {
+		off = uintptr(p.ts.Len())
+		p.ts.WriteString(s)
+		p.ts.WriteByte(0)
+		p.tsOffs[id] = off
+	}
+	return fmt.Sprintf("%s%s", p.tsNameP, nonZeroUintptr(off))
 }
 
 func (p *project) stringLiteral(v cc.Value) string {
@@ -3271,8 +3498,10 @@ func (p *project) intConst(src string, op cc.Operand, to cc.Type, flags flags) {
 	ptr := to.Kind() == cc.Ptr
 	switch {
 	case to.IsArithmeticType():
-		defer p.w("%s", p.convert(op, to, flags|fIntLiteral))
+		defer p.w("%s", p.convert(op, to, flags))
 	case ptr:
+		p.w(" uintptr(")
+		defer p.w(")")
 		// ok
 	default:
 		panic(todo("", op.Type(), to))
@@ -3294,60 +3523,13 @@ func (p *project) intConst(src string, op cc.Operand, to cc.Type, flags flags) {
 	default:
 		panic(todo("%T(%v)", x, x))
 	}
-	var mask uint64
-	switch {
-	case ptr:
-		switch to.Size() {
-		case 4:
-			mask = math.MaxUint32
-		case 8:
-			mask = math.MaxUint64
-		default:
-			panic(todo("", op.Type().Size()))
-		}
-	case !to.IsIntegerType():
-		// ok
-		if snValid { // Prefer original form
-			p.w("%s", src)
-			return
-		}
 
-		p.w("%d", on)
-		return
-	case to.IsSignedType():
-		switch to.Size() {
-		case 1:
-			mask = math.MaxInt8
-		case 2:
-			mask = math.MaxInt16
-		case 4:
-			mask = math.MaxInt32
-		case 8:
-			mask = math.MaxInt64
-		default:
-			panic(todo("", op.Type().Size()))
-		}
-	default:
-		switch to.Size() {
-		case 1:
-			mask = math.MaxUint8
-		case 2:
-			mask = math.MaxUint16
-		case 4:
-			mask = math.MaxUint32
-		case 8:
-			mask = math.MaxUint64
-		default:
-			panic(todo("", op.Type().Size()))
-		}
-	}
-
-	if snValid && sn&mask == on { // Prefer original form
+	if snValid && sn == on { // Prefer original form
 		p.w("%s", src)
 		return
 	}
 
-	p.w("%d", mask&on)
+	p.w("%d", on)
 }
 
 func (p *project) voidAssignmentExpression(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
@@ -3369,7 +3551,7 @@ func (p *project) voidAssignmentExpression(f *function, n *cc.AssignmentExpressi
 	case cc.AssignmentExpressionSub: // UnaryExpression "-=" AssignmentExpression
 		p.assignOp(f, n, t, nil, mode, "-", "Sub", flags)
 	case cc.AssignmentExpressionLsh: // UnaryExpression "<<=" AssignmentExpression
-		p.assignOp(f, n, t, nil, mode, ">>", "Shl", flags)
+		p.assignOp(f, n, t, nil, mode, "<<", "Shl", flags)
 	case cc.AssignmentExpressionRsh: // UnaryExpression ">>=" AssignmentExpression
 		p.assignOp(f, n, t, nil, mode, ">>", "Shr", flags)
 	case cc.AssignmentExpressionAnd: // UnaryExpression "&=" AssignmentExpression
@@ -3384,24 +3566,33 @@ func (p *project) voidAssignmentExpression(f *function, n *cc.AssignmentExpressi
 }
 
 func (p *project) assignOp(f *function, n *cc.AssignmentExpression, t, s cc.Type, mode exprMode, oper, oper2 string, flags flags) {
-	switch {
-	case mode == exprVoid:
+	switch mode {
+	case exprVoid, exprVoidSingle:
 		if d := n.UnaryExpression.Declarator(); d != nil {
 			p.declarator(f, d, d.Type(), s, exprLValue, flags|fOutermost)
 			p.w(" = ")
-			x := p.convertType(n.Promote(), d.Type(), flags)
-			p.declarator(f, d, n.Promote(), s, exprValue, flags|fOutermost)
-			p.w(" %s ", oper)
-			p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), s, exprValue, flags|fOutermost)
-			p.w("%s", x)
+			switch d.Type().Kind() {
+			case cc.Array:
+				defer p.w("%s", p.convertType(n.Promote(), d.Type(), flags))
+				p.declarator(f, d, n.Promote(), s, exprValue, flags|fOutermost)
+				p.w(" %s (", oper)
+				p.assignmentExpression(f, n.AssignmentExpression, d.Type().Decay(), s, exprValue, flags|fOutermost)
+			default:
+				defer p.w("%s", p.convertType(n.Promote(), d.Type(), flags))
+				p.declarator(f, d, n.Promote(), s, exprValue, flags|fOutermost)
+				p.w(" %s (", oper)
+				p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), s, exprValue, flags|fOutermost)
+			}
+			p.w(")")
 			return
 		}
 
 		lhs := n.UnaryExpression
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(lhs.Operand.Type()))
 		p.unaryExpression(f, lhs, lhs.Operand.Type(), s, exprAddrOf, flags|fOutermost)
-		p.w(")) %s= ", oper)
+		p.w(")) %s= (", oper)
 		p.assignmentExpression(f, n.AssignmentExpression, lhs.Operand.Type(), s, exprValue, flags|fOutermost)
+		p.w(")")
 	default:
 		panic(todo(""))
 	}
@@ -3430,7 +3621,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		case cc.IterationStatementFor: // "for" '(' Expression ';' Expression ';' Expression ')' Statement
 			p.w("for ")
 			if n.Expression != nil {
-				p.expression(f, n.Expression, n.Expression.Operand.Type(), nil, exprVoid, fOutermost)
+				p.expression(f, n.Expression, n.Expression.Operand.Type(), nil, exprVoidSingle, fOutermost)
 			}
 			p.w("; ")
 			if n.Expression2 != nil {
@@ -3438,7 +3629,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			}
 			p.w("; ")
 			if n.Expression3 != nil {
-				p.expression(f, n.Expression3, n.Expression3.Operand.Type(), nil, exprVoid, fOutermost)
+				p.expression(f, n.Expression3, n.Expression3.Operand.Type(), nil, exprVoidSingle, fOutermost)
 			}
 			p.statement(f, n.Statement, true)
 		case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
@@ -3458,15 +3649,21 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 		p.w("%s", comment("\n", n))
 		switch n.Case {
 		case cc.SelectionStatementIf: // "if" '(' Expression ')' Statement
+			sv := f.ifCtx
+			f.ifCtx = n
 			p.w("if ")
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), nil, exprBool, fOutermost)
 			p.statement(f, n.Statement, true)
+			f.ifCtx = sv
 		case cc.SelectionStatementIfElse: // "if" '(' Expression ')' Statement "else" Statement
+			sv := f.ifCtx
+			f.ifCtx = n
 			p.w("if ")
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), nil, exprBool, fOutermost)
 			p.statement(f, n.Statement, true)
 			p.w(" else ")
 			p.statement(f, n.Statement2, true)
+			f.ifCtx = sv
 		case cc.SelectionStatementSwitch: // "switch" '(' Expression ')' Statement
 			sv := f.switchCtx
 			f.switchCtx = inSwitchFirst
@@ -3573,19 +3770,35 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 	if nm != "" {
 		p.w(" %s", nm)
 	}
-	p.w("(%s *%sTLS", f.tlsName, p.task.crt)
+	switch {
+	case f == nil || nm == "":
+		p.w("(*%sTLS", p.task.crt)
+	default:
+		p.w("(%s *%sTLS", f.tlsName, p.task.crt)
+	}
 	for _, v := range t.Parameters() {
 		if v.Type().Kind() == cc.Void {
 			break
 		}
 
-		nm := "_"
-		if d := v.Declarator(); d != nil {
-			if local := f.locals[d]; local != nil {
-				nm = local.name
+		var pn string
+		if f != nil && nm != "" {
+			pn = "_"
+			if d := v.Declarator(); d != nil {
+				if local := f.locals[d]; local != nil {
+					pn = local.name
+				}
 			}
 		}
-		p.w(", %s %s", nm, p.paramTyp(v.Type()))
+		p.w(", %s %s", pn, p.paramTyp(v.Type()))
+	}
+	if t.IsVariadic() {
+		switch {
+		case f == nil:
+			p.w(", uintptr")
+		default:
+			p.w(", %s uintptr", f.vaName)
+		}
 	}
 	p.w(")")
 	if rt := t.Result(); rt != nil && rt.Kind() != cc.Void {

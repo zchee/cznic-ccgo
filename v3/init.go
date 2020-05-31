@@ -5,6 +5,8 @@
 package main // import "modernc.org/ccgo/v3"
 
 import (
+	"strings"
+
 	"modernc.org/cc/v3"
 )
 
@@ -71,12 +73,16 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 
 		if x, ok := v.(cc.StringValue); ok {
 			s := cc.StringID(x).String()
-			n := len(s) + 1
-			if t.Len() != uintptr(n) {
-				panic(todo(""))
+			m := uintptr(len(s) + 1)
+			tn := t.Len()
+			switch {
+			case tn < m:
+				panic(todo("", pos(n), t.Len(), m))
+			case tn == m:
+				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(t), p.stringLiteral(x))
+			default: // tn > m
+				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(t), p.stringLiteralString(s+strings.Repeat("\x00", int(tn-m))))
 			}
-
-			p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(t), p.stringLiteral(x))
 			return
 		}
 	}
