@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
+
+	"modernc.org/cc/v3"
 )
 
 var (
@@ -107,4 +110,32 @@ func (s scope) take(t string) string {
 			return r
 		}
 	}
+}
+
+func dumpLayout(t cc.Type) string {
+	switch t.Kind() {
+	case cc.Struct, cc.Union:
+		// ok
+	default:
+		return t.String()
+	}
+
+	nf := t.NumField()
+	var a []string
+	for i := 0; i < nf; i++ {
+		f := t.FieldByIndex([]int{i})
+		var bf cc.StringID
+		if f.IsBitField() {
+			if bfbf := f.BitFieldBlockFirst(); bfbf != nil {
+				trc("%T(%[1]v)", bfbf)
+				bf = bfbf.Name()
+			}
+		}
+		a = append(a, fmt.Sprintf("%3d: %10q: BitFieldOffset %3v, BitFieldWidth %3v, IsBitField %5v, Mask: %#016x, off: %3v, pad %2v, BitFieldBlockWidth: %2d, BitFieldBlockFirst: %s",
+			i, f.Name(), f.BitFieldOffset(), f.BitFieldWidth(),
+			f.IsBitField(), f.Mask(), f.Offset(), f.Padding(),
+			f.BitFieldBlockWidth(), bf,
+		))
+	}
+	return "\n" + strings.Join(a, "\n")
 }

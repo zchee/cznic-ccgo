@@ -5,6 +5,7 @@
 package main // import "modernc.org/ccgo/v3"
 
 import (
+	"fmt"
 	"strings"
 
 	"modernc.org/cc/v3"
@@ -172,24 +173,68 @@ func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.
 func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc.Type) {
 	p.w(" %s{", p.typ(t))
 	idx := []int{0}
-	for ; n != nil; n = n.InitializerList {
-		if n.Designation != nil {
-			panic(todo("", n.Position(), t))
+	var m map[uintptr][]string
+	nvalues := 0
+	for list := n; list != nil; list = list.InitializerList {
+		if list.Designation != nil {
+			panic(todo("", list.Position(), t))
+		}
+
+		fld := t.FieldByIndex(idx)
+		nvalues++
+		if fld.IsBitField() {
+			if m == nil {
+				m = map[uintptr][]string{}
+			}
+			init := list.Initializer
+			if init.Case != cc.InitializerExpr {
+				panic(todo(""))
+			}
+
+			switch x := init.AssignmentExpression.Operand.Value().(type) {
+			case cc.Int64Value:
+				off := fld.Offset()
+				m[off] = append(m[off], fmt.Sprintf("%d<<%d&%#x", x, fld.BitFieldOffset(), fld.Mask()))
+			case cc.Uint64Value:
+				off := fld.Offset()
+				m[off] = append(m[off], fmt.Sprintf("%d<<%d&%#x", x, fld.BitFieldOffset(), fld.Mask()))
+			default:
+				panic(todo("%T(%v) %v", x, x, init.AssignmentExpression.Operand.Type()))
+			}
+		}
+		idx[0]++
+	}
+	idx[0] = 0
+	keys := nvalues != t.NumField()
+	for list := n; list != nil; list = list.InitializerList {
+		if list.Designation != nil {
+			panic(todo("", list.Position(), t))
 		}
 
 		fld := t.FieldByIndex(idx)
 		ft := fld.Type()
-		if ft.IsBitFieldType() {
-			//TODO panic(todo("bit fields not supported"))
-		}
-
+		comma := ","
 		switch {
-		case isAggregateType(ft) && n.Initializer.Case != cc.InitializerInitList && ft.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
-			panic(todo("", n.Position(), t, ft))
+		case fld.IsBitField():
+			off := fld.Offset()
+			if fld.BitFieldOffset() != 0 {
+				comma = ""
+				break
+			}
+
+			if keys {
+				p.w("%s: ", p.bitFieldName(fld.BitFieldBlockFirst()))
+			}
+			p.w("%s", strings.Join(m[off], "|"))
+		case isAggregateType(ft) && list.Initializer.Case != cc.InitializerInitList && ft.Kind() != list.Initializer.AssignmentExpression.Operand.Type().Kind():
+			panic(todo("", list.Position(), t, ft))
 		default:
-			p.initializer(f, n.Initializer, ft)
+			if keys {
+				p.w("%s: ", p.fieldName(fld.Name()))
+			}
+			p.initializer(f, list.Initializer, ft)
 		}
-		p.w(",")
+		p.w("%s", comma)
 		idx[0]++
 	}
 	p.w("}")
