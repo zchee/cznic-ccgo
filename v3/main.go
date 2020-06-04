@@ -43,7 +43,7 @@ typedef __WCHAR_TYPE__ wchar_t;
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 #define __builtin_va_copy(dst, src) dst = src
-#define __builtin_va_end(ap)
+#define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
 
 typedef void *__builtin_va_list;
@@ -57,6 +57,7 @@ void *__builtin_memset(void *s, int c, size_t n);
 void *__ccgo_va_arg(__builtin_va_list ap);
 void __builtin_abort(void);
 void __builtin_exit(int status);
+void __ccgo_va_end(__builtin_va_list ap);
 void __ccgo_va_start(__builtin_va_list ap);
 
 #undef __GNUC__

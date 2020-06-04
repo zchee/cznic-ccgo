@@ -675,6 +675,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20010904-1.c": {}, // __attribute__((aligned(32)))
 		"20010904-2.c": {}, // __attribute__((aligned(32)))
 		"20021127-1.c": {}, // gcc specific optimization
+		"eeprof-1.c":   {}, // requires instrumentation
 
 		"20040411-1.c": {}, //TODO VLA
 		"20040423-1.c": {}, //TODO VLA

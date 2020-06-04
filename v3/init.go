@@ -181,6 +181,10 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 		}
 
 		fld := t.FieldByIndex(idx)
+		for fld.IsBitField() && fld.Name() == 0 {
+			idx[0]++
+			fld = t.FieldByIndex(idx)
+		}
 		nvalues++
 		if fld.IsBitField() {
 			if m == nil {
@@ -212,6 +216,10 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 		}
 
 		fld := t.FieldByIndex(idx)
+		for fld.IsBitField() && fld.Name() == 0 {
+			idx[0]++
+			fld = t.FieldByIndex(idx)
+		}
 		ft := fld.Type()
 		comma := ","
 		switch {
