@@ -581,6 +581,7 @@ gofast.c
 20010226-1.c
 20011123-1.c
 20030331-1.c
+20041213-1.c
 920518-1.c
 920810-1.c
 980619-1.c
@@ -588,9 +589,12 @@ acc1.c
 acc2.c
 compare-fp-2.c
 fp-cmp-4e.c
+fp-cmp-6.c
 fp-cmp-8e.c
 pr28634.c
+pr29302-1.c
 pr67218.c
+pr84235.c
 rbug.c
 unsafe-fp-assoc.c
 ifcvt-onecmpl-abs-1.c

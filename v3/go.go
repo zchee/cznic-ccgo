@@ -2807,7 +2807,22 @@ func (p *project) binaryMultiplicativeExpression(f *function, n *cc.Multiplicati
 		}
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 		p.w("%s %s%s", s, oper, comment(" ", &n.Token))
+		if (oper == "/" || oper == "%") && isZeroReal(n.CastExpression.Operand) {
+			p.w("%s%sFrom%[2]s(", p.task.crt, p.helperType(n.Promote()))
+			defer p.w(")")
+		}
 		p.castExpression(f, n.CastExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
+	}
+}
+
+func isZeroReal(op cc.Operand) bool {
+	switch x := op.Value().(type) {
+	case cc.Float32Value:
+		return x == 0
+	case cc.Float64Value:
+		return x == 0
+	default:
+		return false
 	}
 }
 
