@@ -127,7 +127,6 @@ func dumpLayout(t cc.Type) string {
 		var bf cc.StringID
 		if f.IsBitField() {
 			if bfbf := f.BitFieldBlockFirst(); bfbf != nil {
-				trc("%T(%[1]v)", bfbf)
 				bf = bfbf.Name()
 			}
 		}

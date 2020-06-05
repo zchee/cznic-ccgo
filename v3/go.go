@@ -890,7 +890,7 @@ func (p *project) structLiteral(t cc.Type) string {
 	var b strings.Builder
 	switch t.Kind() {
 	case cc.Struct:
-		//TODO- trc("", dumpLayout(t)) //TODO-
+		// trc("", dumpLayout(t)) //TODO-
 		b.WriteString("struct {")
 		for idx[0] = 0; idx[0] < nf; idx[0]++ {
 			f := t.FieldByIndex(idx)
@@ -2163,7 +2163,15 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 	case cc.StatementJump: // JumpStatement
 		r = p.jumpStatement(f, n.JumpStatement)
 	case cc.StatementAsm: // AsmStatement
-		panic(todo("", pos(n)))
+		// AsmStatement:
+		//         Asm AttributeSpecifierList ';'
+		// Asm:
+		//         "__asm__" AsmQualifierList '(' STRINGLITERAL AsmArgList ')'
+		if n.AsmStatement.Asm.Token3.Value == 0 {
+			break
+		}
+
+		p.err(n, "assemberl statements not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -2674,6 +2682,7 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 	case exprValue, exprLValue, exprAddrOf:
 		switch {
 		case lt.IsArithmeticType() && rt.IsArithmeticType(): // x +- y
+			defer p.w("%s", p.bitFieldPatch2(lo, ro, n.Promote()))
 			switch {
 			case intAddOverflows(lo, ro, oper, n.Promote()): // i +- j
 				p.additiveExpression(f, n.AdditiveExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
@@ -2720,6 +2729,11 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 	default:
 		panic(todo("", mode))
 	}
+}
+
+func (p *project) bitFieldPatch2(a, b cc.Operand, promote cc.Type) string {
+	p.w("/*2735 %v */", promote)
+	return "" //TODO-
 }
 
 func intAddOverflows(lo, ro cc.Operand, oper string, promote cc.Type) bool {
@@ -2807,7 +2821,7 @@ func (p *project) binaryMultiplicativeExpression(f *function, n *cc.Multiplicati
 		}
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), nil, exprValue, flags&^fOutermost)
 		p.w("%s %s%s", s, oper, comment(" ", &n.Token))
-		if (oper == "/" || oper == "%") && isZeroReal(n.CastExpression.Operand) {
+		if (oper == "/" || oper == "%") && (isZeroReal(n.MultiplicativeExpression.Operand) || isZeroReal(n.CastExpression.Operand)) {
 			p.w("%s%sFrom%[2]s(", p.task.crt, p.helperType(n.Promote()))
 			defer p.w(")")
 		}
@@ -2924,6 +2938,12 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t, s cc.Ty
 		p.castExpression(f, n.CastExpression, t, s, exprValue, flags)
 	case cc.UnaryExpressionMinus: // '-' CastExpression
 		switch {
+		case isZeroReal(n.CastExpression.Operand):
+			p.w(" -")
+			defer p.w("%s", p.convert(n.CastExpression.Operand, t, flags))
+			p.w("%s%sFrom%[2]s(", p.task.crt, p.helperType(n.CastExpression.Operand.Type()))
+			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), s, exprValue, flags)
+			p.w(")")
 		case isNonNegativeInt(n.CastExpression.Operand) && isUnsigned(n.Operand.Type()):
 			p.w(" -")
 			defer p.w("%s", p.convert(n.CastExpression.Operand, t, flags|fForceRuntimeConv))
@@ -3216,7 +3236,7 @@ func (p *project) postPostfixExpressionIncDec(f *function, n *cc.PostfixExpressi
 			bf := pe.BitField()
 			p.w("%sPost%sBitFieldPtr%d%s(", p.task.crt, x, bf.BitFieldBlockWidth(), p.bfHelperType(pe))
 			p.postfixExpression(f, n.PostfixExpression, pe, s, exprAddrOf, flags)
-			p.w(", %d, %d, %#x)", p.incDelta(n.PostfixExpression, pe), bf.BitFieldOffset(), bf.Mask())
+			p.w(", %d, %d, %#x)", p.incDelta(n.PostfixExpression, pe), p.bitFieldOffset(bf), p.mask(bf))
 		default:
 			p.w("%sPost%s%s(&", p.task.crt, x, p.helperType(pe))
 			p.postfixExpression(f, n.PostfixExpression, pe, s, exprLValue, flags)
@@ -3225,6 +3245,14 @@ func (p *project) postPostfixExpressionIncDec(f *function, n *cc.PostfixExpressi
 	default:
 		panic(todo("", pos(n), mode))
 	}
+}
+
+func (p *project) bitFieldOffset(bf cc.Field) int {
+	return bf.BitFieldOffset() + 8*int(bf.Offset()-bf.BitFieldBlockFirst().Offset())
+}
+
+func (p *project) mask(bf cc.Field) uint64 {
+	return bf.Mask() << (8 * (bf.Offset() - bf.BitFieldBlockFirst().Offset()))
 }
 
 func (p *project) incDelta(n cc.Node, t cc.Type) uintptr {
@@ -3255,7 +3283,7 @@ func (p *project) postfixExpressionPSelect(f *function, n *cc.PostfixExpression,
 			x := p.convertType(nil, fld.Promote(), flags)
 			p.postfixExpression(f, n.PostfixExpression, pe, s, exprPSelect, flags)
 			p.w(".%s /* .%s */", p.bitFieldName(fld.BitFieldBlockFirst()), fld.Name())
-			p.w("&%#x>>%d", fld.Mask(), fld.BitFieldOffset())
+			p.w("&%#x>>%d", p.mask(fld), p.bitFieldOffset(fld))
 			p.w("%s", x)
 			if fld.Type().IsSignedType() {
 				p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
@@ -3307,7 +3335,7 @@ func (p *project) postfixExpressionSelect(f *function, n *cc.PostfixExpression, 
 			x := p.convertType(nil, fld.Promote(), flags)
 			p.postfixExpression(f, n.PostfixExpression, pe, s, exprSelect, flags)
 			p.w(".%s /* .%s */", p.bitFieldName(fld.BitFieldBlockFirst()), fld.Name())
-			p.w("&%#x>>%d", fld.Mask(), fld.BitFieldOffset())
+			p.w("&%#x>>%d", p.mask(fld), p.bitFieldOffset(fld))
 			p.w("%s", x)
 			if fld.Type().IsSignedType() {
 				p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
@@ -3796,7 +3824,7 @@ func (p *project) voidAssignmentExpression(f *function, n *cc.AssignmentExpressi
 			p.unaryExpression(f, n.UnaryExpression, n.UnaryExpression.Operand.Type(), nil, exprAddrOf, flags)
 			p.w(", ")
 			p.assignmentExpression(f, n.AssignmentExpression, n.UnaryExpression.Operand.Type(), nil, exprValue, flags|fOutermost)
-			p.w(", %d, %#x)", bf.BitFieldOffset(), bf.Mask())
+			p.w(", %d, %#x)", p.bitFieldOffset(bf), p.mask(bf))
 		default:
 			p.unaryExpression(f, n.UnaryExpression, n.UnaryExpression.Operand.Type(), nil, exprLValue, flags)
 			p.w(" = ")

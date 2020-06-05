@@ -45,18 +45,37 @@ typedef __WCHAR_TYPE__ wchar_t;
 #define __builtin_va_copy(dst, src) dst = src
 #define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
+#define asm __asm__
 
 typedef void *__builtin_va_list;
 
+char *__builtin_strchr(const char *s, int c);
+char *__builtin_strcpy(char *dest, const char *src);
+double __builtin_copysign ( double x, double y );
 double __builtin_fabs(double x);
+double __builtin_huge_val (void);
+double __builtin_inf (void);
+float __builtin_copysignf ( float x, float y );
+float __builtin_huge_valf (void);
+float __builtin_inff (void);
 int __builtin_abs(int j);
+int __builtin_memcmp(const void *s1, const void *s2, size_t n);
 int __builtin_printf(const char *format, ...);
+int __builtin_snprintf(char *str, size_t size, const char *format, ...);
+int __builtin_sprintf(char *str, const char *format, ...);
 int __builtin_strcmp(const char *s1, const char *s2);
+long __builtin_expect (long exp, long c);
+size_t __builtin_strlen(const char *s);
+void *__builtin_malloc(size_t size);
 void *__builtin_memcpy(void *dest, const void *src, size_t n);
 void *__builtin_memset(void *s, int c, size_t n);
 void *__ccgo_va_arg(__builtin_va_list ap);
 void __builtin_abort(void);
 void __builtin_exit(int status);
+void __builtin_free(void *ptr);
+void __builtin_prefetch (const void *addr, ...);
+void __builtin_trap (void);
+void __builtin_unreachable (void);
 void __ccgo_va_end(__builtin_va_list ap);
 void __ccgo_va_start(__builtin_va_list ap);
 
