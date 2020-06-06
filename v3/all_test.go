@@ -677,8 +677,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20021127-1.c": {}, // gcc specific optimization
 		"eeprof-1.c":   {}, // requires instrumentation
 
-		"20040411-1.c": {}, //TODO VLA
-		"20040423-1.c": {}, //TODO VLA
+		"20040411-1.c":    {}, //TODO VLA
+		"20040423-1.c":    {}, //TODO VLA
+		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
 	}
 	wd, err := os.Getwd()
 	if err != nil {

@@ -155,6 +155,7 @@ func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.
 		fld := t.FieldByIndex(idx)
 		ft := fld.Type()
 		if ft.IsBitFieldType() {
+			panic(todo(""))
 			//TODO panic(todo("bit fields not supported"))
 		}
 
@@ -174,6 +175,7 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 	p.w(" %s{", p.typ(t))
 	idx := []int{0}
 	var m map[uintptr][]string
+	var bm map[uintptr][]cc.Field
 	nvalues := 0
 	for list := n; list != nil; list = list.InitializerList {
 		if list.Designation != nil {
@@ -187,8 +189,13 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 		}
 		nvalues++
 		if fld.IsBitField() {
+			if !fld.BitFieldBlockFirst().IsBitField() {
+				panic(todo("\n%s", dumpLayout(t)))
+			}
+
 			if m == nil {
 				m = map[uintptr][]string{}
+				bm = p.bitFields(t)
 			}
 			init := list.Initializer
 			if init.Case != cc.InitializerExpr {
@@ -225,7 +232,7 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 		switch {
 		case fld.IsBitField():
 			off := fld.Offset()
-			if fld.BitFieldOffset() != 0 {
+			if bm[off][0].Name() != fld.Name() {
 				comma = ""
 				break
 			}

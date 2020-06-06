@@ -30,14 +30,20 @@ const (
 	builtin = `
 #ifdef __PTRDIFF_TYPE__
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
+#else
+#error __PTRDIFF_TYPE__ undefined
 #endif
 
 #ifdef __SIZE_TYPE__
 typedef __SIZE_TYPE__ size_t;
+#else
+#error __SIZE_TYPE__ undefined
 #endif
 
 #ifdef __WCHAR_TYPE__
 typedef __WCHAR_TYPE__ wchar_t;
+#else
+#error __WCHAR_TYPE__ undefined
 #endif
 
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
