@@ -141,7 +141,6 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 }
 
 func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.Type) {
-	p.w(" %s{", p.typ(t))
 	idx := []int{0}
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
@@ -165,10 +164,8 @@ func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.
 		default:
 			p.initializer(f, n.Initializer, ft)
 		}
-		p.w(",")
 		idx[0]++
 	}
-	p.w("}")
 }
 
 func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc.Type) {

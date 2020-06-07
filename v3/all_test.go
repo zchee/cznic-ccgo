@@ -675,10 +675,17 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20010904-1.c": {}, // __attribute__((aligned(32)))
 		"20010904-2.c": {}, // __attribute__((aligned(32)))
 		"20021127-1.c": {}, // gcc specific optimization
+		"20101011-1.c": {}, // sigfpe
 		"eeprof-1.c":   {}, // requires instrumentation
+		"fp-cmp-1.c":   {}, // sigfpe
+		"fp-cmp-2.c":   {}, // sigfpe
+		"fp-cmp-3.c":   {}, // sigfpe
+		"991014-1.c":   {}, // Struct type too big
 
 		"20040411-1.c":    {}, //TODO VLA
 		"20040423-1.c":    {}, //TODO VLA
+		"anon-1.c":        {}, //TODO nested field access
+		"pr41317.c":       {}, // TODO nested field access
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
 	}
 	wd, err := os.Getwd()
@@ -1159,6 +1166,10 @@ next:
 			t.Errorf("%s: %s:", base, err)
 			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
 			continue
+		}
+		if *oTraceF {
+			b, _ := ioutil.ReadFile(src)
+			fmt.Printf("\n----\n%s\n----\n", b)
 		}
 
 		if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {

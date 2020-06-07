@@ -25,8 +25,8 @@ all:
 	maligned || true
 	grep -n 'files.*, ok' log 
 	grep -n 'FAIL\|PASS' log 
-	grep -c 'exit status 1' log 
-	grep -c 'exit status 2' log 
+	grep -c 'exit status 1' log || true
+	grep -c 'exit status 2' log || true
 	go version
 	date 2>&1 | tee -a log
 
