@@ -1158,6 +1158,9 @@ next:
 		if err := func() (err error) {
 			defer func() {
 				if e := recover(); e != nil && err == nil {
+					if *oStackTrace {
+						fmt.Printf("%s\n", stack())
+					}
 					err = fmt.Errorf("%v", e)
 				}
 			}()

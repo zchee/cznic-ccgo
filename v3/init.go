@@ -122,7 +122,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 	}
 
 	// 16: Otherwise, the initializer for an object that has aggregate or union
-	// type shall be a brace- enclosed list of initializers for the elements or
+	// type shall be a brace-enclosed list of initializers for the elements or
 	// named members.
 	if n.Case != cc.InitializerInitList { // '{' InitializerList ',' '}'
 		panic(todo(""))
