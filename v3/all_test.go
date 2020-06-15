@@ -681,12 +681,17 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"fp-cmp-2.c":   {}, // sigfpe
 		"fp-cmp-3.c":   {}, // sigfpe
 		"991014-1.c":   {}, // Struct type too big
+		"20000822-1.c": {}, // nested func
 
 		"20040411-1.c":    {}, //TODO VLA
 		"20040423-1.c":    {}, //TODO VLA
 		"anon-1.c":        {}, //TODO nested field access
 		"pr41317.c":       {}, // TODO nested field access
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
+		"20000113-1.c":    {}, //TODO non-const bitfield initalizer
+		"20030714-1.c":    {}, //TODO select nested field
+		"20000722-1.c":    {}, //TODO composite literal
+		"20000801-3.c":    {}, //TODO designators
 	}
 	wd, err := os.Getwd()
 	if err != nil {

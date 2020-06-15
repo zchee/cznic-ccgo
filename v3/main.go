@@ -348,7 +348,7 @@ func (t *task) main() (err error) {
 	}
 
 	t.cfg.ABI = abi
-	t.cfg.Config3 = cc.Config3{PreserveWhiteSpace: true, IgnoreInclude: re}
+	t.cfg.Config3 = cc.Config3{PreserveWhiteSpace: true, IgnoreInclude: re, UnsignedEnums: true}
 	hostPredefined, hostIncludes, hostSysIncludes, err := cc.HostConfig("")
 	if err != nil {
 		return err
