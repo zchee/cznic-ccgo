@@ -682,16 +682,22 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"fp-cmp-3.c":   {}, // sigfpe
 		"991014-1.c":   {}, // Struct type too big
 		"20000822-1.c": {}, // nested func
+		"20001009-2.c": {}, // asm
+		"20010122-1.c": {}, // __builtin_return_address
 
 		"20040411-1.c":    {}, //TODO VLA
 		"20040423-1.c":    {}, //TODO VLA
 		"anon-1.c":        {}, //TODO nested field access
-		"pr41317.c":       {}, // TODO nested field access
+		"pr41317.c":       {}, //TODO nested field access
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
 		"20000113-1.c":    {}, //TODO non-const bitfield initalizer
 		"20030714-1.c":    {}, //TODO select nested field
 		"20000722-1.c":    {}, //TODO composite literal
 		"20000801-3.c":    {}, //TODO designators
+		"20000703-1.c":    {}, //TODO statement expression
+		"20001203-2.c":    {}, //TODO statement expression
+		"20000917-1.c":    {}, //TODO composite literal
+		"20010123-1.c":    {}, //TODO composite literal
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -754,7 +760,11 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			return err
 		}
 
-		ccgoArgs := []string{"ccgo", "-o", main}
+		ccgoArgs := []string{
+			"ccgo",
+			"-D__FUNCTION__=__func__",
+			"-o", main,
+		}
 		if !func() (r bool) {
 			defer func() {
 				if err := recover(); err != nil {

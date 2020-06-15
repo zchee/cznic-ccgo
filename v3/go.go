@@ -168,6 +168,8 @@ type function struct {
 	block        *block
 	blocks       map[*cc.CompoundStatement]*block
 	bpName       string
+	breakCtx     int //TODO merge with continueCtx
+	continueCtx  int
 	flatLabels   int
 	fndef        *cc.FunctionDefinition
 	gen          *project
@@ -404,6 +406,10 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		}
 
 		ft := funcType(x.PostfixExpression.Operand.Type())
+		if ft.Kind() != cc.Function {
+			return true
+		}
+
 		for list := x.ArgumentExpressionList; list != nil; list = list.ArgumentExpressionList {
 			if d := list.AssignmentExpression.Declarator(); d != nil {
 				if f.project.isArrayDeclarator(d) {
@@ -1067,6 +1073,7 @@ func (p *project) layoutEnums() error {
 	m := map[cc.StringID]cc.Value{}
 	var enumList []*cc.EnumSpecifier
 	enums := map[*cc.EnumSpecifier]*enumSpec{}
+out:
 	for _, v := range p.task.asts {
 		for list := v.TranslationUnit; list != nil; list = list.TranslationUnit {
 			decl := list.ExternalDeclaration
@@ -1107,6 +1114,10 @@ func (p *project) layoutEnums() error {
 				}
 				return true
 			})
+			if enums == nil {
+				enumList = enumList[:0]
+				break out
+			}
 		}
 	}
 
@@ -2635,6 +2646,38 @@ func (p *project) convertInt(op cc.Operand, to cc.Type, flags flags) string {
 				default:
 					panic(todo("%T(%v) %v -> %v", x, op.Value(), from, to))
 				}
+			case cc.Uint64Value:
+				switch to.Size() {
+				case 1:
+					if x <= math.MaxUint8 {
+						p.w("%s(", p.typ(to))
+						return ")"
+					}
+
+					p.w("%sUint8FromUint%d(", p.task.crt, from.Size()*8)
+					return ")"
+				case 2:
+					if x <= math.MaxUint16 {
+						p.w("%s(", p.typ(to))
+						return ")"
+					}
+
+					p.w("%sUint16FromUint%d(", p.task.crt, from.Size()*8)
+					return ")"
+				case 4:
+					if x <= math.MaxUint32 {
+						p.w("%s(", p.typ(to))
+						return ")"
+					}
+
+					p.w("%sUint32FromUint%d(", p.task.crt, from.Size()*8)
+					return ")"
+				case 8:
+					p.w("uint64(")
+					return ")"
+				default:
+					panic(todo("%T(%v) %v -> %v", x, op.Value(), from, to))
+				}
 			default:
 				panic(todo("%T(%v) %v -> %v", x, op.Value(), from, to))
 			}
@@ -2910,11 +2953,11 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 		//         Asm AttributeSpecifierList ';'
 		// Asm:
 		//         "__asm__" AsmQualifierList '(' STRINGLITERAL AsmArgList ')'
-		if n.AsmStatement.Asm.Token3.Value == 0 {
+		if n.AsmStatement.Asm.Token3.Value == 0 && n.AsmStatement.Asm.AsmArgList == nil {
 			break
 		}
 
-		p.err(n, "assemberl statements not supported")
+		p.err(n, "assembler statements not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -2943,9 +2986,19 @@ func (p *project) jumpStatement(f *function, n *cc.JumpStatement) (r *cc.JumpSta
 	case cc.JumpStatementGotoExpr: // "goto" '*' Expression ';'
 		panic(todo("", pos(n)))
 	case cc.JumpStatementContinue: // "continue" ';'
-		p.w("continue")
+		switch {
+		case f.continueCtx != 0:
+			p.w("goto __%d", f.continueCtx)
+		default:
+			p.w("continue")
+		}
 	case cc.JumpStatementBreak: // "break" ';'
-		p.w("break")
+		switch {
+		case f.breakCtx != 0:
+			p.w("goto __%d", f.breakCtx)
+		default:
+			p.w("break")
+		}
 	case cc.JumpStatementReturn: // "return" Expression ';'
 		r = n
 		switch {
@@ -5581,11 +5634,34 @@ func (p *project) castExpressionValue(f *function, n *cc.CastExpression, t, s cc
 			p.castExpressionValueNormal(f, n, t, s, mode, flags)
 		case opArray:
 			p.castExpressionValueArray(f, n, t, s, mode, flags)
+		case opFunction:
+			p.castExpressionValueFunction(f, n, t, s, mode, flags)
 		default:
 			panic(todo("", n.Position(), k))
 		}
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
+	}
+}
+
+func (p *project) castExpressionValueFunction(f *function, n *cc.CastExpression, t, s cc.Type, mode exprMode, flags flags) {
+	// '(' TypeName ')' CastExpression
+	op := n.CastExpression.Operand
+	tn := n.TypeName.Type()
+	switch {
+	case op.Type().Kind() == cc.Function:
+		switch {
+		case tn.Kind() == cc.Ptr && t.Kind() == cc.Ptr:
+			p.w("(*(*")
+			p.functionSignature(f, op.Type(), "")
+			p.w(")(unsafe.Pointer(")
+			p.castExpression(f, n.CastExpression, tn, s, exprValue, flags)
+			p.w(")))")
+		default:
+			panic(todo(""))
+		}
+	default:
+		panic(todo("%v: %v -> %v -> %v", pos(n), op.Type(), tn, t))
 	}
 }
 
@@ -5709,7 +5785,7 @@ func (p *project) unaryExpressionPSelect(f *function, n *cc.UnaryExpression, t, 
 	case cc.UnaryExpressionDec: // "--" UnaryExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
-		panic(todo("", n.Position()))
+		p.unaryExpression(f, n, t, s, exprValue, flags)
 	case cc.UnaryExpressionDeref: // '*' CastExpression
 		panic(todo(""))
 	case cc.UnaryExpressionPlus: // '+' CastExpression
@@ -5837,7 +5913,7 @@ func (p *project) unaryExpressionVoid(f *function, n *cc.UnaryExpression, t, s c
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		panic(todo("", n.Position()))
+		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), s, exprVoid, flags)
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
@@ -6724,7 +6800,16 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t,
 	case cc.PostfixExpressionPrimary: // PrimaryExpression
 		p.primaryExpression(f, n.PrimaryExpression, t, s, mode, flags)
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
-		panic(todo(""))
+		switch n.Operand.Type().Kind() {
+		case cc.Ptr:
+			p.w("(*(*")
+			p.functionSignature(f, n.Operand.Type().Elem(), "")
+			p.w(")(unsafe.Pointer(")
+			p.postfixExpression(f, n, t, s, exprValue, flags)
+			p.w(")))")
+		default:
+			panic(todo("", n.Position(), n.Operand.Type()))
+		}
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
 		panic(todo(""))
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
@@ -7585,7 +7670,7 @@ func (p *project) primaryExpressionBool(f *function, n *cc.PrimaryExpression, t,
 		defer p.w(")")
 		p.expression(f, n.Expression, t, s, mode, flags|fOutermost)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo(""))
+		p.err(n, "statement expressions not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -7623,7 +7708,7 @@ func (p *project) primaryExpressionPSelect(f *function, n *cc.PrimaryExpression,
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		p.expression(f, n.Expression, t, s, mode, flags)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo(""))
+		p.err(n, "statement expressions not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -7655,7 +7740,7 @@ func (p *project) primaryExpressionSelect(f *function, n *cc.PrimaryExpression, 
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		panic(todo(""))
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo(""))
+		p.err(n, "statement expressions not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -7687,7 +7772,7 @@ func (p *project) primaryExpressionAddrOf(f *function, n *cc.PrimaryExpression, 
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		p.expression(f, n.Expression, t, s, mode, flags)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo(""))
+		p.err(n, "statement expressions not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -7719,7 +7804,7 @@ func (p *project) primaryExpressionFunc(f *function, n *cc.PrimaryExpression, t,
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		p.expression(f, n.Expression, t, s, mode, flags)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo(""))
+		p.err(n, "statement expressions not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -7767,7 +7852,7 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 		defer p.w(")")
 		p.expression(f, n.Expression, t, s, mode, flags|fOutermost)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo(""))
+		p.err(n, "statement expressions not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -7801,7 +7886,7 @@ func (p *project) primaryExpressionLValue(f *function, n *cc.PrimaryExpression, 
 		defer p.w(")")
 		p.expression(f, n.Expression, t, s, mode, flags|fOutermost)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		panic(todo(""))
+		p.err(n, "statement expressions not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -8370,11 +8455,57 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t,
 
 func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 	sv := f.switchCtx
+	sv2 := f.continueCtx
+	sv3 := f.breakCtx
 	f.switchCtx = 0
-	defer func() { f.switchCtx = sv }()
+	f.continueCtx = 0
+	f.breakCtx = 0
+	defer func() {
+		f.breakCtx = sv3
+		f.continueCtx = sv2
+		f.switchCtx = sv
+	}()
 	switch {
 	case f.block.isFlat:
-		panic(todo("", pos(n)))
+		p.w("%s", comment("\n", n))
+		switch n.Case {
+		case cc.IterationStatementWhile: // "while" '(' Expression ')' Statement
+			panic(todo(""))
+		case cc.IterationStatementDo: // "do" Statement "while" '(' Expression ')' ';'
+			panic(todo(""))
+		case cc.IterationStatementFor: // "for" '(' Expression ';' Expression ';' Expression ')' Statement
+			//	expr
+			// a:	if !expr2 goto c
+			//	stmt
+			// b: 	expr3 // label for continue
+			//	goto a
+			// c:
+			a := f.flatLabel()
+			b := f.flatLabel()
+			f.continueCtx = b
+			c := f.flatLabel()
+			f.breakCtx = c
+			if n.Expression != nil {
+				p.expression(f, n.Expression, n.Expression.Operand.Type(), nil, exprVoidSingle, fOutermost)
+			}
+			p.w("; __%d:", a)
+			if n.Expression2 != nil {
+				p.w("if !(")
+				p.expression(f, n.Expression2, n.Expression2.Operand.Type(), nil, exprBool, fOutermost)
+				p.w(") { goto __%d }", c)
+			}
+			p.w("; ")
+			p.statement(f, n.Statement, false)
+			p.w(";goto __%d; __%[1]d:", b)
+			if n.Expression3 != nil {
+				p.expression(f, n.Expression3, n.Expression3.Operand.Type(), nil, exprVoidSingle, fOutermost)
+			}
+			p.w(";goto __%d; __%d:", a, c)
+		case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
+			panic(todo(""))
+		default:
+			panic(todo("%v: internal error: %v", n.Position(), n.Case))
+		}
 	default:
 		p.w("%s", comment("\n", n))
 		switch n.Case {
@@ -8494,9 +8625,8 @@ func (p *project) expressionStatement(f *function, n *cc.ExpressionStatement) {
 
 func (p *project) labeledStatement(f *function, n *cc.LabeledStatement) {
 	if f.block.isFlat {
-		panic(todo(""))
-		//TODO p.labeledStatementFlat(f, n)
-		//TODO return
+		p.labeledStatementFlat(f, n)
+		return
 	}
 
 	switch n.Case {
