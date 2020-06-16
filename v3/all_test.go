@@ -690,7 +690,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"anon-1.c":        {}, //TODO nested field access
 		"pr41317.c":       {}, //TODO nested field access
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
-		"20000113-1.c":    {}, //TODO non-const bitfield initalizer
+		"20000113-1.c":    {}, //TODO non-const bitfield initializer
 		"20030714-1.c":    {}, //TODO select nested field
 		"20000722-1.c":    {}, //TODO composite literal
 		"20000801-3.c":    {}, //TODO designators
