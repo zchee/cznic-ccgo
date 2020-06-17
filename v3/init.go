@@ -22,7 +22,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 		switch n.Case {
 		case cc.InitializerExpr: // AssignmentExpression
 			p.w("%s", comment("", n.AssignmentExpression))
-			p.assignmentExpression(f, n.AssignmentExpression, t, nil, exprValue, fOutermost)
+			p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, fOutermost)
 		case cc.InitializerInitList: // '{' InitializerList ',' '}'
 			panic(todo("", n.Position(), n.Case))
 		default:
@@ -42,7 +42,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 		switch n.Case {
 		case cc.InitializerExpr: // AssignmentExpression
 			p.w("%s", comment("", n.AssignmentExpression))
-			p.assignmentExpression(f, n.AssignmentExpression, t, nil, exprValue, fOutermost)
+			p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, fOutermost)
 			return
 		case cc.InitializerInitList: // '{' InitializerList ',' '}'
 			// ok
