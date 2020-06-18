@@ -407,6 +407,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		"60_errors_and_warnings.c":    {}, // Not a standalone test. gcc fails.
 		"76_dollars_in_identifiers.c": {}, // `int $ = 10;` etc.
 		"77_push_pop_macro.c":         {}, //
+		"81_types.c":                  {}, // invalid function type cast
 		"93_integer_promotion.c":      {}, // The expected output does not agree with gcc.
 		"95_bitfields.c":              {}, // Included from 95_bitfields_ms.c
 		"95_bitfields_ms.c":           {}, // The expected output does not agree with gcc.
@@ -684,20 +685,22 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20000822-1.c": {}, // nested func
 		"20001009-2.c": {}, // asm
 		"20010122-1.c": {}, // __builtin_return_address
+		"20030323-1.c": {}, // __builtin_return_address
 
+		"20000113-1.c":    {}, //TODO non-const bitfield initializer
+		"20000703-1.c":    {}, //TODO statement expression
+		"20000722-1.c":    {}, //TODO composite literal
+		"20000801-3.c":    {}, //TODO designators
+		"20000917-1.c":    {}, //TODO composite literal
+		"20001203-2.c":    {}, //TODO statement expression
+		"20010123-1.c":    {}, //TODO composite literal
+		"20030714-1.c":    {}, //TODO select nested field
 		"20040411-1.c":    {}, //TODO VLA
 		"20040423-1.c":    {}, //TODO VLA
 		"anon-1.c":        {}, //TODO nested field access
 		"pr41317.c":       {}, //TODO nested field access
+		"pr42570":         {}, //TODO uint8_t foo[1][0];
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
-		"20000113-1.c":    {}, //TODO non-const bitfield initializer
-		"20030714-1.c":    {}, //TODO select nested field
-		"20000722-1.c":    {}, //TODO composite literal
-		"20000801-3.c":    {}, //TODO designators
-		"20000703-1.c":    {}, //TODO statement expression
-		"20001203-2.c":    {}, //TODO statement expression
-		"20000917-1.c":    {}, //TODO composite literal
-		"20010123-1.c":    {}, //TODO composite literal
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -889,6 +892,10 @@ func testSQLite(t *testing.T, dir string) {
 				}
 				t.Errorf("%v", err)
 				r = false
+			}
+			if *oTraceF {
+				b, _ := ioutil.ReadFile(main)
+				fmt.Printf("\n----\n%s\n----\n", b)
 			}
 		}()
 

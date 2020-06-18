@@ -80,9 +80,9 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 			case tn < m:
 				panic(todo("", pos(n), t.Len(), m))
 			case tn == m:
-				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(t), p.stringLiteral(x))
+				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.stringLiteral(x))
 			default: // tn > m
-				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(t), p.stringLiteralString(s+strings.Repeat("\x00", int(tn-m))))
+				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.stringLiteralString(s+strings.Repeat("\x00", int(tn-m))))
 			}
 			return
 		}
@@ -111,12 +111,12 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 
 		if x, ok := v.(cc.WideStringValue); ok {
 			s := []rune(cc.StringID(x).String())
-			n := len(s) + 1
-			if t.Len() != uintptr(n) {
+			nn := len(s) + 1
+			if t.Len() != uintptr(nn) {
 				panic(todo(""))
 			}
 
-			p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(t), p.wideStringLiteral(x))
+			p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.wideStringLiteral(x))
 			return
 		}
 	}
@@ -169,7 +169,7 @@ func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.
 }
 
 func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc.Type) {
-	p.w(" %s{", p.typ(t))
+	p.w(" %s{", p.typ(n, t))
 	idx := []int{0}
 	var m map[uintptr][]string
 	var bm map[uintptr][]cc.Field
@@ -253,7 +253,7 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 }
 
 func (p *project) initializerListArray(f *function, n *cc.InitializerList, t cc.Type) {
-	p.w(" %s{", p.typ(t))
+	p.w(" %s{", p.typ(n, t))
 	et := t.Elem()
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
