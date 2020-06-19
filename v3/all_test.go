@@ -876,6 +876,18 @@ func testSQLite(t *testing.T, dir string) {
 	ccgoArgs := []string{
 		"ccgo",
 		"-DLONGDOUBLE_TYPE=double",
+		//TODO "-DSQLITE_DEBUG",
+		//TODO "-DSQLITE_DEFAULT_MEMSTATUS=0",
+		//TODO "-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1",
+		//TODO "-DSQLITE_DQS=0",
+		//TODO "-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
+		//TODO "-DSQLITE_MAX_EXPR_DEPTH=0",
+		//TODO "-DSQLITE_MEMDEBUG",
+		//TODO "-DSQLITE_OMIT_DECLTYPE",
+		//TODO "-DSQLITE_OMIT_DEPRECATED",
+		//TODO "-DSQLITE_OMIT_PROGRESS_CALLBACK",
+		//TODO "-DSQLITE_OMIT_SHARED_CACHE",
+		//TODO "-DSQLITE_THREADSAFE=0",
 		"-ccgo-long-double-is-double", // stddef.h
 		"-o", main,
 		filepath.Join(dir, "shell.c"),

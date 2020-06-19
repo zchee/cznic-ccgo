@@ -116,10 +116,8 @@ func tokenSeparator(n cc.Node) (r string) {
 	return tok.Sep.String()
 }
 
-type tld struct {
+type tld struct { //TODO plain string
 	name string // Can differ from the original one.
-
-	hasInitilaizer bool
 }
 
 type block struct {
@@ -971,6 +969,8 @@ type project struct {
 	tsName      string
 	tsNameP     string
 	tsOffs      map[cc.StringID]uintptr
+	typedefs    map[string]struct{}
+	wanted      map[*cc.Declarator]struct{}
 
 	isMain bool
 }
@@ -989,6 +989,8 @@ func newProject(t *task) (*project, error) {
 		tlds:       map[*cc.Declarator]*tld{},
 		ts4Offs:    map[cc.StringID]uintptr{},
 		tsOffs:     map[cc.StringID]uintptr{},
+		typedefs:   map[string]struct{}{},
+		wanted:     map[*cc.Declarator]struct{}{},
 	}
 	if err := p.layout(); err != nil {
 		return nil, err
@@ -1155,7 +1157,7 @@ func (p *project) layoutStaticLocals() error {
 						break
 					}
 
-					p.tlds[x] = &tld{name: p.scope.take(x.Name().String()), hasInitilaizer: x.HasInitializer()}
+					p.tlds[x] = &tld{name: p.scope.take(x.Name().String())}
 				}
 				return true
 			})
@@ -1402,27 +1404,26 @@ func (p *project) layoutTLDs() error {
 		}
 	}
 	var a []*cc.Declarator
-	for _, v := range p.task.asts {
+	for _, ast := range p.task.asts {
 		a = a[:0]
-		for k := range v.TLD {
-			a = append(a, k)
+		for d := range ast.TLD {
+			if d.IsFunctionPrototype() {
+				continue
+			}
+
+			a = append(a, d)
+			p.wanted[d] = struct{}{}
 		}
 		sort.Slice(a, func(i, j int) bool {
 			return a[i].NameTok().Seq() < a[j].NameTok().Seq()
 		})
 		for _, d := range a {
 			isMain := false
-			//trc("", pos(d), d.Name(), isMain, d.IsTypedefName, d.Read, d.Write, d.IsExtern()) //TODO-
 			if d.Name() == idMain && d.Linkage == cc.External {
 				isMain = true
 				p.isMain = true
 				p.scope.take("main")
 			}
-			if !isMain && !d.IsTypedefName && (d.Read == 0 && d.Write == 0 || d.IsExtern()) || d.IsFunctionPrototype() {
-				//trc("", pos(d), d.Name(), isMain, d.IsTypedefName, d.Read, d.Write, d.IsExtern()) //TODO-
-				continue
-			}
-
 			switch d.Type().Kind() {
 			case cc.Struct, cc.Union:
 				p.checkAlignAttr(d.Type())
@@ -1430,35 +1431,41 @@ func (p *project) layoutTLDs() error {
 			nm := d.Name()
 			switch d.Linkage {
 			case cc.External:
-				ex, ok := p.externs[nm]
-				if !ok { // First definition.
-					name := d.Name().String()
-					switch export {
-					case doNotExport:
-						// nop
-					case exportCapitalize:
-						name = capitalize(name)
-					case exportPrefix:
-						name = p.task.exportExtern + name
-					}
-					name = p.scope.take(name)
-					if isMain {
-						p.mainName = name
-					}
-					tld := &tld{name: name, hasInitilaizer: d.HasInitializer()}
-					p.externs[nm] = tld
-					p.tlds[d] = tld
-					break
+				if p.externs[nm] != nil {
+					panic(todo(""))
 				}
 
-				p.tlds[d] = ex
+				name := d.Name().String()
+				switch export {
+				case doNotExport:
+					// nop
+				case exportCapitalize:
+					name = capitalize(name)
+				case exportPrefix:
+					name = p.task.exportExtern + name
+				}
+				name = p.scope.take(name)
+				if isMain {
+					p.mainName = name
+				}
+				tld := &tld{name: name}
+				p.externs[nm] = tld
+				for _, v := range ast.Scope[nm] {
+					if d, ok := v.(*cc.Declarator); ok {
+						p.tlds[d] = tld
+					}
+				}
 			case cc.Internal:
 				name := nm.String()
 				if token.IsExported(name) {
 					name = "s" + name
 				}
-				p.tlds[d] = &tld{name: p.scope.take(name), hasInitilaizer: d.HasInitializer()}
-				//trc("", pos(d), d.Name(), isMain, d.IsTypedefName, d.Read, d.Write, d.IsExtern()) //TODO-
+				tld := &tld{name: p.scope.take(name)}
+				for _, v := range ast.Scope[nm] {
+					if d, ok := v.(*cc.Declarator); ok {
+						p.tlds[d] = tld
+					}
+				}
 			case cc.None:
 				if d.IsTypedefName {
 					name := nm.String()
@@ -1466,13 +1473,15 @@ func (p *project) layoutTLDs() error {
 						break
 					}
 
-					p.tlds[d] = &tld{name: p.scope.take(name)}
-					break
+					tld := &tld{name: p.scope.take(name)}
+					for _, v := range ast.Scope[nm] {
+						if d, ok := v.(*cc.Declarator); ok {
+							p.tlds[d] = tld
+						}
+					}
 				}
-
-				panic(todo(""))
 			default:
-				panic(todo("", d.Linkage))
+				panic(todo("", pos(d), nm, d.Linkage))
 			}
 		}
 	}
@@ -1745,7 +1754,7 @@ func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
 
 func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, topDecl bool) {
 	if f == nil {
-		p.tld(f, n, sep)
+		p.tld(f, n, sep, false)
 		return
 	}
 
@@ -2798,15 +2807,24 @@ func nonZeroUintptr(n uintptr) string {
 	return fmt.Sprintf("%+d", n)
 }
 
-func (p *project) tld(f *function, n *cc.InitDeclarator, sep string) {
+func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal bool) {
 	d := n.Declarator
+	if _, ok := p.wanted[d]; !ok && !staticLocal {
+		return
+	}
+
 	tld := p.tlds[d]
-	if tld == nil || d.IsFunctionPrototype() { // Dead declaration.
+	if tld == nil { // Dead declaration.
 		return
 	}
 
 	t := d.Type()
 	if d.IsTypedefName {
+		if _, ok := p.typedefs[tld.name]; ok {
+			return
+		}
+
+		p.typedefs[tld.name] = struct{}{}
 		if t.Kind() != cc.Void {
 			p.w("%stype %s = %s; /* %v */", sep, tld.name, p.typ(n, t), pos(n))
 		}
@@ -2868,7 +2886,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 
 func (p *project) flushStaticTLDs() {
 	for _, v := range p.staticQueue {
-		p.tld(nil, v, "\n")
+		p.tld(nil, v, "\n", true)
 	}
 	p.staticQueue = nil
 }
