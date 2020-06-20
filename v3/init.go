@@ -130,17 +130,18 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 
 	switch t.Kind() {
 	case cc.Array:
-		p.initializerListArray(f, n.InitializerList, t)
+		p.initializerListArray(f, n, t)
 	case cc.Struct:
-		p.initializerListStruct(f, n.InitializerList, t)
+		p.initializerListStruct(f, n, t)
 	case cc.Union:
-		p.initializerListUnion(f, n.InitializerList, t)
+		p.initializerListUnion(f, n, t)
 	default:
 		panic(todo("", n.Position(), k, t))
 	}
 }
 
-func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.Type) {
+func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Type) {
+	n := n0.InitializerList
 	idx := []int{0}
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
@@ -168,8 +169,9 @@ func (p *project) initializerListUnion(f *function, n *cc.InitializerList, t cc.
 	}
 }
 
-func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc.Type) {
-	p.w(" %s{", p.typ(n, t))
+func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Type) {
+	n := n0.InitializerList
+	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
 	idx := []int{0}
 	var m map[uintptr][]string
 	var bm map[uintptr][]cc.Field
@@ -249,11 +251,12 @@ func (p *project) initializerListStruct(f *function, n *cc.InitializerList, t cc
 		p.w("%s", comma)
 		idx[0]++
 	}
-	p.w("}")
+	p.w("%s}", comment("", &n0.Token3))
 }
 
-func (p *project) initializerListArray(f *function, n *cc.InitializerList, t cc.Type) {
-	p.w(" %s{", p.typ(n, t))
+func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Type) {
+	n := n0.InitializerList
+	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
 	et := t.Elem()
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
@@ -268,7 +271,7 @@ func (p *project) initializerListArray(f *function, n *cc.InitializerList, t cc.
 		}
 		p.w(",")
 	}
-	p.w("}")
+	p.w("%s}", comment("", &n0.Token3))
 }
 
 func isAggregateType(t cc.Type) bool {

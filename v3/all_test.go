@@ -887,7 +887,7 @@ func testSQLite(t *testing.T, dir string) {
 		//TODO "-DSQLITE_OMIT_DEPRECATED",
 		//TODO "-DSQLITE_OMIT_PROGRESS_CALLBACK",
 		//TODO "-DSQLITE_OMIT_SHARED_CACHE",
-		//TODO "-DSQLITE_THREADSAFE=0",
+		"-DSQLITE_THREADSAFE=0",
 		"-ccgo-long-double-is-double", // stddef.h
 		"-o", main,
 		filepath.Join(dir, "shell.c"),

@@ -23,6 +23,7 @@ import (
 
 var (
 	idAligned = cc.String("aligned") // int __attribute__ ((aligned (8))) foo;
+	idComma   = cc.String(",")
 	idMain    = cc.String("main")
 	idVaArg   = cc.String("__ccgo_va_arg")
 	idVaEnd   = cc.String("__ccgo_va_end")
@@ -129,7 +130,6 @@ type block struct {
 	parent     *block
 	scope      scope
 
-	isFlat  bool
 	topDecl bool // Declare locals at block start to avoid "jumps over declaration".
 }
 
@@ -143,6 +143,8 @@ func newBlock(parent *block, n *cc.CompoundStatement, decls []*cc.Declaration, p
 		topDecl: topDecl,
 	}
 }
+
+func (b *block) isFlat() bool { return b.block.IsJumpTarget() }
 
 type local struct {
 	name string
@@ -891,16 +893,6 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 		}
 		local.name = block.scope.take(d.Name().String())
 	}
-	if !n.IsJumpTarget() {
-		return
-	}
-
-	for _, v := range n.Children() {
-		if v.IsJumpTarget() {
-			block.isFlat = true
-			return
-		}
-	}
 }
 
 func (f *function) layoutLocals(parent *block, n *cc.CompoundStatement, params []*cc.Parameter) {
@@ -1077,6 +1069,7 @@ func (p *project) layout() error {
 }
 
 func (p *project) layoutEnums() error {
+	return nil //TODO
 	m := map[cc.StringID]cc.Value{}
 	var enumList []*cc.EnumSpecifier
 	enums := map[*cc.EnumSpecifier]*enumSpec{}
@@ -1763,7 +1756,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 		return
 	}
 
-	if tld := p.tlds[d]; tld != nil { // static local
+	if tld := p.tlds[d]; tld != nil && !topDecl { // static local
 		p.staticQueue = append(p.staticQueue, n)
 		return
 	}
@@ -6555,7 +6548,7 @@ func (p *project) postfixExpressionPSelectIndexNormal(f *function, n *cc.Postfix
 	case pe.Kind() == cc.Array:
 		if flags&fOutermost == 0 {
 			p.w("(")
-			p.w(")")
+			defer p.w(")")
 		}
 		p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
@@ -6568,7 +6561,7 @@ func (p *project) postfixExpressionPSelectIndexNormal(f *function, n *cc.Postfix
 	default:
 		if flags&fOutermost == 0 {
 			p.w("(")
-			p.w(")")
+			defer p.w(")")
 		}
 		p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
@@ -6618,6 +6611,7 @@ func (p *project) postfixExpressionPSelectPSelect(f *function, n *cc.PostfixExpr
 }
 
 func (p *project) postfixExpressionPSelectPSelectNormal(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	// PostfixExpression "->" IDENTIFIER
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo(""))
@@ -8256,7 +8250,15 @@ func (p *project) intConst(n cc.Node, src string, op cc.Operand, to cc.Type, fla
 	switch x := op.Value().(type) {
 	case cc.Int64Value:
 		if x < 0 {
-			panic(todo(""))
+			sn, err := strconv.ParseInt(src, 0, 64)
+			snValid := err == nil
+			if snValid && sn == int64(x) { // Prefer original form
+				p.w("%s", src)
+				return
+			}
+
+			p.w("%d", x)
+			return
 		}
 
 		on = uint64(x)
@@ -8605,7 +8607,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 	p.w("%s", comment("\n", n))
 	switch n.Case {
 	case cc.IterationStatementWhile: // "while" '(' Expression ')' Statement
-		if f.block.isFlat && isJumpTarget(n.Statement) {
+		if f.block.isFlat() && isJumpTarget(n.Statement) {
 			panic(todo("", pos(n)))
 		}
 
@@ -8613,7 +8615,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 		p.statement(f, n.Statement, true, false)
 	case cc.IterationStatementDo: // "do" Statement "while" '(' Expression ')' ';'
-		if f.block.isFlat && isJumpTarget(n.Statement) {
+		if f.block.isFlat() && isJumpTarget(n.Statement) {
 			// a:	stmt
 			// b:	if expr goto a // b is the continue label
 			a := f.flatLabel()
@@ -8632,7 +8634,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 		p.statement(f, n.Statement, true, false)
 	case cc.IterationStatementFor: // "for" '(' Expression ';' Expression ';' Expression ')' Statement
-		if f.block.isFlat && isJumpTarget(n.Statement) {
+		if f.block.isFlat() && isJumpTarget(n.Statement) {
 			//	expr
 			// a:	if !expr2 goto c
 			//	stmt
@@ -8707,7 +8709,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			p.statement(f, n.Statement, true, false)
 		}
 	case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
-		if f.block.isFlat {
+		if f.block.isFlat() {
 			panic(todo(""))
 		}
 
@@ -8724,7 +8726,7 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 		sv := f.ifCtx
 		f.ifCtx = n
 		defer func() { f.ifCtx = sv }()
-		if f.block.isFlat {
+		if f.block.isFlat() {
 			// if !expr goto a
 			// stmt
 			// a:
@@ -8745,7 +8747,7 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 		sv := f.ifCtx
 		f.ifCtx = n
 		defer func() { f.ifCtx = sv }()
-		if f.block.isFlat && (isJumpTarget(n.Statement) || isJumpTarget(n.Statement2)) {
+		if f.block.isFlat() && (isJumpTarget(n.Statement) || isJumpTarget(n.Statement2)) {
 			// if !expr goto a
 			// stmt
 			// goto b
@@ -8768,11 +8770,16 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 		p.statement(f, n.Statement, true, false)
 		p.w(" else ")
-		p.statement(f, n.Statement2, true, false)
+		switch {
+		case p.isIfStmt(n.Statement2):
+			p.statement(f, n.Statement2, false, true)
+		default:
+			p.statement(f, n.Statement2, true, false)
+		}
 	case cc.SelectionStatementSwitch: // "switch" '(' Expression ')' Statement
 		sv := f.switchCtx
 		defer func() { f.switchCtx = sv }()
-		if f.block.isFlat && isJumpTarget(n.Statement) {
+		if f.block.isFlat() && isJumpTarget(n.Statement) {
 			f.switchCtx = inSwitchFlat
 			p.flatSwitch(f, n)
 			break
@@ -8785,6 +8792,19 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
+}
+
+func (p *project) isIfStmt(n *cc.Statement) bool {
+	if n.Case != cc.StatementSelection {
+		return false
+	}
+
+	switch n.SelectionStatement.Case {
+	case cc.SelectionStatementIf, cc.SelectionStatementIfElse:
+		return true
+	}
+
+	return false
 }
 
 func (p *project) flatSwitch(f *function, n *cc.SelectionStatement) {
@@ -8847,7 +8867,7 @@ func (p *project) expressionStatement(f *function, n *cc.ExpressionStatement) {
 }
 
 func (p *project) labeledStatement(f *function, n *cc.LabeledStatement) {
-	if f.block.isFlat { //TODO merge with ...Flat below
+	if f.block.isFlat() { //TODO merge with ...Flat below
 		p.labeledStatementFlat(f, n)
 		return
 	}

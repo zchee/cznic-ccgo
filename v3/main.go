@@ -6,6 +6,102 @@
 
 package main // import "modernc.org/ccgo/v3"
 
+//TODO define and use all tagged struct types, including inner ones, for example SQLite's SrcList_item.
+
+//TODO turn return conditionalExpression so it has no closures.
+
+//TODO merge _equivalent_ typedefs into one Go type definition.
+
+//TODO merge _equivalent_ tagged struct/unions into one Go type definition.
+
+//TODO define and restore simple named constants. Having
+//
+//	#define FOO 42
+//	...
+//	case FOO:
+//
+// we do not yet define FOO and generate
+//
+//	case 42:
+
+//TODO do not generate a terminating semicolon for empty statements.
+
+//TODO replace
+//
+//	n = func() int32 {
+//		if nKey1 < nKey2 {
+//			return nKey1
+//		}
+//		return nKey2
+//	}()
+//
+// by
+//
+//	if nKey1 < nKey2 {
+//		n = nKey1
+//	} else {
+//		n = nKey2
+//	}
+
+//TODO replace
+//
+//	var sqlite3_data_directory uintptr = uintptr(0) /* sqlite3.c:156345:17 */
+//
+// by
+//
+//	var sqlite3_data_directory uintptr = 0 /* sqlite3.c:156345:17 */
+//
+// or
+//
+//	var sqlite3_data_directory = uintptr(0) /* sqlite3.c:156345:17 */
+
+//TODO drop unreferenced declarators having a __ prefix.
+//
+//	func __bswap_16(tls *crt.TLS, __bsx uint16) uint16 { /* byteswap.h:34:1: */
+
+//TODO BUG wrong output
+//
+//	typedef struct sqlite3 sqlite3;
+//
+//	type sqlite3 = struct{} /* sqlite3.h:249:24 */
+
+//TODO turn comments like
+//
+//	/*
+//	** This is the callback routine that the shell
+//	** invokes for each row of a query result.
+//	 */
+//
+// into
+//
+//	// This is the callback routine that the shell
+//	// invokes for each row of a query result.
+
+//TODO turn
+//
+//	if (*ShellState)(unsafe.Pointer(pState)).expert.pExpert != 0 {
+//	} else {
+//		crt.X__assert_fail(tls, ts+7572, ts+725, uint32(11438), uintptr(unsafe.Pointer(&__func__15)))
+//	}
+//
+// into
+//
+//	if !((*ShellState)(unsafe.Pointer(pState)).expert.pExpert != 0) {
+//		crt.X__assert_fail(tls, ts+7572, ts+725, uint32(11438), uintptr(unsafe.Pointer(&__func__15)))
+//	}
+
+//TODO add text snippets to ts+1234
+
+//TODO drop all non-referenced declarators unless forced by a command line flag.
+
+//TODO turn single line comments
+//
+//	/* --help lists all file-controls */
+//
+// ending in a newline into
+//
+//	// --help lists all file-controls
+
 import (
 	"bufio"
 	"fmt"
