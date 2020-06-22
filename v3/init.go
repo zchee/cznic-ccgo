@@ -142,6 +142,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 
 func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Type) {
 	n := n0.InitializerList
+	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
 	idx := []int{0}
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
@@ -156,7 +157,6 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 		ft := fld.Type()
 		if ft.IsBitFieldType() {
 			panic(todo(""))
-			//TODO panic(todo("bit fields not supported"))
 		}
 
 		switch {
@@ -167,6 +167,7 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 		}
 		idx[0]++
 	}
+	p.w("%s}", comment("", &n0.Token3))
 }
 
 func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Type) {
