@@ -1226,11 +1226,17 @@ func (p *project) structLiteral(t cc.Type) string {
 	switch t.Kind() {
 	case cc.Struct:
 		//trc("", dumpLayout(t))
-		offs, m := p.structLayout(t)
+		info := p.structLayout(t)
 		b.WriteString("struct {")
-		for _, off := range offs {
-			flds := m[off]
+		for _, off := range info.offs {
+			flds := info.flds[off]
 			f := flds[0]
+			switch pad := info.padBefore[f]; {
+			case pad < 0:
+				continue
+			case pad > 0:
+				fmt.Fprintf(&b, "_ [%d]byte;", pad)
+			}
 			switch {
 			case f.IsBitField():
 				var a []string
@@ -1242,12 +1248,7 @@ func (p *project) structLiteral(t cc.Type) string {
 				}
 				fmt.Fprintf(&b, "%s uint%d /* %s */;", p.bitFieldName(f), f.BitFieldBlockWidth(), strings.Join(a, ", "))
 			default:
-				switch {
-				case len(flds) != 1:
-					panic(todo("%v\n%v", off, dumpLayout(t)))
-				default:
-					fmt.Fprintf(&b, "%s %s;", p.fieldName2(f), p.typ(nil, f.Type()))
-				}
+				fmt.Fprintf(&b, "%s %s;", p.fieldName2(f), p.typ(nil, f.Type()))
 			}
 		}
 		b.WriteByte('}')
@@ -1276,19 +1277,52 @@ func (p *project) structLiteral(t cc.Type) string {
 	return b.String()
 }
 
-func (p *project) structLayout(t cc.Type) (o []uintptr, m map[uintptr][]cc.Field) {
+type structInfo struct {
+	offs      []uintptr
+	flds      map[uintptr][]cc.Field
+	padBefore map[cc.Field]int
+}
+
+func (p *project) structLayout(t cc.Type) *structInfo {
 	nf := t.NumField()
-	m = map[uintptr][]cc.Field{}
+	flds := map[uintptr][]cc.Field{}
 	for idx := []int{0}; idx[0] < nf; idx[0]++ {
 		f := t.FieldByIndex(idx)
 		off := f.Offset()
-		m[off] = append(m[off], f)
+		flds[off] = append(flds[off], f)
 	}
-	for k := range m {
-		o = append(o, k)
+	var offs []uintptr
+	for k := range flds {
+		offs = append(offs, k)
 	}
-	sort.Slice(o, func(i, j int) bool { return o[i] < o[j] })
-	return o, m
+	sort.Slice(offs, func(i, j int) bool { return offs[i] < offs[j] })
+	var pads map[cc.Field]int
+	var pos uintptr
+	for i, off := range offs {
+		f := flds[off][0]
+		ft := f.Type()
+		pos = roundup(pos, uintptr(ft.Align()))
+		if i > 0 {
+			if p := int(off - pos); p != 0 {
+				if pads == nil {
+					pads = map[cc.Field]int{}
+				}
+				pads[f] = p
+				pos = off
+			}
+		}
+		switch {
+		case ft.IsBitFieldType():
+			pos += uintptr(f.BitFieldBlockWidth()) >> 3
+		default:
+			pos += ft.Size()
+		}
+	}
+	return &structInfo{
+		offs:      offs,
+		flds:      flds,
+		padBefore: pads,
+	}
 }
 
 func (p *project) bitFieldName(f cc.Field) string {
