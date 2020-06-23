@@ -136,10 +136,10 @@ func dumpLayout(t cc.Type) string {
 				bf = bfbf.Name()
 			}
 		}
-		a = append(a, fmt.Sprintf("%3d: %*q: BitFieldOffset %3v, BitFieldWidth %3v, IsBitField %5v, Mask: %#016x, off: %3v, pad %2v, BitFieldBlockWidth: %2d, BitFieldBlockFirst: %s",
+		a = append(a, fmt.Sprintf("%3d: %*q: BitFieldOffset %3v, BitFieldWidth %3v, IsBitField %5v, Mask: %#016x, off: %3v, pad %2v, BitFieldBlockWidth: %2d, BitFieldBlockFirst: %s, %v",
 			i, w+2, f.Name(), f.BitFieldOffset(), f.BitFieldWidth(),
 			f.IsBitField(), f.Mask(), f.Offset(), f.Padding(),
-			f.BitFieldBlockWidth(), bf,
+			f.BitFieldBlockWidth(), bf, f.Type(),
 		))
 	}
 	return "\n" + strings.Join(a, "\n")

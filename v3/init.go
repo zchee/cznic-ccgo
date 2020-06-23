@@ -176,6 +176,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 	idx := []int{0}
 	var m map[uintptr][]string
 	var bm map[uintptr][]cc.Field
+	var offs []uintptr
 	nvalues := 0
 	for list := n; list != nil; list = list.InitializerList {
 		if list.Designation != nil {
@@ -189,13 +190,15 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		}
 		nvalues++
 		if fld.IsBitField() {
-			if !fld.BitFieldBlockFirst().IsBitField() {
-				panic(todo("\n%s", dumpLayout(t)))
-			}
-
 			if m == nil {
 				m = map[uintptr][]string{}
-				bm = p.bitFields(t)
+				offs, bm = p.structLayout(t)
+				for _, off := range offs {
+					a := bm[off]
+					if f := a[0]; f.IsBitField() && !f.BitFieldBlockFirst().IsBitField() {
+						panic(todo("\n%s", dumpLayout(t)))
+					}
+				}
 			}
 			init := list.Initializer
 			if init.Case != cc.InitializerExpr {

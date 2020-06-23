@@ -6,6 +6,8 @@
 
 package main // import "modernc.org/ccgo/v3"
 
+//TODO emit optionally struct/union layout verifying code
+
 //TODO define and use all tagged struct types, including inner ones, for example SQLite's SrcList_item.
 
 //TODO turn return conditionalExpression so it has no closures.
