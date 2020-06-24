@@ -44,12 +44,6 @@ package main // import "modernc.org/ccgo/v3"
 //
 //	func __bswap_16(tls *crt.TLS, __bsx uint16) uint16 { /* byteswap.h:34:1: */
 
-//TODO BUG wrong output
-//
-//	typedef struct sqlite3 sqlite3;
-//
-//	type sqlite3 = struct{} /* sqlite3.h:249:24 */
-
 //TODO turn comments like
 //
 //	/*

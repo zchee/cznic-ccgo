@@ -12,7 +12,7 @@ import (
 )
 
 // 6.7.8 Initialization
-func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
+func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tld) {
 	// 11: The initializer for a scalar shall be a single expression, optionally
 	// enclosed in braces. The initial value of the object is that of the
 	// expression (after conversion); the same type constraints and conversions as
@@ -22,7 +22,13 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 		switch n.Case {
 		case cc.InitializerExpr: // AssignmentExpression
 			p.w("%s", comment("", n.AssignmentExpression))
-			p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, fOutermost)
+			switch {
+			case tld != nil && t.Kind() == cc.Ptr && n.AssignmentExpression.Operand.Value() == nil:
+				tld.patches = append(tld.patches, initPatch{t, n})
+				p.w(" 0 ")
+			default:
+				p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, fOutermost)
+			}
 		case cc.InitializerInitList: // '{' InitializerList ',' '}'
 			panic(todo("", n.Position(), n.Case))
 		default:
@@ -130,17 +136,17 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type) {
 
 	switch t.Kind() {
 	case cc.Array:
-		p.initializerListArray(f, n, t)
+		p.initializerListArray(f, n, t, tld)
 	case cc.Struct:
-		p.initializerListStruct(f, n, t)
+		p.initializerListStruct(f, n, t, tld)
 	case cc.Union:
-		p.initializerListUnion(f, n, t)
+		p.initializerListUnion(f, n, t, tld)
 	default:
 		panic(todo("", n.Position(), k, t))
 	}
 }
 
-func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Type) {
+func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
 	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
 	idx := []int{0}
@@ -163,14 +169,14 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 		case isAggregateType(ft) && n.Initializer.Case != cc.InitializerInitList && ft.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
 			panic(todo("", n.Position(), t, ft))
 		default:
-			p.initializer(f, n.Initializer, ft)
+			p.initializer(f, n.Initializer, ft, tld)
 		}
 		idx[0]++
 	}
 	p.w("%s}", comment("", &n0.Token3))
 }
 
-func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Type) {
+func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
 	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
 	idx := []int{0}
@@ -250,7 +256,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 			if keys {
 				p.w("%s: ", p.fieldName(fld.Name()))
 			}
-			p.initializer(f, list.Initializer, ft)
+			p.initializer(f, list.Initializer, ft, tld)
 		}
 		p.w("%s", comma)
 		idx[0]++
@@ -258,7 +264,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 	p.w("%s}", comment("", &n0.Token3))
 }
 
-func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Type) {
+func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
 	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
 	et := t.Elem()
@@ -271,7 +277,7 @@ func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Typ
 		case isAggregateType(et) && n.Initializer.Case != cc.InitializerInitList && et.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
 			panic(todo(""))
 		default:
-			p.initializer(f, n.Initializer, et)
+			p.initializer(f, n.Initializer, et, tld)
 		}
 		p.w(",")
 	}
