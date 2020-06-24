@@ -189,6 +189,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		}
 		nvalues++
 		if fld.IsBitField() {
+			panic(todo(""))
 			if m == nil {
 				m = map[uintptr][]string{}
 				for _, off := range info.offs {
@@ -217,7 +218,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		idx[0]++
 	}
 	idx[0] = 0
-	keys := nvalues != t.NumField() || len(info.padBefore) != 0
+	keys := nvalues != t.NumField() || len(info.padBefore) != 0 || info.padAfter != 0
 	for list := n; list != nil; list = list.InitializerList {
 		if list.Designation != nil {
 			panic(todo("", list.Position(), t))
@@ -232,6 +233,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		comma := ","
 		switch {
 		case fld.IsBitField():
+			panic(todo(""))
 			off := fld.Offset()
 			if info.flds[off][0].Name() != fld.Name() {
 				comma = ""

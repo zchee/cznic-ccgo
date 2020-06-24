@@ -6,8 +6,6 @@
 
 package main // import "modernc.org/ccgo/v3"
 
-//TODO BUG bf-sign-2.c produces final extra field
-
 //TODO emit optionally struct/union layout verifying code
 
 //TODO define and use all tagged struct types, including inner ones, for example SQLite's SrcList_item.
@@ -29,23 +27,6 @@ package main // import "modernc.org/ccgo/v3"
 //	case 42:
 
 //TODO do not generate a terminating semicolon for empty statements.
-
-//TODO replace
-//
-//	n = func() int32 {
-//		if nKey1 < nKey2 {
-//			return nKey1
-//		}
-//		return nKey2
-//	}()
-//
-// by
-//
-//	if nKey1 < nKey2 {
-//		n = nKey1
-//	} else {
-//		n = nKey2
-//	}
 
 //TODO replace
 //

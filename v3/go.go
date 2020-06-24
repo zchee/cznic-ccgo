@@ -1225,7 +1225,6 @@ func (p *project) structLiteral(t cc.Type) string {
 	var b strings.Builder
 	switch t.Kind() {
 	case cc.Struct:
-		//trc("", dumpLayout(t))
 		info := p.structLayout(t)
 		b.WriteString("struct {")
 		for _, off := range info.offs {
@@ -1250,6 +1249,9 @@ func (p *project) structLiteral(t cc.Type) string {
 			default:
 				fmt.Fprintf(&b, "%s %s;", p.fieldName2(f), p.typ(nil, f.Type()))
 			}
+		}
+		if info.padAfter != 0 {
+			fmt.Fprintf(&b, "_ [%d]byte;", info.padAfter)
 		}
 		b.WriteByte('}')
 	case cc.Union:
@@ -1281,6 +1283,7 @@ type structInfo struct {
 	offs      []uintptr
 	flds      map[uintptr][]cc.Field
 	padBefore map[cc.Field]int
+	padAfter  int
 }
 
 func (p *project) structLayout(t cc.Type) *structInfo {
@@ -1322,6 +1325,7 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 		offs:      offs,
 		flds:      flds,
 		padBefore: pads,
+		padAfter:  int(t.Size() - pos),
 	}
 }
 

@@ -142,5 +142,5 @@ func dumpLayout(t cc.Type) string {
 			f.BitFieldBlockWidth(), bf, f.Type(),
 		))
 	}
-	return "\n" + strings.Join(a, "\n")
+	return t.String() + "\n" + strings.Join(a, "\n")
 }
