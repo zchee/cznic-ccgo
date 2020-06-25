@@ -36,15 +36,15 @@ type exprMode int
 
 const (
 	_              exprMode = iota
-	exprAddrOf              // &foo as uinptr
-	exprBool                // foo != 0
+	exprAddrOf              // &foo as uinptr (must be static)
+	exprBool                // foo in foo != 0
 	exprCondInit            // foo or bar in int i = x ? foo : bar;
 	exprCondReturn          // foo or bar in return x ? foo : bar;
 	exprFunc                // foo in foo(bar)
 	exprLValue              // foo in foo = bar
 	exprPSelect             // foo in foo->bar
 	exprSelect              // foo in foo.bar
-	exprValue               // foo
+	exprValue               // foo in bar = foo
 	exprVoid                //
 )
 
@@ -332,6 +332,8 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 				if t.Kind() == cc.Struct || t.Kind() == cc.Union {
 					f.pin(x)
 				}
+			case x.Linkage == cc.None && x.Type().Kind() == cc.Ptr && x.Type().Elem().Kind() == cc.Function:
+				f.pin(x)
 			}
 		case *cc.CastExpression:
 			switch x.Case {
@@ -474,13 +476,17 @@ func mustPinStruct(t cc.Type) bool {
 			return true
 		}
 
-		switch f.Type().Kind() {
+		switch ft := f.Type(); ft.Kind() {
 		case cc.Struct:
 			if mustPinStruct(f.Type()) {
 				return true
 			}
 		case cc.Array:
 			return true
+		case cc.Ptr:
+			if ft.Elem().Kind() == cc.Function {
+				return true
+			}
 		}
 	}
 	return false
@@ -2143,13 +2149,20 @@ func (p *project) declaratorFuncNormal(f *function, d *cc.Declarator, t cc.Type,
 		if u.Kind() == cc.Function {
 			if local := f.locals[d]; local != nil {
 				if local.isPinned {
-					panic(todo(""))
+					p.w("(*(*")
+					p.functionSignature(f, u, "")
+					p.w(")(unsafe.Pointer(%s%s)))", f.bpName, nonZeroUintptr(local.off))
+					return
 				}
 
-				p.w("(*(*")
-				p.functionSignature(f, u, "")
-				p.w(")(unsafe.Pointer(&%s)))", local.name)
-				return
+				if d.IsParameter {
+					p.w("(*(*")
+					p.functionSignature(f, u, "")
+					p.w(")(unsafe.Pointer(&%s)))", local.name)
+					return
+				}
+
+				panic(todo("", pos(d)))
 			}
 
 			tld := p.tlds[d]
@@ -5824,7 +5837,7 @@ func (p *project) castExpressionFunc(f *function, n *cc.CastExpression, t cc.Typ
 				p.w("(*(*")
 				p.functionSignature(f, ft, "")
 				p.w(")(unsafe.Pointer(")
-				p.castExpression(f, n.CastExpression, op.Type(), exprValue, flags)
+				p.castExpression(f, n.CastExpression, op.Type(), exprAddrOf, flags)
 				p.w(")))")
 			default:
 				panic(todo(""))
@@ -7135,11 +7148,10 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
 		switch n.Operand.Type().Kind() {
 		case cc.Ptr:
-			panic(todo(""))
 			p.w("(*(*")
 			p.functionSignature(f, n.Operand.Type().Elem(), "")
 			p.w(")(unsafe.Pointer(")
-			p.postfixExpression(f, n, n.Operand.Type(), exprValue, flags)
+			p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
 			p.w(")))")
 		default:
 			panic(todo("", n.Position(), n.Operand.Type()))
@@ -7163,7 +7175,7 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 			p.w("(*(*")
 			p.functionSignature(f, n.Operand.Type().Elem(), "")
 			p.w(")(unsafe.Pointer(")
-			p.postfixExpression(f, n, n.Operand.Type(), exprValue, flags)
+			p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
 			p.w(")))")
 		default:
 			panic(todo("", n.Position(), n.Operand.Type()))
