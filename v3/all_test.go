@@ -673,19 +673,20 @@ func TestGCCExec(t *testing.T) {
 func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
 	const main = "main.go"
 	blacklist := map[string]struct{}{
+		"20000822-1.c": {}, // nested func
+		"20001009-2.c": {}, // asm
+		"20010122-1.c": {}, // __builtin_return_address
 		"20010904-1.c": {}, // __attribute__((aligned(32)))
 		"20010904-2.c": {}, // __attribute__((aligned(32)))
 		"20021127-1.c": {}, // gcc specific optimization
+		"20030323-1.c": {}, // __builtin_return_address
 		"20101011-1.c": {}, // sigfpe
+		"991014-1.c":   {}, // Struct type too big
+		"align-3.c":    {}, // __attribute__((aligned(256)))
 		"eeprof-1.c":   {}, // requires instrumentation
 		"fp-cmp-1.c":   {}, // sigfpe
 		"fp-cmp-2.c":   {}, // sigfpe
 		"fp-cmp-3.c":   {}, // sigfpe
-		"991014-1.c":   {}, // Struct type too big
-		"20000822-1.c": {}, // nested func
-		"20001009-2.c": {}, // asm
-		"20010122-1.c": {}, // __builtin_return_address
-		"20030323-1.c": {}, // __builtin_return_address
 
 		"20000113-1.c":    {}, //TODO non-const bitfield initializer
 		"20000703-1.c":    {}, //TODO statement expression
@@ -876,17 +877,17 @@ func testSQLite(t *testing.T, dir string) {
 	ccgoArgs := []string{
 		"ccgo",
 		"-DLONGDOUBLE_TYPE=double",
-		//TODO "-DSQLITE_DEBUG",
-		//TODO "-DSQLITE_DEFAULT_MEMSTATUS=0",
-		//TODO "-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1",
-		//TODO "-DSQLITE_DQS=0",
-		//TODO "-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
-		//TODO "-DSQLITE_MAX_EXPR_DEPTH=0",
-		//TODO "-DSQLITE_MEMDEBUG",
-		//TODO "-DSQLITE_OMIT_DECLTYPE",
-		//TODO "-DSQLITE_OMIT_DEPRECATED",
-		//TODO "-DSQLITE_OMIT_PROGRESS_CALLBACK",
-		//TODO "-DSQLITE_OMIT_SHARED_CACHE",
+		"-DSQLITE_DEBUG",
+		"-DSQLITE_DEFAULT_MEMSTATUS=0",
+		"-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1",
+		"-DSQLITE_DQS=0",
+		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
+		"-DSQLITE_MAX_EXPR_DEPTH=0",
+		"-DSQLITE_MEMDEBUG",
+		"-DSQLITE_OMIT_DECLTYPE",
+		"-DSQLITE_OMIT_DEPRECATED",
+		"-DSQLITE_OMIT_PROGRESS_CALLBACK",
+		"-DSQLITE_OMIT_SHARED_CACHE",
 		"-DSQLITE_THREADSAFE=0",
 		"-ccgo-long-double-is-double", // stddef.h
 		"-o", main,

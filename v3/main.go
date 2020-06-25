@@ -6,6 +6,47 @@
 
 package main // import "modernc.org/ccgo/v3"
 
+//TODO turn
+//
+//	if foo {
+//		...
+//	} else {
+//		if bar {
+//			...
+//		}
+//	}
+//
+// into
+//
+//	if foo {
+//		...
+//	} else if bar {
+//		...
+//	}
+
+//TODO turn
+//
+//	if foo {
+//		// nothing here
+//	} else {
+//		// something here
+//	}
+//
+// into
+//
+//	if !foo {
+//		// something here
+//	}
+
+//TODO turn void
+//
+//	a = b = c
+//
+// where all but the first and last of a,b,c,... are declarators, into
+//
+//	b = c
+//	a = b
+
 //TODO emit optionally struct/union layout verifying code
 
 //TODO define and use all tagged struct types, including inner ones, for example SQLite's SrcList_item.
@@ -68,8 +109,6 @@ package main // import "modernc.org/ccgo/v3"
 //	if !((*ShellState)(unsafe.Pointer(pState)).expert.pExpert != 0) {
 //		crt.X__assert_fail(tls, ts+7572, ts+725, uint32(11438), uintptr(unsafe.Pointer(&__func__15)))
 //	}
-
-//TODO add text snippets to ts+1234
 
 //TODO drop all non-referenced declarators unless forced by a command line flag.
 

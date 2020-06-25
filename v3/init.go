@@ -12,7 +12,7 @@ import (
 )
 
 // 6.7.8 Initialization
-func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tld) {
+func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tld, fld cc.Field) {
 	// 11: The initializer for a scalar shall be a single expression, optionally
 	// enclosed in braces. The initial value of the object is that of the
 	// expression (after conversion); the same type constraints and conversions as
@@ -24,7 +24,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 			p.w("%s", comment("", n.AssignmentExpression))
 			switch {
 			case tld != nil && t.Kind() == cc.Ptr && n.AssignmentExpression.Operand.Value() == nil:
-				tld.patches = append(tld.patches, initPatch{t, n})
+				tld.patches = append(tld.patches, initPatch{t, n, fld})
 				p.w(" 0 ")
 			default:
 				p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, fOutermost)
@@ -169,7 +169,7 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 		case isAggregateType(ft) && n.Initializer.Case != cc.InitializerInitList && ft.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
 			panic(todo("", n.Position(), t, ft))
 		default:
-			p.initializer(f, n.Initializer, ft, tld)
+			p.initializer(f, n.Initializer, ft, tld, fld)
 		}
 		idx[0]++
 	}
@@ -256,7 +256,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 			if keys {
 				p.w("%s: ", p.fieldName(fld.Name()))
 			}
-			p.initializer(f, list.Initializer, ft, tld)
+			p.initializer(f, list.Initializer, ft, tld, fld)
 		}
 		p.w("%s", comma)
 		idx[0]++
@@ -277,7 +277,7 @@ func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Typ
 		case isAggregateType(et) && n.Initializer.Case != cc.InitializerInitList && et.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
 			panic(todo(""))
 		default:
-			p.initializer(f, n.Initializer, et, tld)
+			p.initializer(f, n.Initializer, et, tld, nil)
 		}
 		p.w(",")
 	}
