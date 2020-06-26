@@ -6,6 +6,8 @@
 
 package main // import "modernc.org/ccgo/v3"
 
+//TODO merge VaList slots of distinct top level statements.
+
 //TODO turn
 //
 //	if foo {
@@ -40,10 +42,11 @@ package main // import "modernc.org/ccgo/v3"
 
 //TODO turn void
 //
-//	a = b = c
+//	a = b = c = d
 //
 // where all but the first and last of a,b,c,... are declarators, into
 //
+//	c = d
 //	b = c
 //	a = b
 

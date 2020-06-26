@@ -6109,6 +6109,8 @@ func (p *project) unaryExpressionFunc(f *function, n *cc.UnaryExpression, t cc.T
 		switch ce := n.CastExpression.Operand.Type(); ce.Kind() {
 		case cc.Ptr:
 			p.castExpression(f, n.CastExpression, ce.Elem(), mode, flags)
+		case cc.Function:
+			p.castExpression(f, n.CastExpression, ce, mode, flags)
 		default:
 			panic(todo("", n.Position(), n.CastExpression.Operand.Type()))
 		}

@@ -1231,3 +1231,149 @@ next:
 	}
 	return r
 }
+
+func TestBug(t *testing.T) {
+	g := newGolden(t, fmt.Sprintf("testdata/bug_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
+	var files, ok int
+	const dir = "tests/tests2"
+	f, o := testBugExec(g.w, t, filepath.Join(testWD, filepath.FromSlash("testdata/bug")))
+	files += f
+	ok += o
+	t.Logf("files %s, ok %s", h(files), h(ok))
+}
+
+func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
+	const main = "main.go"
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Chdir(wd)
+
+	temp, err := ioutil.TempDir("", "ccgo-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(temp)
+
+	if err := os.Chdir(temp); err != nil {
+		t.Fatal(err)
+	}
+
+	var re *regexp.Regexp
+	if s := *oRE; s != "" {
+		re = regexp.MustCompile(s)
+	}
+
+	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				err = nil
+			}
+			return err
+		}
+
+		if info.IsDir() {
+			return skipDir(path)
+		}
+
+		if filepath.Ext(path) != ".c" || info.Mode()&os.ModeType != 0 {
+			return nil
+		}
+
+		files++
+
+		if re != nil && !re.MatchString(path) {
+			return nil
+		}
+
+		if *oTrace {
+			fmt.Fprintln(os.Stderr, files, ok, path)
+		}
+
+		if err := os.Remove(main); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+
+		ccgoArgs := []string{"ccgo", "-o", main}
+		var args []string
+		if !func() (r bool) {
+			defer func() {
+				if err := recover(); err != nil {
+					if *oStackTrace {
+						fmt.Printf("%s\n", stack())
+					}
+					if *oTrace {
+						fmt.Println(err)
+					}
+					t.Errorf("%s: %v", path, err)
+					r = false
+				}
+			}()
+
+			ccgoArgs = append(ccgoArgs, path)
+			if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
+				if *oTrace {
+					fmt.Println(err)
+				}
+				t.Errorf("%s: %v", path, err)
+				return false
+			}
+
+			return true
+		}() {
+			return nil
+		}
+
+		out, err := exec.Command("go", append([]string{"run", main}, args...)...).CombinedOutput()
+		if err != nil {
+			if *oTrace {
+				fmt.Println(err)
+			}
+			b, _ := ioutil.ReadFile(main)
+			t.Errorf("\n%s\n%v: %s\n%v", b, path, out, err)
+			return nil
+		}
+
+		if *oTraceF {
+			b, _ := ioutil.ReadFile(main)
+			fmt.Printf("\n----\n%s\n----\n", b)
+		}
+		if *oTraceO {
+			fmt.Printf("%s\n", out)
+		}
+		exp, err := ioutil.ReadFile(noExt(path) + ".expect")
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Fprintln(w, filepath.Base(path))
+				ok++
+				return nil
+			}
+
+			return err
+		}
+
+		out = trim(out)
+		exp = trim(exp)
+
+		if !bytes.Equal(out, exp) {
+			if *oTrace {
+				fmt.Println(err)
+			}
+			t.Errorf("%v: out\n%s\nexp\n%s", path, out, exp)
+			return nil
+		}
+
+		fmt.Fprintln(w, filepath.Base(path))
+		ok++
+		return nil
+	}); err != nil {
+		t.Errorf("%v", err)
+	}
+	return files, ok
+}
