@@ -66,6 +66,7 @@ const (
 	fForceConv
 	fForceRuntimeConv
 	fNoCondAssignment
+	fAddrOfFuncPtrOk
 )
 
 type imported struct {
@@ -2015,7 +2016,7 @@ func (p *project) declarator(f *function, d *cc.Declarator, t cc.Type, mode expr
 	case exprValue:
 		p.declaratorValue(f, d, t, mode, flags)
 	case exprAddrOf:
-		p.declaratorAddrOf(f, d, t)
+		p.declaratorAddrOf(f, d, t, flags)
 	case exprSelect:
 		p.declaratorSelect(f, d)
 	case exprPSelect:
@@ -2227,6 +2228,13 @@ func (p *project) declaratorFuncNormal(f *function, d *cc.Declarator, t cc.Type,
 }
 
 func (p *project) declaratorFuncFunc(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+	switch d.Type().Kind() {
+	case cc.Function:
+		// ok
+	default:
+		panic(todo("", pos(d), d.Type(), d.Type().Kind()))
+	}
+
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			panic(todo(""))
@@ -2391,7 +2399,7 @@ func (p *project) declaratorPSelectNormal(f *function, d *cc.Declarator, t cc.Ty
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type().Elem()), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("(*%s)(unsafe.Pointer(*(*unsafe.Pointer)(unsafe.Pointer(%s%s/* &%s */))))", p.typ(d, d.Type().Elem()), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -2473,12 +2481,12 @@ func (p *project) declaratorSelectNormal(f *function, d *cc.Declarator) {
 	}
 }
 
-func (p *project) declaratorAddrOf(f *function, d *cc.Declarator, t cc.Type) {
+func (p *project) declaratorAddrOf(f *function, d *cc.Declarator, t cc.Type, flags flags) {
 	switch k := p.declaratorKind(d); k {
 	case opArray:
 		p.declaratorAddrOfArray(f, d)
 	case opNormal:
-		p.declaratorAddrOfNormal(f, d)
+		p.declaratorAddrOfNormal(f, d, flags)
 	case opUnion:
 		p.declaratorAddrOfUnion(f, d)
 	case opFunction:
@@ -2553,12 +2561,19 @@ func (p *project) declaratorAddrOfUnion(f *function, d *cc.Declarator) {
 	}
 }
 
-func (p *project) declaratorAddrOfNormal(f *function, d *cc.Declarator) {
+func (p *project) declaratorAddrOfNormal(f *function, d *cc.Declarator, flags flags) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
 				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
+			}
+
+			if flags&fAddrOfFuncPtrOk != 0 {
+				if d.Type().Kind() == cc.Ptr && d.Type().Elem().Kind() == cc.Function {
+					p.w("&%s", local.name)
+					return
+				}
 			}
 
 			panic(todo("", pos(d), d.Name(), d.Type(), d.IsParameter))
@@ -5864,26 +5879,64 @@ func (p *project) castExpressionFunc(f *function, n *cc.CastExpression, t cc.Typ
 	case cc.CastExpressionUnary: // UnaryExpression
 		p.unaryExpression(f, n.UnaryExpression, t, mode, flags)
 	case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
-		op := n.CastExpression.Operand
+		ot := n.CastExpression.Operand.Type()
 		tn := n.TypeName.Type()
-		switch {
-		case op.Type().Kind() == cc.Ptr:
-			switch {
-			case tn.Kind() == cc.Ptr && t.Kind() == cc.Ptr:
-				ft := tn.Elem().Alias()
-				if ft.Kind() == cc.Ptr {
-					ft = ft.Elem()
-				}
+		var ft cc.Type
+		switch tn.Kind() {
+		case cc.Ptr:
+			switch et := ot.Elem(); et.Kind() {
+			case cc.Function:
+				// ok
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("%v: %v, %v -> %v, %v -> %v, %v", pos(n), ot, ot.Kind(), tn, tn.Kind(), t, t.Kind()))
+		}
+		switch t.Kind() {
+		case cc.Ptr:
+			switch et := t.Elem(); et.Kind() {
+			case cc.Function:
+				ft = et
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("%v: %v, %v -> %v, %v -> %v, %v", pos(n), ot, ot.Kind(), tn, tn.Kind(), t, t.Kind()))
+		}
+		switch ot.Kind() {
+		//TODO- case op.Type().Kind() == cc.Ptr:
+		//TODO- 	switch {
+		//TODO- 	case tn.Kind() == cc.Ptr && tn.Elem().Kind() == cc.Function && t.Kind() == cc.Ptr:
+		//TODO- 		ft := tn.Elem().Alias()
+		//TODO- 		switch ft.Kind() {
+		//TODO- 		default:
+		//TODO- 			panic(todo("", pos(n), n.CastExpression.Operand.Type(), n.CastExpression.Operand.Type().Kind()))
+		//TODO- 		}
+		//TODO- 		if ft.Kind() == cc.Ptr { //TODO probably wrong
+		//TODO- 			ft = ft.Elem()
+		//TODO- 		}
+		//TODO- 		p.w("(*(*")
+		//TODO- 		p.functionSignature(f, ft, "")
+		//TODO- 		p.w(")(unsafe.Pointer(")
+		//TODO- 		p.castExpression(f, n.CastExpression, op.Type(), exprAddrOf, flags)
+		//TODO- 		p.w(")))")
+		//TODO- 	default:
+		//TODO- 		panic(todo(""))
+		//TODO- 	}
+		case cc.Ptr:
+			switch et := ot.Elem(); et.Kind() {
+			case cc.Function:
 				p.w("(*(*")
 				p.functionSignature(f, ft, "")
 				p.w(")(unsafe.Pointer(")
-				p.castExpression(f, n.CastExpression, op.Type(), exprAddrOf, flags)
+				p.castExpression(f, n.CastExpression, ot, exprAddrOf, flags)
 				p.w(")))")
 			default:
-				panic(todo(""))
+				panic(todo("", pos(n), et, et.Kind()))
 			}
 		default:
-			panic(todo("%v: %v -> %v -> %v", pos(n), op.Type(), tn, t))
+			panic(todo("%v: %v, %v -> %v, %v -> %v, %v", pos(n), ot, ot.Kind(), tn, tn.Kind(), t, t.Kind()))
 		}
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -5933,7 +5986,7 @@ func (p *project) castExpressionAddrOf(f *function, n *cc.CastExpression, t cc.T
 	case cc.CastExpressionUnary: // UnaryExpression
 		p.unaryExpression(f, n.UnaryExpression, t, mode, flags)
 	case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
-		panic(todo(""))
+		p.castExpressionAddrOf(f, n.CastExpression, t, mode, flags)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -6065,9 +6118,23 @@ func (p *project) unaryExpressionSelect(f *function, n *cc.UnaryExpression, t cc
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		panic(todo(""))
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		p.w("(*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
-		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags)
-		p.w(")))")
+		ot := n.CastExpression.Operand.Type()
+		switch ot.Kind() {
+		case cc.Ptr:
+			switch et := ot.Elem(); et.Kind() {
+			case
+				cc.Struct,
+				cc.Union:
+
+				p.w("(*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
+				p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags)
+				p.w(")))")
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("", pos(n), ot, ot.Kind()))
+		}
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo(""))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
@@ -6106,13 +6173,30 @@ func (p *project) unaryExpressionFunc(f *function, n *cc.UnaryExpression, t cc.T
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		panic(todo(""))
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		switch ce := n.CastExpression.Operand.Type(); ce.Kind() {
+		ot := n.CastExpression.Operand.Type()
+		switch ot.Kind() {
 		case cc.Ptr:
-			p.castExpression(f, n.CastExpression, ce.Elem(), mode, flags)
+			switch et := ot.Elem(); et.Kind() {
+			case cc.Function:
+				p.castExpression(f, n.CastExpression, ot, mode, flags|fAddrOfFuncPtrOk)
+			case cc.Ptr:
+				switch et2 := et.Elem(); et2.Kind() {
+				case cc.Function:
+					p.w("(**(**")
+					p.functionSignature(f, et2, "")
+					p.w(")(unsafe.Pointer(")
+					p.castExpression(f, n.CastExpression, ot, exprAddrOf, flags|fAddrOfFuncPtrOk)
+					p.w(")))")
+				default:
+					panic(todo("", pos(n), et2, et2.Kind()))
+				}
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
 		case cc.Function:
-			p.castExpression(f, n.CastExpression, ce, mode, flags)
+			p.castExpression(f, n.CastExpression, ot, mode, flags|fAddrOfFuncPtrOk)
 		default:
-			panic(todo("", n.Position(), n.CastExpression.Operand.Type()))
+			panic(todo("", pos(n), ot, ot.Kind(), mode))
 		}
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo(""))
@@ -6154,9 +6238,25 @@ func (p *project) unaryExpressionPSelect(f *function, n *cc.UnaryExpression, t c
 		p.unaryExpression(f, n, t, exprValue, flags)
 		p.w("))")
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
-		p.castExpression(f, n.CastExpression, t, exprValue, flags)
-		p.w(")))")
+		ot := n.CastExpression.Operand.Type()
+		switch ot.Kind() {
+		case cc.Ptr:
+			switch et := ot.Elem(); {
+			case et.Kind() == cc.Ptr:
+				switch et2 := et.Elem(); et2.Kind() {
+				case cc.Struct:
+					p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
+					p.castExpression(f, n.CastExpression, t, exprValue, flags)
+					p.w(")))")
+				default:
+					panic(todo("", pos(n), et2, et2.Kind()))
+				}
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("", pos(n), ot, ot.Kind()))
+		}
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo(""))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
@@ -6213,7 +6313,23 @@ func (p *project) unaryExpressionAddrOf(f *function, n *cc.UnaryExpression, t cc
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		p.unaryExpressionDeref(f, n, t, mode, flags)
+		ot := n.CastExpression.Operand.Type()
+		switch ot.Kind() {
+		case cc.Ptr:
+			switch et := ot.Elem(); {
+			case
+				et.IsScalarType(),
+				et.Kind() == cc.Struct,
+				et.Kind() == cc.Union,
+				et.Kind() == cc.Array:
+
+				p.unaryExpressionDeref(f, n, t, mode, flags)
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("", pos(n), ot, ot.Kind()))
+		}
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
@@ -6252,7 +6368,18 @@ func (p *project) unaryExpressionVoid(f *function, n *cc.UnaryExpression, t cc.T
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprVoid, flags)
+		ot := n.CastExpression.Operand.Type()
+		switch ot.Kind() {
+		case cc.Ptr:
+			switch et := ot.Elem(); {
+			case et.IsScalarType():
+				p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprVoid, flags)
+			default:
+				panic(todo("", pos(n), ot, ot.Kind()))
+			}
+		default:
+			panic(todo("", pos(n), ot, ot.Kind()))
+		}
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
@@ -6294,7 +6421,23 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 		}
 		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprAddrOf, flags&^fOutermost)
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		p.unaryExpressionDeref(f, n, t, mode, flags)
+		ot := n.CastExpression.Operand.Type()
+		switch ot.Kind() {
+		case cc.Ptr, cc.Array:
+			switch et := ot.Elem(); {
+			case
+				et.IsScalarType(),
+				et.Kind() == cc.Array,
+				et.Kind() == cc.Struct,
+				et.Kind() == cc.Union:
+
+				p.unaryExpressionDeref(f, n, t, mode, flags)
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("", pos(n), ot, ot.Kind()))
+		}
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		p.w(" +")
 		p.castExpression(f, n.CastExpression, t, mode, flags)
@@ -6479,7 +6622,22 @@ func (p *project) unaryExpressionLValue(f *function, n *cc.UnaryExpression, t cc
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		p.unaryExpressionDeref(f, n, t, mode, flags)
+		ot := n.CastExpression.Operand.Type()
+		switch ot.Kind() {
+		case cc.Ptr, cc.Array:
+			switch et := ot.Elem(); {
+			case
+				et.IsScalarType(),
+				et.Kind() == cc.Struct,
+				et.Kind() == cc.Union:
+
+				p.unaryExpressionDeref(f, n, t, mode, flags)
+			default:
+				panic(todo("", pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("", pos(n), ot, ot.Kind()))
+		}
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
@@ -7194,6 +7352,10 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
 		switch n.Operand.Type().Kind() {
 		case cc.Ptr:
+			switch n.Operand.Type().Kind() {
+			default:
+				panic(todo("", pos(n), n.Operand.Type(), n.Operand.Type().Kind()))
+			}
 			p.w("(*(*")
 			p.functionSignature(f, n.Operand.Type().Elem(), "")
 			p.w(")(unsafe.Pointer(")
@@ -7207,22 +7369,42 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 		switch n.Operand.Type().Kind() {
 		case cc.Ptr:
-			p.w("(*(*")
-			p.functionSignature(f, n.Operand.Type().Elem(), "")
-			p.w(")(unsafe.Pointer(")
-			p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
-			p.w(")))")
+			switch n.Operand.Type().Kind() {
+			case cc.Ptr:
+				switch et := n.Operand.Type().Elem(); et.Kind() {
+				case cc.Function:
+					p.w("(*(*")
+					p.functionSignature(f, n.Operand.Type().Elem(), "")
+					p.w(")(unsafe.Pointer(")
+					p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
+					p.w(")))")
+				default:
+					panic(todo("", pos(n), et, et.Kind()))
+				}
+			default:
+				panic(todo("", pos(n), n.Operand.Type(), n.Operand.Type().Kind()))
+			}
 		default:
 			panic(todo("", n.Position(), n.Operand.Type()))
 		}
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
 		switch n.Operand.Type().Kind() {
 		case cc.Ptr:
-			p.w("(*(*")
-			p.functionSignature(f, n.Operand.Type().Elem(), "")
-			p.w(")(unsafe.Pointer(")
-			p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
-			p.w(")))")
+			switch n.Operand.Type().Kind() {
+			case cc.Ptr:
+				switch et := n.Operand.Type().Elem(); et.Kind() {
+				case cc.Function:
+					p.w("(*(*")
+					p.functionSignature(f, n.Operand.Type().Elem(), "")
+					p.w(")(unsafe.Pointer(")
+					p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
+					p.w(")))")
+				default:
+					panic(todo("", pos(n), et, et.Kind()))
+				}
+			default:
+				panic(todo("", pos(n), n.Operand.Type(), n.Operand.Type().Kind()))
+			}
 		default:
 			panic(todo("", n.Position(), n.Operand.Type()))
 		}
@@ -8171,7 +8353,23 @@ func (p *project) primaryExpressionFunc(f *function, n *cc.PrimaryExpression, t 
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
 		switch d := n.Declarator(); {
 		case d != nil:
-			p.declarator(f, d, t, mode, flags)
+			switch d.Type().Kind() {
+			case cc.Function:
+				p.declarator(f, d, t, mode, flags)
+			case cc.Ptr:
+				switch et := d.Type().Elem(); et.Kind() {
+				case cc.Function:
+					p.w("(*(*")
+					p.functionSignature(f, et, "")
+					p.w(")(unsafe.Pointer(&")
+					p.primaryExpression(f, n, n.Operand.Type(), exprValue, flags)
+					p.w(")))")
+				default:
+					panic(todo("", pos(n), pos(d), d.Type(), d.Type().Kind()))
+				}
+			default:
+				panic(todo("", pos(n), pos(d), d.Type(), d.Type().Kind()))
+			}
 		default:
 			panic(todo("", pos(n)))
 		}
