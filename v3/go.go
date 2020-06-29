@@ -1137,38 +1137,8 @@ func (p *project) layoutDefines() error {
 		sort.Slice(a, func(i, j int) bool { return a[i].String() < a[j].String() })
 		for _, nm := range a {
 			m := ast.Macros[nm]
-			toks := m.ReplacementTokens()
-			if len(toks) != 1 {
-				continue
-			}
-
-			src := strings.TrimSpace(toks[0].Src.String())
-			if len(src) == 0 {
-				continue
-			}
-
-			neg := ""
-			switch src[0] {
-			case '"':
-				if _, err := strconv.Unquote(src); err == nil {
-					break
-				}
-			case '-':
-				neg = "-"
-				src = src[1:]
-				fallthrough
-			default:
-				src = strings.TrimRight(src, "lLuUfF")
-				if _, err := strconv.ParseUint(src, 0, 64); err == nil {
-					src = neg + src
-					break
-				}
-
-				if _, err := strconv.ParseFloat(src, 64); err == nil {
-					src = neg + src
-					break
-				}
-
+			src := evalMacro(m, ast)
+			if src == "" {
 				continue
 			}
 
@@ -1184,6 +1154,55 @@ func (p *project) layoutDefines() error {
 		}
 	}
 	return nil
+}
+
+func evalMacro(m *cc.Macro, ast *cc.AST) string {
+	toks := m.ReplacementTokens()
+	if len(toks) != 1 {
+		return evalMacro2(m, ast)
+	}
+
+	src := strings.TrimSpace(toks[0].Src.String())
+	if len(src) == 0 {
+		return ""
+	}
+
+	neg := ""
+	switch src[0] {
+	case '"':
+		if _, err := strconv.Unquote(src); err == nil {
+			return src
+		}
+	case '-':
+		neg = "-"
+		src = src[1:]
+		fallthrough
+	default:
+		src = strings.TrimRight(src, "lLuUfF")
+		if _, err := strconv.ParseUint(src, 0, 64); err == nil {
+			return neg + src
+		}
+
+		if _, err := strconv.ParseFloat(src, 64); err == nil {
+			return neg + src
+		}
+	}
+
+	return evalMacro2(m, ast)
+}
+
+func evalMacro2(m *cc.Macro, ast *cc.AST) string {
+	op, err := ast.Eval(m)
+	if err != nil {
+		return ""
+	}
+
+	switch x := op.Value().(type) {
+	case cc.Int64Value:
+		return fmt.Sprintf("%d", x)
+	default:
+		panic(todo(""))
+	}
 }
 
 func (p *project) layoutEnums() error {
