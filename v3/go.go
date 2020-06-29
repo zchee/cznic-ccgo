@@ -490,7 +490,7 @@ func mustPinStruct(t cc.Type) bool {
 			if mustPinStruct(f.Type()) {
 				return true
 			}
-		case cc.Array:
+		case cc.Array, cc.Union:
 			return true
 		case cc.Ptr:
 			if ft.Elem().Kind() == cc.Function {
@@ -6965,10 +6965,10 @@ func (p *project) postfixExpressionPSelectSelectUnion(f *function, n *cc.Postfix
 	default:
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		p.w("(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
+		p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
 		p.w("/* .%s */", p.fieldName(n.Token2.Value))
-		p.w("))")
+		p.w(")))")
 	}
 }
 
@@ -7352,15 +7352,16 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
 		switch n.Operand.Type().Kind() {
 		case cc.Ptr:
-			switch n.Operand.Type().Kind() {
+			switch et := n.Operand.Type().Elem(); et.Kind() {
+			case cc.Function:
+				p.w("(*(*")
+				p.functionSignature(f, n.Operand.Type().Elem(), "")
+				p.w(")(unsafe.Pointer(")
+				p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
+				p.w(")))")
 			default:
-				panic(todo("", pos(n), n.Operand.Type(), n.Operand.Type().Kind()))
+				panic(todo("", pos(n), et, et.Kind()))
 			}
-			p.w("(*(*")
-			p.functionSignature(f, n.Operand.Type().Elem(), "")
-			p.w(")(unsafe.Pointer(")
-			p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
-			p.w(")))")
 		default:
 			panic(todo("", n.Position(), n.Operand.Type()))
 		}
@@ -8232,7 +8233,7 @@ func (p *project) primaryExpressionBool(f *function, n *cc.PrimaryExpression, t 
 	case cc.PrimaryExpressionLChar: // LONGCHARCONST
 		panic(todo(""))
 	case cc.PrimaryExpressionString: // STRINGLITERAL
-		panic(todo(""))
+		p.w(" 1 ")
 	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
 		panic(todo(""))
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'

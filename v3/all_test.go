@@ -90,7 +90,7 @@ var (
 	gccDir    = filepath.FromSlash("testdata/gcc-9.1.0")
 	gpsdDir   = filepath.FromSlash("testdata/gpsd-3.20/")
 	ntpsecDir = filepath.FromSlash("testdata/ntpsec-master")
-	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3300100")
+	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3320300")
 	tccDir    = filepath.FromSlash("testdata/tcc-0.9.27")
 	mjsonDir  = filepath.FromSlash("testdata/microjson-1.5")
 
@@ -117,7 +117,7 @@ var (
 		{gpsdDir, "http://download-mirror.savannah.gnu.org/releases/gpsd/gpsd-3.20.tar.gz", 3600, false},
 		{mjsonDir, "https://gitlab.com/esr/microjson/-/archive/1.5/microjson-1.5.tar.gz", 22, false},
 		{ntpsecDir, "https://gitlab.com/NTPsec/ntpsec/-/archive/master/ntpsec-master.tar.gz", 2600, false},
-		{sqliteDir, "https://www.sqlite.org/2019/sqlite-amalgamation-3300100.zip", 2400, false},
+		{sqliteDir, "https://www.sqlite.org/2020/sqlite-amalgamation-3320300.zip", 2400, false},
 		{tccDir, "http://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2", 620, false},
 	}
 )
@@ -896,6 +896,7 @@ func testSQLite(t *testing.T, dir string) {
 		"-DSQLITE_DEFAULT_MEMSTATUS=0",
 		"-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1",
 		"-DSQLITE_DQS=0",
+		"-DSQLITE_ENABLE_DBPAGE_VTAB",
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
 		"-DSQLITE_MAX_EXPR_DEPTH=0",
 		"-DSQLITE_MEMDEBUG",
@@ -938,6 +939,41 @@ func testSQLite(t *testing.T, dir string) {
 		return true
 	}() {
 		return
+	}
+	if err := exec.Command("go", "build", "-o", "shell", main).Run(); err != nil {
+		t.Error(err)
+		return
+	}
+
+	out, err := exec.Command("./shell", "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	if err != nil {
+		if *oTrace {
+			fmt.Printf("%s\n%s\n", out, err)
+		}
+		t.Errorf("%v", err)
+		return
+	}
+
+	if g, e := strings.TrimSpace(string(out)), "462"; g != e {
+		t.Errorf("%q %q", g, e)
+	}
+	if *oTraceO {
+		fmt.Printf("%s\n", out)
+	}
+
+	if out, err = exec.Command("./shell", "tmp", "select 13*i from t;").CombinedOutput(); err != nil {
+		if *oTrace {
+			fmt.Printf("%s\n%s\n", out, err)
+		}
+		t.Errorf("%v", err)
+		return
+	}
+
+	if g, e := strings.TrimSpace(string(out)), "546"; g != e {
+		t.Errorf("%q %q", g, e)
+	}
+	if *oTraceO {
+		fmt.Printf("%s\n", out)
 	}
 }
 
