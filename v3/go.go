@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"io/ioutil"
 	"math"
 	"math/big"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -980,6 +982,8 @@ func (n *enumSpec) emit(p *project, enumConsts map[cc.StringID]string) {
 type project struct {
 	ast         *cc.AST
 	buf         bytes.Buffer
+	capi        []string
+	defines     []string
 	enumConsts  map[cc.StringID]string
 	enumSpecs   map[*cc.EnumSpecifier]*enumSpec
 	errors      scanner.ErrorList
@@ -1022,11 +1026,12 @@ func newProject(t *task) (*project, error) {
 		typedefs:   map[string]struct{}{},
 		wanted:     map[*cc.Declarator]struct{}{},
 	}
+	p.scope.take("CAPI")
 	if err := p.layout(); err != nil {
 		return nil, err
 	}
 
-	for _, v := range t.imports {
+	for _, v := range t.imported {
 		var err error
 		if v.name, v.exports, err = t.capi(v.path); err != nil {
 			return nil, err
@@ -1103,7 +1108,82 @@ func (p *project) layout() error {
 		return err
 	}
 
+	if err := p.layoutDefines(); err != nil {
+		return err
+	}
+
 	return p.layoutStaticLocals()
+}
+
+func (p *project) layoutDefines() error {
+	if !p.task.exportDefinesValid {
+		return nil
+	}
+
+	var prefix = p.task.exportDefines
+	var a []cc.StringID
+	for _, ast := range p.task.asts {
+		for nm, m := range ast.Macros {
+			if m.IsFnLike() {
+				continue
+			}
+
+			if strings.HasPrefix(nm.String(), "__") {
+				continue
+			}
+
+			a = append(a, nm)
+		}
+		sort.Slice(a, func(i, j int) bool { return a[i].String() < a[j].String() })
+		for _, nm := range a {
+			m := ast.Macros[nm]
+			toks := m.ReplacementTokens()
+			if len(toks) != 1 {
+				continue
+			}
+
+			src := strings.TrimSpace(toks[0].Src.String())
+			if len(src) == 0 {
+				continue
+			}
+
+			neg := ""
+			switch src[0] {
+			case '"':
+				if _, err := strconv.Unquote(src); err == nil {
+					break
+				}
+			case '-':
+				neg = "-"
+				src = src[1:]
+				fallthrough
+			default:
+				src = strings.TrimRight(src, "lLuUfF")
+				if _, err := strconv.ParseUint(src, 0, 64); err == nil {
+					src = neg + src
+					break
+				}
+
+				if _, err := strconv.ParseFloat(src, 64); err == nil {
+					src = neg + src
+					break
+				}
+
+				continue
+			}
+
+			name := nm.String()
+			switch {
+			case prefix == "":
+				name = capitalize(name)
+			default:
+				name = prefix + name
+			}
+			name = p.scope.take(name)
+			p.defines = append(p.defines, fmt.Sprintf("%s = %s", name, src))
+		}
+	}
+	return nil
 }
 
 func (p *project) layoutEnums() error {
@@ -1456,13 +1536,21 @@ func (p *project) layoutTLDs() error {
 		exportPrefix
 	)
 
-	var export int
-	if p.task.exportExternValid {
+	var exportExtern, exportTypedef int
+	if p.task.exportExternsValid {
 		switch {
-		case p.task.exportExtern != "":
-			export = exportPrefix
+		case p.task.exportExterns != "":
+			exportExtern = exportPrefix
 		default:
-			export = exportCapitalize
+			exportExtern = exportCapitalize
+		}
+	}
+	if p.task.exportTypedefsValid {
+		switch {
+		case p.task.exportTypedefs != "":
+			exportTypedef = exportPrefix
+		default:
+			exportTypedef = exportCapitalize
 		}
 	}
 	var a []*cc.Declarator
@@ -1498,13 +1586,13 @@ func (p *project) layoutTLDs() error {
 				}
 
 				name := d.Name().String()
-				switch export {
+				switch exportExtern {
 				case doNotExport:
 					// nop
 				case exportCapitalize:
 					name = capitalize(name)
 				case exportPrefix:
-					name = p.task.exportExtern + name
+					name = p.task.exportExterns + name
 				}
 				name = p.scope.take(name)
 				if isMain {
@@ -1516,6 +1604,9 @@ func (p *project) layoutTLDs() error {
 					if d, ok := v.(*cc.Declarator); ok {
 						p.tlds[d] = tld
 					}
+				}
+				if !isMain {
+					p.capi = append(p.capi, d.Name().String())
 				}
 			case cc.Internal:
 				name := nm.String()
@@ -1539,6 +1630,14 @@ func (p *project) layoutTLDs() error {
 						break
 					}
 
+					switch exportTypedef {
+					case doNotExport:
+						// nop
+					case exportCapitalize:
+						name = capitalize(name)
+					case exportPrefix:
+						name = p.task.exportExterns + name
+					}
 					tld := &tld{name: p.scope.take(name)}
 					for _, v := range ast.Scope[nm] {
 						if d, ok := v.(*cc.Declarator); ok {
@@ -1636,17 +1735,22 @@ package %s
 		strings.Join(p.task.args[1:], " "),
 		p.task.pkgName,
 	)
+	if len(p.defines) != 0 {
+		p.w("\nconst (")
+		p.w("%s", strings.Join(p.defines, "\n"))
+		p.w("\n)\n\n")
+	}
 	for _, v := range p.task.asts {
 		p.oneAST(v)
 	}
-	sort.Slice(p.task.imports, func(i, j int) bool { return p.task.imports[i].path < p.task.imports[j].path })
+	sort.Slice(p.task.imported, func(i, j int) bool { return p.task.imported[i].path < p.task.imported[j].path })
 	p.o(`import (
 	"math"
 	"reflect"
 	"unsafe"
 `)
 	first := true
-	for _, v := range p.task.imports {
+	for _, v := range p.task.imported {
 		if v.used {
 			if first {
 				p.o("\n")
@@ -1668,11 +1772,43 @@ func main() { %sStart(%s) }`, p.task.crt, p.mainName)
 	p.flushStructs()
 	p.initPatches()
 	p.flushTS()
+	p.flushCAPI()
 	if _, err := p.buf.WriteTo(p.task.out); err != nil {
 		return err
 	}
 
 	return p.Err()
+}
+
+func (p *project) flushCAPI() {
+	if len(p.capi) == 0 || p.isMain {
+		return
+	}
+
+	b := bytes.NewBuffer(nil)
+	fmt.Fprintf(b, `// Code generated by '%s %s', DO NOT EDIT.
+
+package %s
+
+`,
+		filepath.Base(p.task.args[0]),
+		strings.Join(p.task.args[1:], " "),
+		p.task.pkgName,
+	)
+	fmt.Fprintf(b, "\n\nvar CAPI = map[string]struct{}{")
+	sort.Strings(p.capi)
+	for _, nm := range p.capi {
+		fmt.Fprintf(b, "\n%q: {},", nm)
+	}
+	fmt.Fprintf(b, "\n}\n")
+	if err := ioutil.WriteFile(p.task.capif, b.Bytes(), 0644); err != nil {
+		p.err(nil, "%v", err)
+		return
+	}
+
+	if out, err := exec.Command("gofmt", "-l", "-s", "-w", p.task.capif).CombinedOutput(); err != nil {
+		p.err(nil, "%s: %v", out, err)
+	}
 }
 
 func (p *project) initPatches() {
@@ -2087,6 +2223,7 @@ func (p *project) declaratorValueUnion(f *function, d *cc.Declarator, t cc.Type,
 			return
 		}
 
+		imp.used = true
 		p.w("%sX%s", imp.qualifier, nm)
 	}
 }
@@ -2122,6 +2259,7 @@ func (p *project) declaratorValueArray(f *function, d *cc.Declarator, t cc.Type,
 			return
 		}
 
+		imp.used = true
 		if d.Type().Kind() == cc.Union {
 			panic(todo("", pos(d)))
 		}
@@ -2161,6 +2299,7 @@ func (p *project) declaratorValueNormal(f *function, d *cc.Declarator, t cc.Type
 			return
 		}
 
+		imp.used = true
 		p.w("%sX%s", imp.qualifier, nm)
 	}
 }
@@ -2217,6 +2356,8 @@ func (p *project) declaratorFuncNormal(f *function, d *cc.Declarator, t cc.Type,
 					p.err(d, "%v: undefined: %s", d.Position(), d.Name())
 					return
 				}
+
+				imp.used = true
 				panic(todo(""))
 			}
 		}
@@ -2256,6 +2397,7 @@ func (p *project) declaratorFuncFunc(f *function, d *cc.Declarator, t cc.Type, m
 			return
 		}
 
+		imp.used = true
 		p.w("%sX%s", imp.qualifier, nm)
 	}
 }
@@ -2299,6 +2441,7 @@ func (p *project) declaratorLValueArray(f *function, d *cc.Declarator, t cc.Type
 			return
 		}
 
+		imp.used = true
 		if d.Type().Kind() == cc.Union {
 			panic(todo("", pos(d)))
 		}
@@ -2339,6 +2482,7 @@ func (p *project) declaratorLValueNormal(f *function, d *cc.Declarator, t cc.Typ
 			return
 		}
 
+		imp.used = true
 		p.w("%sX%s", imp.qualifier, nm)
 	}
 }
@@ -2524,6 +2668,7 @@ func (p *project) declaratorAddrOfFunction(f *function, d *cc.Declarator) {
 			return
 		}
 
+		imp.used = true
 		p.w("*(*uintptr)(unsafe.Pointer(&struct{f ")
 		p.functionSignature(f, d.Type(), "")
 		p.w("}{%sX%s}))", imp.qualifier, nm)
@@ -2557,6 +2702,7 @@ func (p *project) declaratorAddrOfUnion(f *function, d *cc.Declarator) {
 			return
 		}
 
+		imp.used = true
 		panic(todo("", pos(d), d.Name()))
 	}
 }
@@ -2595,6 +2741,7 @@ func (p *project) declaratorAddrOfNormal(f *function, d *cc.Declarator, flags fl
 			return
 		}
 
+		imp.used = true
 		panic(todo("", pos(d), d.Name()))
 	}
 }
@@ -2626,6 +2773,7 @@ func (p *project) declaratorAddrOfArray(f *function, d *cc.Declarator) {
 			return
 		}
 
+		imp.used = true
 		panic(todo("", pos(d), d.Name()))
 	}
 }
@@ -6504,6 +6652,7 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 
 		//TODO 	nm := d.Name().String()
 		//TODO 	if imp := p.imports[nm]; imp != nil {
+		//TODO		imp.used = true
 		//TODO 		p.w("unsafe.Sizeof(%sX%s)", imp.qualifier, nm)
 		//TODO 		break
 		//TODO 	}

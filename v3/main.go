@@ -249,15 +249,18 @@ type task struct {
 	U               []string // -U
 	args            []string
 	asts            []*cc.AST
+	capif           string
 	cfg             *cc.Config
 	crt             string
 	crtImportPath   string // -ccgo-crt-import-path
-	exportExtern    string // -ccgo-export-extern
+	exportDefines   string // -ccgo-export-defines
+	exportExterns   string // -ccgo-export-externs
 	exportFields    string // -ccgo-export-fields
+	exportTypedefs  string // -ccgo-export-typedefs
 	goarch          string
 	goos            string
 	ignoredIncludes string // -ccgo-ignored-includes
-	imports         []*imported
+	imported        []*imported
 	l               []string // -l
 	o               string   // -o
 	out             io.Writer
@@ -266,9 +269,11 @@ type task struct {
 	stderr          io.Writer
 	stdout          io.Writer
 
-	E                 bool // -E
-	exportExternValid bool // -ccgo-export-extern present
-	exportFieldsValid bool // -ccgo-export-fields present
+	E                   bool // -E
+	exportDefinesValid  bool // -ccgo-export-defines present
+	exportExternsValid  bool // -ccgo-export-externs present
+	exportFieldsValid   bool // -ccgo-export-fields present
+	exportTypedefsValid bool // -ccgo-export-typedefs present
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -398,8 +403,10 @@ func (t *task) main() (err error) {
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
 	opts.Arg("U", true, func(arg, value string) error { t.U = append(t.U, value); return nil })
 	opts.Arg("ccgo-crt-import-path", false, func(arg, value string) error { t.crtImportPath = value; return nil })
-	opts.Arg("ccgo-export-extern", false, func(arg, value string) error { t.exportExtern = value; t.exportExternValid = true; return nil })
+	opts.Arg("ccgo-export-defines", false, func(arg, value string) error { t.exportDefines = value; t.exportDefinesValid = true; return nil })
+	opts.Arg("ccgo-export-externs", false, func(arg, value string) error { t.exportExterns = value; t.exportExternsValid = true; return nil })
 	opts.Arg("ccgo-export-fields", false, func(arg, value string) error { t.exportFields = value; t.exportFieldsValid = true; return nil })
+	opts.Arg("ccgo-export-typedefs", false, func(arg, value string) error { t.exportTypedefs = value; t.exportTypedefsValid = true; return nil })
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
@@ -447,11 +454,11 @@ func (t *task) main() (err error) {
 	for _, v := range t.l {
 		v = strings.TrimSpace(v)
 		if _, ok := m[v]; !ok {
-			t.imports = append(t.imports, &imported{path: v})
+			t.imported = append(t.imported, &imported{path: v})
 			m[v] = struct{}{}
 		}
 	}
-	t.imports[len(t.imports)-1].used = true // crt is always imported
+	t.imported[len(t.imported)-1].used = true // crt is always imported
 	abi, err := cc.NewABIFromEnv()
 	if err != nil {
 		return err
@@ -536,6 +543,8 @@ func (t *task) main() (err error) {
 	if t.o == "" {
 		t.o = fmt.Sprintf("a_%s_%s.go", t.goos, t.goarch)
 	}
+	dir := filepath.Dir(t.o)
+	t.capif = filepath.Join(dir, fmt.Sprintf("capi_%s_%s.go", t.goos, t.goarch))
 	f, err2 := os.Create(t.o)
 	if err2 != nil {
 		return err2
