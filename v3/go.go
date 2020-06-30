@@ -48,6 +48,8 @@ const (
 	exprSelect              // foo in foo.bar
 	exprValue               // foo in bar = foo
 	exprVoid                //
+
+	tooManyErrors = "too many errors"
 )
 
 type opKind int
@@ -118,7 +120,7 @@ func tokenSeparator(n cc.Node) (r string) {
 		}
 		return true
 	})
-	return tok.Sep.String()
+	return strings.ReplaceAll(tok.Sep.String(), "\x0c", "")
 }
 
 type initPatch struct {
@@ -1073,11 +1075,18 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
+	if len(p.errors) >= 10 {
+		return
+	}
+
 	switch {
 	case n == nil:
 		p.errors.Add(token.Position{}, fmt.Sprintf(s, args...))
 	default:
 		p.errors.Add(token.Position(n.Position()), fmt.Sprintf(s, args...))
+		if len(p.errors) == 10 {
+			p.errors.Add(token.Position(n.Position()), tooManyErrors)
+		}
 	}
 }
 
@@ -1121,8 +1130,9 @@ func (p *project) layoutDefines() error {
 	}
 
 	var prefix = p.task.exportDefines
-	var a []cc.StringID
+	taken := map[cc.StringID]struct{}{}
 	for _, ast := range p.task.asts {
+		var a []cc.StringID
 		for nm, m := range ast.Macros {
 			if m.IsFnLike() {
 				continue
@@ -1132,6 +1142,11 @@ func (p *project) layoutDefines() error {
 				continue
 			}
 
+			if _, ok := taken[nm]; ok {
+				continue
+			}
+
+			taken[nm] = struct{}{}
 			a = append(a, nm)
 		}
 		sort.Slice(a, func(i, j int) bool { return a[i].String() < a[j].String() })
@@ -1573,6 +1588,19 @@ func (p *project) layoutTLDs() error {
 		}
 	}
 	var a []*cc.Declarator
+out:
+	for _, ast := range p.task.asts {
+		if a := ast.Scope[idMain]; len(a) != 0 {
+			switch x := a[0].(type) {
+			case *cc.Declarator:
+				if x.Linkage == cc.External {
+					p.isMain = true
+					p.scope.take("main")
+					break out
+				}
+			}
+		}
+	}
 	for _, ast := range p.task.asts {
 		a = a[:0]
 		for d := range ast.TLD {
@@ -1587,12 +1615,6 @@ func (p *project) layoutTLDs() error {
 			return a[i].NameTok().Seq() < a[j].NameTok().Seq()
 		})
 		for _, d := range a {
-			isMain := false
-			if d.Name() == idMain && d.Linkage == cc.External {
-				isMain = true
-				p.isMain = true
-				p.scope.take("main")
-			}
 			switch d.Type().Kind() {
 			case cc.Struct, cc.Union:
 				p.checkAlignAttr(d.Type())
@@ -1604,6 +1626,7 @@ func (p *project) layoutTLDs() error {
 					panic(todo(""))
 				}
 
+				isMain := nm == idMain
 				name := d.Name().String()
 				switch exportExtern {
 				case doNotExport:
@@ -1629,7 +1652,7 @@ func (p *project) layoutTLDs() error {
 				}
 			case cc.Internal:
 				name := nm.String()
-				if token.IsExported(name) {
+				if token.IsExported(name) && !p.isMain {
 					name = "s" + name
 				}
 				tld := &tld{name: p.scope.take(name)}
@@ -1781,8 +1804,8 @@ package %s
 	p.o(`)
 
 var _ = math.Pi
-var _ unsafe.Pointer
 var _ reflect.Kind
+var _ unsafe.Pointer
 `)
 	if p.isMain {
 		p.o(`
@@ -1857,7 +1880,7 @@ func (p *project) initPatches() {
 				p.w("\n*(*")
 				p.functionSignature(nil, d.Type(), "")
 				p.w(")(unsafe.Pointer(uintptr(unsafe.Pointer(&%s))+%d%s)) = ", tld.name, init.Offset, fld)
-				p.declarator(nil, d, d.Type(), exprFunc, 0)
+				p.declarator(init, nil, d, d.Type(), exprFunc, 0)
 			default:
 				p.w("\n*(*%s)(unsafe.Pointer(uintptr(unsafe.Pointer(&%s))+%d%s)) = ", p.typ(init, patch.t), tld.name, init.Offset, fld)
 				p.assignmentExpression(nil, expr, patch.t, exprValue, fOutermost)
@@ -1877,7 +1900,7 @@ func (p *project) Err() error {
 	w := 0
 	for _, v := range p.errors {
 		if lpos.Filename != "" {
-			if v.Pos.Filename == lpos.Filename && v.Pos.Line == lpos.Line {
+			if v.Pos.Filename == lpos.Filename && v.Pos.Line == lpos.Line && !strings.HasPrefix(v.Msg, tooManyErrors) {
 				continue
 			}
 		}
@@ -1889,7 +1912,15 @@ func (p *project) Err() error {
 	p.errors = p.errors[:w]
 	sort.Slice(p.errors, func(i, j int) bool {
 		a := p.errors[i]
+		if a.Msg == tooManyErrors {
+			return false
+		}
+
 		b := p.errors[j]
+		if b.Msg == tooManyErrors {
+			return true
+		}
+
 		if !a.Pos.IsValid() && b.Pos.IsValid() {
 			return true
 		}
@@ -2053,7 +2084,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 			default:
 				sv := f.condInitPrefix
 				f.condInitPrefix = func() {
-					p.declarator(f, d, d.Type(), exprLValue, fOutermost)
+					p.declarator(d, f, d, d.Type(), exprLValue, fOutermost)
 					p.w(" = ")
 				}
 				switch {
@@ -2074,7 +2105,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 		case local.isPinned:
 			sv := f.condInitPrefix
 			f.condInitPrefix = func() {
-				p.declarator(f, d, d.Type(), exprLValue, fOutermost)
+				p.declarator(d, f, d, d.Type(), exprLValue, fOutermost)
 				p.w(" = ")
 			}
 			switch {
@@ -2162,43 +2193,43 @@ func (p *project) initDeclaratorDecl(f *function, n *cc.InitDeclarator, sep stri
 	p.w("%svar %s %s;", sep, local.name, p.typ(n, d.Type()))
 }
 
-func (p *project) declarator(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declarator(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	switch mode {
 	case exprLValue:
-		p.declaratorLValue(f, d, t, mode, flags)
+		p.declaratorLValue(n, f, d, t, mode, flags)
 	case exprFunc:
-		p.declaratorFunc(f, d, t, mode, flags)
+		p.declaratorFunc(n, f, d, t, mode, flags)
 	case exprValue:
-		p.declaratorValue(f, d, t, mode, flags)
+		p.declaratorValue(n, f, d, t, mode, flags)
 	case exprAddrOf:
-		p.declaratorAddrOf(f, d, t, flags)
+		p.declaratorAddrOf(n, f, d, t, flags)
 	case exprSelect:
-		p.declaratorSelect(f, d)
+		p.declaratorSelect(n, f, d)
 	case exprPSelect:
-		p.declaratorPSelect(f, d, t)
+		p.declaratorPSelect(n, f, d, t)
 	default:
 		panic(todo("", mode))
 	}
 }
 
-func (p *project) declaratorValue(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorValue(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	switch k := p.declaratorKind(d); k {
 	case opNormal:
-		p.declaratorValueNormal(f, d, t, mode, flags)
+		p.declaratorValueNormal(n, f, d, t, mode, flags)
 	case opArray:
-		p.declaratorValueArray(f, d, t, mode, flags)
+		p.declaratorValueArray(n, f, d, t, mode, flags)
 	case opFunction:
-		p.declarator(f, d, t, exprAddrOf, flags)
+		p.declarator(n, f, d, t, exprAddrOf, flags)
 	case opUnion:
-		p.declaratorValueUnion(f, d, t, mode, flags)
+		p.declaratorValueUnion(n, f, d, t, mode, flags)
 	case opArrayParameter:
-		p.declaratorValueArrayParameter(f, d, t, mode, flags)
+		p.declaratorValueArrayParameter(n, f, d, t, mode, flags)
 	default:
 		panic(todo("", d.Position(), k))
 	}
 }
 
-func (p *project) declaratorValueArrayParameter(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorValueArrayParameter(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	if d.Type().IsScalarType() {
 		defer p.w("%s", p.convertType(d.Type(), t, flags))
 	}
@@ -2211,7 +2242,7 @@ func (p *project) declaratorValueArrayParameter(f *function, d *cc.Declarator, t
 	p.w("%s", local.name)
 }
 
-func (p *project) declaratorValueUnion(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorValueUnion(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	if d.Type().IsScalarType() {
 		defer p.w("%s", p.convertType(d.Type(), t, flags))
 	}
@@ -2238,7 +2269,8 @@ func (p *project) declaratorValueUnion(f *function, d *cc.Declarator, t cc.Type,
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2247,7 +2279,7 @@ func (p *project) declaratorValueUnion(f *function, d *cc.Declarator, t cc.Type,
 	}
 }
 
-func (p *project) declaratorValueArray(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorValueArray(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	if t.IsIntegerType() {
 		defer p.w("%s", p.convertType(nil, t, flags))
 	}
@@ -2274,7 +2306,8 @@ func (p *project) declaratorValueArray(f *function, d *cc.Declarator, t cc.Type,
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2287,7 +2320,7 @@ func (p *project) declaratorValueArray(f *function, d *cc.Declarator, t cc.Type,
 	}
 }
 
-func (p *project) declaratorValueNormal(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorValueNormal(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	if d.Type().IsScalarType() {
 		defer p.w("%s", p.convertType(d.Type(), t, flags))
 	}
@@ -2314,7 +2347,8 @@ func (p *project) declaratorValueNormal(f *function, d *cc.Declarator, t cc.Type
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2323,18 +2357,18 @@ func (p *project) declaratorValueNormal(f *function, d *cc.Declarator, t cc.Type
 	}
 }
 
-func (p *project) declaratorFunc(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorFunc(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	switch k := p.declaratorKind(d); k {
 	case opFunction:
-		p.declaratorFuncFunc(f, d, t, exprValue, flags)
+		p.declaratorFuncFunc(n, f, d, t, exprValue, flags)
 	case opNormal:
-		p.declaratorFuncNormal(f, d, t, exprValue, flags)
+		p.declaratorFuncNormal(n, f, d, t, exprValue, flags)
 	default:
 		panic(todo("", d.Position(), k))
 	}
 }
 
-func (p *project) declaratorFuncNormal(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	u := d.Type()
 	switch u.Kind() {
 	case cc.Ptr:
@@ -2372,7 +2406,8 @@ func (p *project) declaratorFuncNormal(f *function, d *cc.Declarator, t cc.Type,
 				nm := d.Name()
 				imp := p.imports[nm.String()]
 				if imp == nil {
-					p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+					p.err(n, "undefined: %s", d.Name())
+					p.w("%s", nm)
 					return
 				}
 
@@ -2387,7 +2422,7 @@ func (p *project) declaratorFuncNormal(f *function, d *cc.Declarator, t cc.Type,
 	}
 }
 
-func (p *project) declaratorFuncFunc(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorFuncFunc(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	switch d.Type().Kind() {
 	case cc.Function:
 		// ok
@@ -2412,7 +2447,8 @@ func (p *project) declaratorFuncFunc(f *function, d *cc.Declarator, t cc.Type, m
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2421,18 +2457,18 @@ func (p *project) declaratorFuncFunc(f *function, d *cc.Declarator, t cc.Type, m
 	}
 }
 
-func (p *project) declaratorLValue(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorLValue(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	switch k := p.declaratorKind(d); k {
 	case opNormal, opArrayParameter:
-		p.declaratorLValueNormal(f, d, t, mode, flags)
+		p.declaratorLValueNormal(n, f, d, t, mode, flags)
 	case opArray:
-		p.declaratorLValueArray(f, d, t, mode, flags)
+		p.declaratorLValueArray(n, f, d, t, mode, flags)
 	default:
 		panic(todo("", d.Position(), k))
 	}
 }
 
-func (p *project) declaratorLValueArray(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorLValueArray(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -2456,7 +2492,8 @@ func (p *project) declaratorLValueArray(f *function, d *cc.Declarator, t cc.Type
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2470,7 +2507,7 @@ func (p *project) declaratorLValueArray(f *function, d *cc.Declarator, t cc.Type
 	}
 }
 
-func (p *project) declaratorLValueNormal(f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+func (p *project) declaratorLValueNormal(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	if d.Type().IsScalarType() {
 		defer p.w("%s", p.convertType(d.Type(), t, flags))
 	}
@@ -2497,7 +2534,8 @@ func (p *project) declaratorLValueNormal(f *function, d *cc.Declarator, t cc.Typ
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2521,19 +2559,19 @@ func (p *project) declaratorKind(d *cc.Declarator) opKind {
 	}
 }
 
-func (p *project) declaratorPSelect(f *function, d *cc.Declarator, t cc.Type) {
+func (p *project) declaratorPSelect(n cc.Node, f *function, d *cc.Declarator, t cc.Type) {
 	switch k := p.declaratorKind(d); k {
 	case opNormal:
-		p.declaratorPSelectNormal(f, d, t)
+		p.declaratorPSelectNormal(n, f, d, t)
 	case opArray:
 		panic(todo(""))
-		p.declaratorPSelectArray(f, d)
+		p.declaratorPSelectArray(n, f, d)
 	default:
 		panic(todo("", d.Position(), k))
 	}
 }
 
-func (p *project) declaratorPSelectArray(f *function, d *cc.Declarator) {
+func (p *project) declaratorPSelectArray(n cc.Node, f *function, d *cc.Declarator) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -2558,7 +2596,7 @@ func (p *project) declaratorPSelectArray(f *function, d *cc.Declarator) {
 	}
 }
 
-func (p *project) declaratorPSelectNormal(f *function, d *cc.Declarator, t cc.Type) {
+func (p *project) declaratorPSelectNormal(n cc.Node, f *function, d *cc.Declarator, t cc.Type) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -2586,18 +2624,18 @@ func (p *project) declaratorPSelectNormal(f *function, d *cc.Declarator, t cc.Ty
 	}
 }
 
-func (p *project) declaratorSelect(f *function, d *cc.Declarator) {
+func (p *project) declaratorSelect(n cc.Node, f *function, d *cc.Declarator) {
 	switch k := p.declaratorKind(d); k {
 	case opNormal:
-		p.declaratorSelectNormal(f, d)
+		p.declaratorSelectNormal(n, f, d)
 	case opArray:
-		p.declaratorSelectArray(f, d)
+		p.declaratorSelectArray(n, f, d)
 	default:
 		panic(todo("", d.Position(), k))
 	}
 }
 
-func (p *project) declaratorSelectArray(f *function, d *cc.Declarator) {
+func (p *project) declaratorSelectArray(n cc.Node, f *function, d *cc.Declarator) {
 	if local := f.locals[d]; local != nil {
 		if local.isPinned {
 			panic(todo(""))
@@ -2621,7 +2659,7 @@ func (p *project) declaratorSelectArray(f *function, d *cc.Declarator) {
 	}
 }
 
-func (p *project) declaratorSelectNormal(f *function, d *cc.Declarator) {
+func (p *project) declaratorSelectNormal(n cc.Node, f *function, d *cc.Declarator) {
 	if local := f.locals[d]; local != nil {
 		if local.isPinned {
 			p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
@@ -2644,28 +2682,28 @@ func (p *project) declaratorSelectNormal(f *function, d *cc.Declarator) {
 	}
 }
 
-func (p *project) declaratorAddrOf(f *function, d *cc.Declarator, t cc.Type, flags flags) {
+func (p *project) declaratorAddrOf(n cc.Node, f *function, d *cc.Declarator, t cc.Type, flags flags) {
 	switch k := p.declaratorKind(d); k {
 	case opArray:
-		p.declaratorAddrOfArray(f, d)
+		p.declaratorAddrOfArray(n, f, d)
 	case opNormal:
-		p.declaratorAddrOfNormal(f, d, flags)
+		p.declaratorAddrOfNormal(n, f, d, flags)
 	case opUnion:
-		p.declaratorAddrOfUnion(f, d)
+		p.declaratorAddrOfUnion(n, f, d)
 	case opFunction:
-		p.declaratorAddrOfFunction(f, d)
+		p.declaratorAddrOfFunction(n, f, d)
 	case opArrayParameter:
-		p.declaratorAddrOfArrayParameter(f, d)
+		p.declaratorAddrOfArrayParameter(n, f, d)
 	default:
 		panic(todo("", d.Position(), k))
 	}
 }
 
-func (p *project) declaratorAddrOfArrayParameter(f *function, d *cc.Declarator) {
+func (p *project) declaratorAddrOfArrayParameter(n cc.Node, f *function, d *cc.Declarator) {
 	p.w("%s", f.locals[d].name)
 }
 
-func (p *project) declaratorAddrOfFunction(f *function, d *cc.Declarator) {
+func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declarator) {
 	if d.Type().Kind() != cc.Function {
 		panic(todo(""))
 	}
@@ -2683,7 +2721,8 @@ func (p *project) declaratorAddrOfFunction(f *function, d *cc.Declarator) {
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2694,7 +2733,7 @@ func (p *project) declaratorAddrOfFunction(f *function, d *cc.Declarator) {
 	}
 }
 
-func (p *project) declaratorAddrOfUnion(f *function, d *cc.Declarator) {
+func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -2717,7 +2756,8 @@ func (p *project) declaratorAddrOfUnion(f *function, d *cc.Declarator) {
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2726,7 +2766,7 @@ func (p *project) declaratorAddrOfUnion(f *function, d *cc.Declarator) {
 	}
 }
 
-func (p *project) declaratorAddrOfNormal(f *function, d *cc.Declarator, flags flags) {
+func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarator, flags flags) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -2756,7 +2796,8 @@ func (p *project) declaratorAddrOfNormal(f *function, d *cc.Declarator, flags fl
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -2765,7 +2806,7 @@ func (p *project) declaratorAddrOfNormal(f *function, d *cc.Declarator, flags fl
 	}
 }
 
-func (p *project) declaratorAddrOfArray(f *function, d *cc.Declarator) {
+func (p *project) declaratorAddrOfArray(n cc.Node, f *function, d *cc.Declarator) {
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -2788,7 +2829,8 @@ func (p *project) declaratorAddrOfArray(f *function, d *cc.Declarator) {
 		nm := d.Name()
 		imp := p.imports[nm.String()]
 		if imp == nil {
-			p.err(d, "%v: undefined: %s", d.Position(), d.Name())
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
 			return
 		}
 
@@ -8386,7 +8428,7 @@ func (p *project) primaryExpressionBool(f *function, n *cc.PrimaryExpression, t 
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
 		switch d := n.Declarator(); {
 		case d != nil:
-			p.declarator(f, d, d.Type(), exprValue, flags)
+			p.declarator(n, f, d, d.Type(), exprValue, flags)
 		default:
 			panic(todo("", pos(n)))
 		}
@@ -8425,7 +8467,7 @@ func (p *project) primaryExpressionPSelect(f *function, n *cc.PrimaryExpression,
 				panic(todo(""))
 				p.primaryExpression(f, n, t, exprAddrOf, flags)
 			default:
-				p.declarator(f, d, t, mode, flags)
+				p.declarator(n, f, d, t, mode, flags)
 			}
 		default:
 			panic(todo("", pos(n)))
@@ -8458,7 +8500,7 @@ func (p *project) primaryExpressionSelect(f *function, n *cc.PrimaryExpression, 
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
 		switch d := n.Declarator(); {
 		case d != nil:
-			p.declarator(f, d, t, mode, flags)
+			p.declarator(n, f, d, t, mode, flags)
 		default:
 			panic(todo("", pos(n)))
 		}
@@ -8490,7 +8532,7 @@ func (p *project) primaryExpressionAddrOf(f *function, n *cc.PrimaryExpression, 
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
 		switch d := n.Declarator(); {
 		case d != nil:
-			p.declarator(f, d, t, mode, flags)
+			p.declarator(n, f, d, t, mode, flags)
 		default:
 			panic(todo("", pos(n)))
 		}
@@ -8524,7 +8566,7 @@ func (p *project) primaryExpressionFunc(f *function, n *cc.PrimaryExpression, t 
 		case d != nil:
 			switch d.Type().Kind() {
 			case cc.Function:
-				p.declarator(f, d, t, mode, flags)
+				p.declarator(n, f, d, t, mode, flags)
 			case cc.Ptr:
 				switch et := d.Type().Elem(); et.Kind() {
 				case cc.Function:
@@ -8570,7 +8612,7 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
 		switch d := n.Declarator(); {
 		case d != nil:
-			p.declarator(f, d, t, mode, flags)
+			p.declarator(n, f, d, t, mode, flags)
 		default:
 			panic(todo("", pos(n)))
 		}
@@ -8618,7 +8660,7 @@ func (p *project) primaryExpressionLValue(f *function, n *cc.PrimaryExpression, 
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
 		switch d := n.Declarator(); {
 		case d != nil:
-			p.declarator(f, d, t, mode, flags)
+			p.declarator(n, f, d, t, mode, flags)
 		default:
 			panic(todo("", pos(n)))
 		}
@@ -8980,7 +9022,7 @@ func (p *project) assignShiftOpVoidNormal(f *function, n *cc.AssignmentExpressio
 		panic(todo(""))
 	default:
 		if d := n.UnaryExpression.Declarator(); d != nil {
-			p.declarator(f, d, d.Type(), exprLValue, flags|fOutermost)
+			p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 			p.w(" %s= ", oper)
 			p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
 			return
@@ -9044,7 +9086,7 @@ func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t
 		case d.Type().Kind() == cc.Ptr:
 			defer p.w("%s", p.convertType(d.Type(), t, flags))
 			p.w("%sAssign%s%s(&", p.task.crt, oper2, p.helperType(d.Type()))
-			p.declarator(f, d, d.Type(), exprLValue, flags|fOutermost)
+			p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 			p.w(", ")
 			if dd := p.incDelta(d, d.Type()); dd != 1 {
 				p.w("%d*(", dd)
@@ -9055,7 +9097,7 @@ func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t
 		case d.Type().IsArithmeticType():
 			defer p.w("%s", p.convertType(d.Type(), t, flags))
 			p.w("%sAssign%s%s(&", p.task.crt, oper2, p.helperType(d.Type()))
-			p.declarator(f, d, d.Type(), exprLValue, flags|fOutermost)
+			p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 			p.w(", ")
 			if asInt {
 				p.w("int(")
@@ -9143,7 +9185,7 @@ func (p *project) assignOpVoidArrayParameter(f *function, n *cc.AssignmentExpres
 		panic(todo(""))
 	}
 
-	p.declarator(f, d, d.Type(), exprLValue, flags|fOutermost)
+	p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 	if oper != "+" && oper != "-" {
 		panic(todo(""))
 	}
@@ -9201,7 +9243,7 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t 
 	// UnaryExpression "*=" AssignmentExpression etc.
 	if d := n.UnaryExpression.Declarator(); d != nil {
 		if local := f.locals[d]; local != nil && local.isPinned {
-			p.declarator(f, d, d.Type(), exprLValue, flags)
+			p.declarator(n, f, d, d.Type(), exprLValue, flags)
 			switch {
 			case d.Type().Kind() == cc.Ptr:
 				p.w(" %s= ", oper)
@@ -9221,7 +9263,7 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t 
 			return
 		}
 
-		p.declarator(f, d, d.Type(), exprLValue, flags|fOutermost)
+		p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 		switch d.Type().Kind() {
 		case cc.Ptr:
 			if oper != "+" && oper != "-" {
@@ -9238,7 +9280,7 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t 
 		default:
 			p.w(" = ")
 			defer p.w("%s", p.convertType(n.Promote(), d.Type(), flags))
-			p.declarator(f, d, n.Promote(), exprValue, flags|fOutermost)
+			p.declarator(n, f, d, n.Promote(), exprValue, flags|fOutermost)
 			p.w(" %s (", oper)
 			p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
 			p.w(")")
