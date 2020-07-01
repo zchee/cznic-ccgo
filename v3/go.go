@@ -501,8 +501,9 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 	for _, v := range n.CompoundStatements() {
 		block := f.blocks[v]
 		for _, v := range extern {
-			tld := f.project.externs[v]
-			block.scope.take(tld.name)
+			if tld := f.project.externs[v]; tld != nil {
+				block.scope.take(tld.name)
+			}
 		}
 	}
 	for _, v := range n.CompoundStatements() {
@@ -1143,7 +1144,15 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 	}
 	for _, item := range work {
 		d := item.d
+		if f.ignore[d] {
+			continue
+		}
+
 		if !f.ignore[d] && d.IsStatic() {
+			continue
+		}
+
+		if d.IsFunctionPrototype() && d.IsExtern() {
 			continue
 		}
 
@@ -1164,21 +1173,16 @@ func (f *function) layoutLocals(parent *block, n *cc.CompoundStatement, params [
 	f.blocks[n] = block
 	if parent == nil {
 		f.top = block
-		f.top.topDecl = true
+		f.top.topDecl = f.hasJumps
 	}
 	for _, ch := range n.Children() {
 		f.layoutLocals(block, ch, nil)
-		//TODO if len(ch.LabeledStatements()) != 0 {
-		//TODO 	chb := f.blocks[ch]
-		//TODO 	top := f.blocks[f.fndef.CompoundStatement]
-		//TODO 	top.decls = append(top.decls, chb.decls...)
-		//TODO 	top.topDecl = true
-		//TODO 	chb.decls = nil
-		//TODO }
-		chb := f.blocks[ch]
-		chb.noDecl = true
-		f.top.decls = append(f.top.decls, chb.decls...)
-		chb.decls = nil
+		if f.hasJumps {
+			chb := f.blocks[ch]
+			chb.noDecl = true
+			f.top.decls = append(f.top.decls, chb.decls...)
+			chb.decls = nil
+		}
 	}
 }
 
@@ -1261,10 +1265,6 @@ func newProject(t *task) (*project, error) {
 		wanted:     map[*cc.Declarator]struct{}{},
 	}
 	p.scope.take("CAPI")
-	if err := p.layout(); err != nil {
-		return nil, err
-	}
-
 	for _, v := range t.imported {
 		var err error
 		if v.name, v.exports, err = t.capi(v.path); err != nil {
@@ -1282,6 +1282,10 @@ func newProject(t *task) (*project, error) {
 	p.tsName = p.scope.take("ts")
 	p.ts4NameP = p.scope.take("wtext")
 	p.ts4Name = p.scope.take("wtext")
+	if err := p.layout(); err != nil {
+		return nil, err
+	}
+
 	return p, nil
 }
 
@@ -1886,7 +1890,7 @@ func (p *project) layoutTLDs() error {
 				}
 			case cc.Internal:
 				name := nm.String()
-				if token.IsExported(name) && !p.isMain {
+				if token.IsExported(name) && !p.isMain && p.task.exportExternsValid {
 					name = "s" + name
 				}
 				tld := &tld{name: p.scope.take(name)}
@@ -1924,6 +1928,39 @@ func (p *project) layoutTLDs() error {
 			default:
 				panic(todo("", pos(d), nm, d.Linkage))
 			}
+		}
+	}
+	for _, ast := range p.task.asts {
+		for list := ast.TranslationUnit; list != nil; list = list.TranslationUnit {
+			decl := list.ExternalDeclaration
+			switch decl.Case {
+			case cc.ExternalDeclarationFuncDef: // FunctionDefinition
+				// ok
+			default:
+				continue
+			}
+
+			cc.Inspect(decl.FunctionDefinition.CompoundStatement, func(n cc.Node, entry bool) bool {
+				switch x := n.(type) {
+				case *cc.Declarator:
+					if x.IsFunctionPrototype() && x.IsExtern() {
+						nm := x.Name()
+						if extern := p.externs[nm]; extern != nil {
+							break
+						}
+
+						tld := &tld{name: nm.String()}
+						p.externs[nm] = tld
+						for _, nd := range ast.Scope[nm] {
+							if d, ok := nd.(*cc.Declarator); ok {
+								p.tlds[d] = tld
+							}
+						}
+					}
+
+				}
+				return true
+			})
 		}
 	}
 	return nil
@@ -2666,7 +2703,7 @@ func (p *project) declaratorFuncFunc(n cc.Node, f *function, d *cc.Declarator, t
 
 	if f != nil {
 		if local := f.locals[d]; local != nil {
-			panic(todo(""))
+			panic(todo("", n.Position(), pos(d)))
 		}
 	}
 
@@ -3587,7 +3624,9 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 		if !forceCompoundStmtBrace {
 			p.w("%s", n.CompoundStatement.Token.Sep)
 		}
-		//TODO- forceNoBraces = true
+		if f.hasJumps {
+			forceNoBraces = true
+		}
 		p.compoundStatement(f, n.CompoundStatement, "", forceCompoundStmtBrace || forceNoBraces)
 	case cc.StatementExpr: // ExpressionStatement
 		p.expressionStatement(f, n.ExpressionStatement)
@@ -9613,7 +9652,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 		p.statement(f, n.Statement, true, false)
 	case cc.IterationStatementFor: // "for" '(' Expression ';' Expression ';' Expression ')' Statement
-		if true || f.block.isFlat() && isJumpTarget(n.Statement) {
+		if f.hasJumps {
 			//	expr
 			// a:	if !expr2 goto c
 			//	stmt
@@ -9648,50 +9687,43 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			break
 		}
 
-		panic(todo("")) //TODO Fails SQLite
-		// expr := true
-		// if n.Expression != nil && n.Expression.Case == cc.ExpressionComma {
-		// 	p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, fOutermost)
-		// 	p.w(";")
-		// 	expr = false
-		// }
-		// switch {
-		// case n.Expression3 != nil && n.Expression3.Case == cc.ExpressionComma:
-		// 	p.w("for ")
-		// 	if expr && n.Expression != nil {
-		// 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
-		// 	}
-		// 	if expr {
-		// 		p.w("; ")
-		// 	}
-		// 	if n.Expression2 != nil {
-		// 		p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprBool, fOutermost)
-		// 	}
-		// 	if expr {
-		// 		p.w(";")
-		// 	}
-		// 	p.w("{")
-		// 	p.statement(f, n.Statement, false, true)
-		// 	a := f.flatLabel()
-		// 	f.continueCtx = a
-		// 	p.w(";goto __%d; __%[1]d:", a)
-		// 	p.expression(f, n.Expression3, n.Expression3.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
-		// 	p.w("}")
-		// default:
-		// 	p.w("for ")
-		// 	if expr && n.Expression != nil {
-		// 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
-		// 	}
-		// 	p.w("; ")
-		// 	if n.Expression2 != nil {
-		// 		p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprBool, fOutermost)
-		// 	}
-		// 	p.w("; ")
-		// 	if n.Expression3 != nil {
-		// 		p.expression(f, n.Expression3, n.Expression3.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
-		// 	}
-		// 	p.statement(f, n.Statement, true, false)
-		// }
+		expr := true
+		if n.Expression != nil && n.Expression.Case == cc.ExpressionComma {
+			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, fOutermost)
+			p.w(";")
+			expr = false
+		}
+		switch {
+		case n.Expression3 != nil && n.Expression3.Case == cc.ExpressionComma:
+			p.w("for ")
+			if expr && n.Expression != nil {
+				p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
+			}
+			p.w("; ")
+			if n.Expression2 != nil {
+				p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprBool, fOutermost)
+			}
+			p.w("; func() {")
+			if n.Expression3 != nil {
+				p.expression(f, n.Expression3, n.Expression3.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
+			}
+			p.w("}()")
+			p.statement(f, n.Statement, true, false)
+		default:
+			p.w("for ")
+			if expr && n.Expression != nil {
+				p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
+			}
+			p.w("; ")
+			if n.Expression2 != nil {
+				p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprBool, fOutermost)
+			}
+			p.w("; ")
+			if n.Expression3 != nil {
+				p.expression(f, n.Expression3, n.Expression3.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
+			}
+			p.statement(f, n.Statement, true, false)
+		}
 	case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
 		if true || f.block.isFlat() {
 			panic(todo(""))
