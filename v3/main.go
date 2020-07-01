@@ -26,20 +26,6 @@ package main // import "modernc.org/ccgo/v3"
 //		...
 //	}
 
-//TODO turn
-//
-//	if foo {
-//		// nothing here
-//	} else {
-//		// something here
-//	}
-//
-// into
-//
-//	if !foo {
-//		// something here
-//	}
-
 //TODO turn void
 //
 //	a = b = c = d
