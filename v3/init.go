@@ -21,7 +21,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 	if t.IsScalarType() {
 		switch n.Case {
 		case cc.InitializerExpr: // AssignmentExpression
-			p.w("%s", comment("", n.AssignmentExpression))
+			p.w("%s", tidyComment("", n.AssignmentExpression))
 			switch {
 			case tld != nil && t.Kind() == cc.Ptr && n.AssignmentExpression.Operand.Value() == nil:
 				tld.patches = append(tld.patches, initPatch{t, n, fld})
@@ -47,7 +47,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 	if k == cc.Struct || k == cc.Union {
 		switch n.Case {
 		case cc.InitializerExpr: // AssignmentExpression
-			p.w("%s", comment("", n.AssignmentExpression))
+			p.w("%s", tidyComment("", n.AssignmentExpression))
 			p.assignmentExpression(f, n.AssignmentExpression, t, exprValue, fOutermost)
 			return
 		case cc.InitializerInitList: // '{' InitializerList ',' '}'
@@ -148,7 +148,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 
 func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
-	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
+	p.w("%s%s{", tidyComment("", &n0.Token), p.typ(n, t))
 	idx := []int{0}
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
@@ -173,12 +173,12 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 		}
 		idx[0]++
 	}
-	p.w("%s}", comment("", &n0.Token3))
+	p.w("%s}", tidyComment("", &n0.Token3))
 }
 
 func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
-	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
+	p.w("%s%s{", tidyComment("", &n0.Token), p.typ(n, t))
 	idx := []int{0}
 	var m map[uintptr][]string
 	info := p.structLayout(t)
@@ -261,12 +261,12 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		p.w("%s", comma)
 		idx[0]++
 	}
-	p.w("%s}", comment("", &n0.Token3))
+	p.w("%s}", tidyComment("", &n0.Token3))
 }
 
 func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
-	p.w("%s%s{", comment("", &n0.Token), p.typ(n, t))
+	p.w("%s%s{", tidyComment("", &n0.Token), p.typ(n, t))
 	et := t.Elem()
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
@@ -281,7 +281,7 @@ func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Typ
 		}
 		p.w(",")
 	}
-	p.w("%s}", comment("", &n0.Token3))
+	p.w("%s}", tidyComment("", &n0.Token3))
 }
 
 func isAggregateType(t cc.Type) bool {

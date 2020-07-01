@@ -96,7 +96,7 @@ func (s *taggedStruct) emit(p *project, ds *cc.DeclarationSpecifiers) {
 	}
 
 	s.emitted = true
-	p.w("%stype %s = %s;\n\n", comment("\n", ds), s.name, s.gotyp)
+	p.w("%stype %s = %s;\n\n", tidyComment("\n", ds), s.name, s.gotyp)
 }
 
 // Return first non empty token separator within n or dflt otherwise.
@@ -106,6 +106,236 @@ func comment(dflt string, n cc.Node) string {
 	}
 
 	return dflt
+}
+
+// tidyComment is like comment but makes comment more Go-like.
+func tidyComment(dflt string, n cc.Node) (r string) {
+	defer func() {
+		if !strings.Contains(r, "// <blockquote><pre>") {
+			return
+		}
+
+		a := strings.Split(r, "\n")
+		in := false
+		for i, v := range a {
+			switch {
+			case in:
+				if strings.HasPrefix(v, "// </pre></blockquote>") {
+					in = false
+					a[i] = "//"
+					break
+				}
+
+				a[i] = fmt.Sprintf("//\t%s", v[3:])
+			default:
+				if strings.HasPrefix(v, "// <blockquote><pre>") {
+					a[i] = "//"
+					in = true
+				}
+			}
+		}
+		r = strings.Join(a, "\n")
+	}()
+
+	s := comment(dflt, n)
+	var b strings.Builder
+	for len(s) != 0 {
+		c := s[0]
+		s = s[1:]
+		if len(s) == 0 {
+			b.WriteByte(c)
+			break
+		}
+
+		if c != '/' {
+			b.WriteByte(c)
+			continue
+		}
+
+		c2 := s[0]
+		s = s[1:]
+		switch c2 {
+		case '/': // line comment start
+			b.WriteByte(c)
+			b.WriteByte(c2)
+			for {
+				c := s[0]
+				s = s[1:]
+				b.WriteByte(c)
+				if c == '\n' {
+					break
+				}
+			}
+		case '*': // block comment start
+			var b2 strings.Builder
+			for {
+				c := s[0]
+				s = s[1:]
+				if c != '*' {
+					b2.WriteByte(c)
+					continue
+				}
+
+			more:
+				c2 := s[0]
+				s = s[1:]
+				if c2 == '*' {
+					b2.WriteByte(c)
+					goto more
+				}
+
+				if c2 != '/' {
+					b2.WriteByte(c)
+					b2.WriteByte(c2)
+					continue
+				}
+
+				break
+			}
+			s2 := b2.String() // comment sans /* prefix and */ suffix
+			a := strings.Split(s2, "\n")
+			nl := len(s) != 0 && s[0] == '\n'
+			if len(a) == 1 { // /* foo */ form
+				if nl {
+					s = s[1:]
+					fmt.Fprintf(&b, "//%s\n", s2)
+					break
+				}
+
+				fmt.Fprintf(&b, "/*%s*/", s2)
+				break
+			}
+
+			if !nl {
+				fmt.Fprintf(&b, "/*%s*/", s2)
+				break
+			}
+
+			// Block comment followed by a newline can be safely replaced by a sequence of
+			// line comments.  Try to enhance the comment.
+			if commentForm1(&b, a) ||
+				commentForm2(&b, a) ||
+				commentForm3(&b, a) {
+				break
+			}
+
+			// No enhancement posibilities detected, use the default form.
+			if a[len(a)-1] == "" {
+				a = a[:len(a)-1]
+			}
+			fmt.Fprintf(&b, "//%s", a[0])
+			for _, v := range a[1:] {
+				fmt.Fprintf(&b, "\n//%s", v)
+			}
+		default:
+			b.WriteByte(c)
+			b.WriteByte(c2)
+		}
+	}
+	return b.String()
+}
+
+func commentForm1(b *strings.Builder, a []string) bool {
+	// Example
+	//
+	//	/*
+	//	** Initialize this module.
+	//	**
+	//	** This Tcl module contains only a single new Tcl command named "sqlite".
+	//	** (Hence there is no namespace.  There is no point in using a namespace
+	//	** if the extension only supplies one new name!)  The "sqlite" command is
+	//	** used to open a new SQLite database.  See the DbMain() routine above
+	//	** for additional information.
+	//	**
+	//	** The EXTERN macros are required by TCL in order to work on windows.
+	//	*/
+	if strings.TrimSpace(a[0]) != "" {
+		return false
+	}
+
+	if strings.TrimSpace(a[len(a)-1]) != "" {
+		return false
+	}
+
+	a = a[1 : len(a)-1]
+	if len(a) == 0 {
+		return false
+	}
+
+	for i, v := range a {
+		v = strings.TrimSpace(v)
+		if !strings.HasPrefix(v, "*") {
+			return false
+		}
+
+		a[i] = strings.TrimLeft(v, "*")
+	}
+
+	fmt.Fprintf(b, "//%s", a[0])
+	for _, v := range a[1:] {
+		fmt.Fprintf(b, "\n//%s", v)
+	}
+	return true
+}
+
+func commentForm2(b *strings.Builder, a []string) bool {
+	// Example
+	//
+	//	/**************************** sqlite3_column_  *******************************
+	//	** The following routines are used to access elements of the current row
+	//	** in the result set.
+	//	*/
+	if strings.TrimSpace(a[len(a)-1]) != "" {
+		return false
+	}
+
+	a = a[:len(a)-1]
+	if len(a) == 0 {
+		return false
+	}
+
+	for i, v := range a[1:] {
+		v = strings.TrimSpace(v)
+		if !strings.HasPrefix(v, "*") {
+			return false
+		}
+
+		a[i+1] = strings.TrimLeft(v, "*")
+	}
+
+	fmt.Fprintf(b, "// %s", strings.TrimSpace(a[0]))
+	if strings.HasPrefix(a[0], "**") && strings.HasSuffix(a[0], "**") {
+		fmt.Fprintf(b, "\n//")
+	}
+	for _, v := range a[1:] {
+		fmt.Fprintf(b, "\n//%s", v)
+	}
+	return true
+}
+
+func commentForm3(b *strings.Builder, a []string) bool {
+	// Example
+	//
+	//	/* Call sqlite3_shutdown() once before doing anything else. This is to
+	//	** test that sqlite3_shutdown() can be safely called by a process before
+	//	** sqlite3_initialize() is. */
+	for i, v := range a[1:] {
+		v = strings.TrimSpace(v)
+		if !strings.HasPrefix(v, "*") {
+			return false
+		}
+
+		a[i+1] = strings.TrimLeft(v, "*")
+	}
+
+	fmt.Fprintf(b, "// %s", strings.TrimSpace(a[0]))
+	if strings.HasPrefix(a[0], "**") && strings.HasSuffix(a[0], "**") {
+		fmt.Fprintf(b, "\n//")
+	}
+	for _, v := range a[1:] {
+		fmt.Fprintf(b, "\n//%s", v)
+	}
+	return true
 }
 
 // Return the preceding white space, including any comments, of the first token
@@ -210,6 +440,7 @@ type function struct {
 	vaName           string
 	vaType           cc.Type
 
+	hasJumps            bool
 	mainSignatureForced bool
 }
 
@@ -241,6 +472,7 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 		blocks:              map[*cc.CompoundStatement]*block{},
 		fndef:               n,
 		gen:                 p,
+		hasJumps:            n.CompoundStatement.IsJumpTarget(),
 		ignore:              ignore,
 		locals:              map[*cc.Declarator]*local{},
 		mainSignatureForced: mainSignatureForced,
@@ -972,11 +1204,11 @@ func (n *enumSpec) emit(p *project, enumConsts map[cc.StringID]string) {
 	}
 
 	n.emitted = true
-	p.w("%s", comment("\n", n.decl))
+	p.w("%s", tidyComment("\n", n.decl))
 	p.w("const ( /* %v: */", pos(n.decl))
 	for list := n.spec.EnumeratorList; list != nil; list = list.EnumeratorList {
 		en := list.Enumerator
-		p.w("%s%s = %v;", comment("\n", en), enumConsts[en.Token.Value], en.Operand.Value())
+		p.w("%s%s = %v;", tidyComment("\n", en), enumConsts[en.Token.Value], en.Operand.Value())
 	}
 	p.w(")")
 }
@@ -1588,15 +1820,17 @@ func (p *project) layoutTLDs() error {
 		}
 	}
 	var a []*cc.Declarator
-out:
-	for _, ast := range p.task.asts {
-		if a := ast.Scope[idMain]; len(a) != 0 {
-			switch x := a[0].(type) {
-			case *cc.Declarator:
-				if x.Linkage == cc.External {
-					p.isMain = true
-					p.scope.take("main")
-					break out
+	if p.task.pkgName == "" || p.task.pkgName == "main" {
+	out:
+		for _, ast := range p.task.asts {
+			if a := ast.Scope[idMain]; len(a) != 0 {
+				switch x := a[0].(type) {
+				case *cc.Declarator:
+					if x.Linkage == cc.External {
+						p.isMain = true
+						p.scope.take("main")
+						break out
+					}
 				}
 			}
 		}
@@ -1626,7 +1860,7 @@ out:
 					panic(todo(""))
 				}
 
-				isMain := nm == idMain
+				isMain := p.isMain && nm == idMain
 				name := d.Name().String()
 				switch exportExtern {
 				case doNotExport:
@@ -1823,7 +2057,7 @@ func main() { %sStart(%s) }`, p.task.crt, p.mainName)
 }
 
 func (p *project) flushCAPI() {
-	if len(p.capi) == 0 || p.isMain {
+	if p.isMain {
 		return
 	}
 
@@ -2037,7 +2271,7 @@ func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
 	}
 
 	// DeclarationSpecifiers InitDeclaratorList ';'
-	sep := comment("\n", n)
+	sep := tidyComment("\n", n)
 	for list := n.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
 		p.initDeclarator(f, list.InitDeclarator, sep, topDecl)
 		sep = "\n"
@@ -3301,7 +3535,7 @@ func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomme
 		p.zeroValue(f.rt)
 	}
 	if brace {
-		p.w("%s}", comment("\n", &n.Token2))
+		p.w("%s}", tidyComment("\n", &n.Token2))
 	}
 	f.block = sv
 }
@@ -3383,7 +3617,7 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 }
 
 func (p *project) jumpStatement(f *function, n *cc.JumpStatement) (r *cc.JumpStatement) {
-	p.w("%s", comment("\n", n))
+	p.w("%s", tidyComment("\n", n))
 	if _, ok := n.Context().(*cc.SelectionStatement); ok && f.ifCtx == nil {
 		switch f.switchCtx {
 		case inSwitchCase:
@@ -4309,7 +4543,7 @@ func (p *project) binaryLogicalOrExpressionBool(f *function, n *cc.LogicalOrExpr
 	flags &^= fOutermost
 	defer p.w("%s", p.booleanBinaryExpression(n, n.Operand, n.Operand.Type(), &mode, flags))
 	p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), exprBool, flags)
-	p.w(" ||%s", comment(" ", &n.Token))
+	p.w(" ||%s", tidyComment(" ", &n.Token))
 	p.logicalAndExpression(f, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), exprBool, flags)
 }
 
@@ -4317,7 +4551,7 @@ func (p *project) binaryLogicalOrExpressionValue(f *function, n *cc.LogicalOrExp
 	flags &^= fOutermost
 	defer p.w("%s", p.booleanBinaryExpression(n, n.Operand, t, &mode, flags))
 	p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), exprBool, flags)
-	p.w(" ||%s", comment(" ", &n.Token))
+	p.w(" ||%s", tidyComment(" ", &n.Token))
 	p.logicalAndExpression(f, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), exprBool, flags)
 }
 
@@ -4463,7 +4697,7 @@ func (p *project) binaryLogicalAndExpressionValue(f *function, n *cc.LogicalAndE
 	flags &^= fOutermost
 	defer p.w("%s", p.booleanBinaryExpression(n, n.Operand, t, &mode, flags))
 	p.logicalAndExpression(f, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), exprBool, flags)
-	p.w(" &&%s", comment(" ", &n.Token))
+	p.w(" &&%s", tidyComment(" ", &n.Token))
 	p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.InclusiveOrExpression.Operand.Type(), exprBool, flags)
 }
 
@@ -4471,7 +4705,7 @@ func (p *project) binaryLogicalAndExpressionBool(f *function, n *cc.LogicalAndEx
 	flags &^= fOutermost
 	defer p.w("%s", p.booleanBinaryExpression(n, n.Operand, t, &mode, flags))
 	p.logicalAndExpression(f, n.LogicalAndExpression, n.LogicalAndExpression.Operand.Type(), exprBool, flags)
-	p.w(" &&%s", comment(" ", &n.Token))
+	p.w(" &&%s", tidyComment(" ", &n.Token))
 	p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.InclusiveOrExpression.Operand.Type(), exprBool, flags)
 }
 
@@ -4603,11 +4837,11 @@ func (p *project) binaryInclusiveOrExpressionValue(f *function, n *cc.InclusiveO
 	switch {
 	case orOverflows(n.InclusiveOrExpression.Operand, n.ExclusiveOrExpression.Operand, n.Promote()):
 		p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.Promote(), exprValue, flags)
-		p.w(" |%s", comment(" ", &n.Token))
+		p.w(" |%s", tidyComment(" ", &n.Token))
 		p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 	default:
 		p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.Promote(), exprValue, flags)
-		p.w(" |%s", comment(" ", &n.Token))
+		p.w(" |%s", tidyComment(" ", &n.Token))
 		p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), exprValue, flags)
 	}
 }
@@ -4618,11 +4852,11 @@ func (p *project) binaryInclusiveOrExpressionBool(f *function, n *cc.InclusiveOr
 	switch {
 	case orOverflows(n.InclusiveOrExpression.Operand, n.ExclusiveOrExpression.Operand, n.Promote()):
 		p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.Promote(), exprValue, flags)
-		p.w(" |%s", comment(" ", &n.Token))
+		p.w(" |%s", tidyComment(" ", &n.Token))
 		p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 	default:
 		p.inclusiveOrExpression(f, n.InclusiveOrExpression, n.Promote(), exprValue, flags)
-		p.w(" |%s", comment(" ", &n.Token))
+		p.w(" |%s", tidyComment(" ", &n.Token))
 		p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), exprValue, flags)
 	}
 }
@@ -4778,11 +5012,11 @@ func (p *project) binaryExclusiveOrExpressionValue(f *function, n *cc.ExclusiveO
 	switch {
 	case xorOverflows(n.ExclusiveOrExpression.Operand, n.AndExpression.Operand, n.Promote()):
 		p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), exprValue, flags)
-		p.w(" ^%s", comment(" ", &n.Token))
+		p.w(" ^%s", tidyComment(" ", &n.Token))
 		p.andExpression(f, n.AndExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 	default:
 		p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), exprValue, flags)
-		p.w(" ^%s", comment(" ", &n.Token))
+		p.w(" ^%s", tidyComment(" ", &n.Token))
 		p.andExpression(f, n.AndExpression, n.Promote(), exprValue, flags)
 	}
 }
@@ -4924,11 +5158,11 @@ func (p *project) binaryAndExpressionBool(f *function, n *cc.AndExpression, t cc
 	switch {
 	case andOverflows(n.AndExpression.Operand, n.EqualityExpression.Operand, n.Promote()):
 		p.andExpression(f, n.AndExpression, n.Promote(), exprValue, flags)
-		p.w(" &%s", comment(" ", &n.Token))
+		p.w(" &%s", tidyComment(" ", &n.Token))
 		p.equalityExpression(f, n.EqualityExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 	default:
 		p.andExpression(f, n.AndExpression, n.Promote(), exprValue, flags)
-		p.w(" &%s", comment(" ", &n.Token))
+		p.w(" &%s", tidyComment(" ", &n.Token))
 		p.equalityExpression(f, n.EqualityExpression, n.Promote(), exprValue, flags)
 	}
 }
@@ -4939,11 +5173,11 @@ func (p *project) binaryAndExpressionValue(f *function, n *cc.AndExpression, t c
 	switch {
 	case andOverflows(n.AndExpression.Operand, n.EqualityExpression.Operand, n.Promote()):
 		p.andExpression(f, n.AndExpression, n.Promote(), exprValue, flags)
-		p.w(" &%s", comment(" ", &n.Token))
+		p.w(" &%s", tidyComment(" ", &n.Token))
 		p.equalityExpression(f, n.EqualityExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 	default:
 		p.andExpression(f, n.AndExpression, n.Promote(), exprValue, flags)
-		p.w(" &%s", comment(" ", &n.Token))
+		p.w(" &%s", tidyComment(" ", &n.Token))
 		p.equalityExpression(f, n.EqualityExpression, n.Promote(), exprValue, flags)
 	}
 }
@@ -5099,7 +5333,7 @@ func (p *project) binaryEqualityExpressionBool(f *function, n *cc.EqualityExpres
 	flags &^= fOutermost
 	defer p.w("%s", p.booleanBinaryExpression(n, n.Operand, t, &mode, flags))
 	p.equalityExpression(f, n.EqualityExpression, n.Promote(), exprValue, flags)
-	p.w(" %s%s", oper, comment(" ", &n.Token))
+	p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 	p.relationalExpression(f, n.RelationalExpression, n.Promote(), exprValue, flags)
 }
 
@@ -5107,7 +5341,7 @@ func (p *project) binaryEqualityExpressionValue(f *function, n *cc.EqualityExpre
 	flags &^= fOutermost
 	defer p.w("%s", p.booleanBinaryExpression(n, n.Operand, t, &mode, flags))
 	p.equalityExpression(f, n.EqualityExpression, n.Promote(), exprValue, flags)
-	p.w(" %s%s", oper, comment(" ", &n.Token))
+	p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 	p.relationalExpression(f, n.RelationalExpression, n.Promote(), exprValue, flags)
 }
 
@@ -5274,7 +5508,7 @@ func (p *project) binaryRelationalExpression(f *function, n *cc.RelationalExpres
 	flags &^= fOutermost
 	defer p.w("%s", p.booleanBinaryExpression(n, n.Operand, t, &mode, flags))
 	p.relationalExpression(f, n.RelationalExpression, n.Promote(), exprValue, flags)
-	p.w(" %s%s", oper, comment(" ", &n.Token))
+	p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 	p.shiftExpression(f, n.ShiftExpression, n.Promote(), exprValue, flags)
 }
 
@@ -5424,21 +5658,21 @@ func (p *project) binaryShiftExpressionBool(f *function, n *cc.ShiftExpression, 
 		panic(todo(""))
 		p.w("(")
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 		p.w(")&%#x", n.ShiftExpression.Operand.Type().BitField().Mask())
 	case shiftOverflows(n.ShiftExpression.Operand, n.AdditiveExpression.Operand, oper, n.Operand.Type()):
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags|fForceRuntimeConv)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	case isConstInteger(n.ShiftExpression.Operand):
 		s := p.convert(n, nil, n.Operand.Type(), 0)
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
-		p.w("%s %s%s", s, oper, comment(" ", &n.Token))
+		p.w("%s %s%s", s, oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	default:
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	}
 }
@@ -5450,21 +5684,21 @@ func (p *project) binaryShiftExpressionValue(f *function, n *cc.ShiftExpression,
 	case n.ShiftExpression.Operand.Type().IsBitFieldType():
 		p.w("(")
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 		p.w(")&%#x", n.ShiftExpression.Operand.Type().BitField().Mask())
 	case shiftOverflows(n.ShiftExpression.Operand, n.AdditiveExpression.Operand, oper, n.Operand.Type()):
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags|fForceRuntimeConv)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	case isConstInteger(n.ShiftExpression.Operand):
 		s := p.convert(n, nil, n.Operand.Type(), 0)
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
-		p.w("%s %s%s", s, oper, comment(" ", &n.Token))
+		p.w("%s %s%s", s, oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	default:
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	}
 }
@@ -5645,7 +5879,7 @@ func (p *project) binaryAdditiveExpressionBool(f *function, n *cc.AdditiveExpres
 		switch {
 		case intAddOverflows(lo, ro, oper, n.Promote()): // i +- j
 			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
-			p.w(" %s%s", oper, comment(" ", &n.Token))
+			p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 		default:
 			var s string
@@ -5653,7 +5887,7 @@ func (p *project) binaryAdditiveExpressionBool(f *function, n *cc.AdditiveExpres
 				s = p.convert(n, nil, n.Promote(), flags)
 			}
 			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
-			p.w("%s %s%s", s, oper, comment(" ", &n.Token))
+			p.w("%s %s%s", s, oper, tidyComment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags)
 		}
 	default:
@@ -5674,7 +5908,7 @@ func (p *project) binaryAdditiveExpressionValue(f *function, n *cc.AdditiveExpre
 		switch {
 		case intAddOverflows(lo, ro, oper, n.Promote()): // i +- j
 			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
-			p.w(" %s%s", oper, comment(" ", &n.Token))
+			p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 		default:
 			var s string
@@ -5682,12 +5916,12 @@ func (p *project) binaryAdditiveExpressionValue(f *function, n *cc.AdditiveExpre
 				s = p.convert(n, nil, n.Promote(), flags)
 			}
 			p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
-			p.w("%s %s%s", s, oper, comment(" ", &n.Token))
+			p.w("%s %s%s", s, oper, tidyComment(" ", &n.Token))
 			p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags)
 		}
 	case lt.Kind() == cc.Ptr && rt.IsIntegerType(): // p +- i
 		p.additiveExpression(f, n.AdditiveExpression, lt, exprValue, flags)
-		p.w(" %s%s uintptr(", oper, comment(" ", &n.Token))
+		p.w(" %s%s uintptr(", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, exprValue, flags)
 		p.w(")")
 		if sz := lt.Elem().Size(); sz != 1 {
@@ -5695,7 +5929,7 @@ func (p *project) binaryAdditiveExpressionValue(f *function, n *cc.AdditiveExpre
 		}
 	case lt.Kind() == cc.Array && rt.IsIntegerType(): // p +- i
 		p.additiveExpression(f, n.AdditiveExpression, lt, exprAddrOf, flags)
-		p.w(" %s%s uintptr(", oper, comment(" ", &n.Token))
+		p.w(" %s%s uintptr(", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, exprValue, flags)
 		p.w(")")
 		if sz := lt.Elem().Size(); sz != 1 {
@@ -5708,21 +5942,21 @@ func (p *project) binaryAdditiveExpressionValue(f *function, n *cc.AdditiveExpre
 		if sz := rt.Elem().Size(); sz != 1 {
 			p.w("*%d", sz)
 		}
-		p.w(" %s%s ", oper, comment(" ", &n.Token))
+		p.w(" %s%s ", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, exprValue, flags)
 	case lt.IsIntegerType() && rt.Kind() == cc.Array: // i +- p
 		panic(todo(""))
 	case lt.Kind() == cc.Ptr && rt.Kind() == cc.Ptr && oper == "-": // p - q
 		p.w("(")
 		p.additiveExpression(f, n.AdditiveExpression, n.Operand.Type(), exprValue, flags)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Operand.Type(), exprValue, flags)
 		p.w(")/%d", lt.Elem().Size())
 	case lt.Kind() == cc.Ptr && rt.Kind() == cc.Array && oper == "-": // p - q
 		defer p.w("%s", p.convertType(nil, n.Operand.Type(), 0))
 		p.w("(")
 		p.additiveExpression(f, n.AdditiveExpression, lt, exprValue, flags)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, rt.Decay(), exprAddrOf, flags&^fOutermost)
 		p.w(")/%d", lt.Elem().Size())
 	case lt.Kind() == cc.Array && rt.Kind() == cc.Ptr && oper == "-": // p - q
@@ -5987,7 +6221,7 @@ func (p *project) binaryMultiplicativeExpressionValue(f *function, n *cc.Multipl
 	switch {
 	case intMulOverflows(n.MultiplicativeExpression.Operand, n.CastExpression.Operand, oper, n.Promote()):
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags)
-		p.w(" %s%s", oper, comment(" ", &n.Token))
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.castExpression(f, n.CastExpression, n.Promote(), exprValue, flags|fForceRuntimeConv)
 	default:
 		defer p.w("%s", p.bitFieldPatch2(n.MultiplicativeExpression.Operand, n.CastExpression.Operand, n.Promote()))
@@ -5996,7 +6230,7 @@ func (p *project) binaryMultiplicativeExpressionValue(f *function, n *cc.Multipl
 			s = p.convert(n, nil, n.Promote(), flags)
 		}
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags)
-		p.w("%s %s%s", s, oper, comment(" ", &n.Token))
+		p.w("%s %s%s", s, oper, tidyComment(" ", &n.Token))
 		if (oper == "/" || oper == "%") && (isZeroReal(n.MultiplicativeExpression.Operand) || isZeroReal(n.CastExpression.Operand)) {
 			p.w("%s%sFrom%[2]s(", p.task.crt, p.helperType(n.Promote()))
 			defer p.w(")")
@@ -8323,7 +8557,7 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 
 	paren := ""
 	for i, arg := range args {
-		p.w(",%s", comment(" ", arg))
+		p.w(",%s", tidyComment(" ", arg))
 		mode := exprValue
 		if at := arg.Operand.Type(); at.Kind() == cc.Array && p.detectArray(f, arg, true, true, nil) {
 			mode = exprAddrOf
@@ -9324,7 +9558,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		f.continueCtx = sv2
 		f.switchCtx = sv
 	}()
-	p.w("%s", comment("\n", n))
+	p.w("%s", tidyComment("\n", n))
 	switch n.Case {
 	case cc.IterationStatementWhile: // "while" '(' Expression ')' Statement
 		if true || f.block.isFlat() && isJumpTarget(n.Statement) {
@@ -9463,7 +9697,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 }
 
 func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
-	p.w("%s", comment("\n", n))
+	p.w("%s", tidyComment("\n", n))
 	switch n.Case {
 	case cc.SelectionStatementIf: // "if" '(' Expression ')' Statement
 		sv := f.ifCtx
@@ -9574,11 +9808,11 @@ func (p *project) flatSwitch(f *function, n *cc.SelectionStatement) {
 		case cc.LabeledStatementLabel: // IDENTIFIER ':' AttributeSpecifierList Statement
 			continue
 		case cc.LabeledStatementCaseLabel: // "case" ConstantExpression ':' Statement
-			p.w("%scase ", comment("\n", ls))
+			p.w("%scase ", tidyComment("\n", ls))
 			p.constantExpression(f, ls.ConstantExpression, ls.ConstantExpression.Operand.Type(), exprValue, fOutermost)
 			p.w(":")
 		case cc.LabeledStatementDefault: // "default" ':' Statement
-			p.w("%sdefault:", comment("\n", ls))
+			p.w("%sdefault:", tidyComment("\n", ls))
 		case cc.LabeledStatementRange: // "case" ConstantExpression "..." ConstantExpression ':' Statement
 			panic(todo(""))
 		default:
@@ -9603,7 +9837,7 @@ func isJumpTarget(n *cc.Statement) bool {
 }
 
 func (p *project) expressionStatement(f *function, n *cc.ExpressionStatement) {
-	p.w("%s", comment("\n", n))
+	p.w("%s", tidyComment("\n", n))
 	// Expression AttributeSpecifierList ';'
 	if n.Expression == nil || n.Expression.IsSideEffectsFree {
 		return
@@ -9644,7 +9878,7 @@ func (p *project) labeledStatementFlat(f *function, n *cc.LabeledStatement) (r *
 		if _, ok := f.unusedLabels[n.Token.Value]; ok {
 			p.w("goto %s;", f.labelNames[n.Token.Value])
 		}
-		p.w("%s%s:", comment("\n", n), f.labelNames[n.Token.Value])
+		p.w("%s%s:", tidyComment("\n", n), f.labelNames[n.Token.Value])
 		r = p.statement(f, n.Statement, false, false)
 	case
 		cc.LabeledStatementCaseLabel, // "case" ConstantExpression ':' Statement
@@ -9676,18 +9910,18 @@ func (p *project) labeledStatementCase(f *function, n *cc.LabeledStatement) {
 	case cc.LabeledStatementCaseLabel: // "case" ConstantExpression ':' Statement
 		switch {
 		case f.switchCtx == inSwitchFlat:
-			p.w("%s__%d:", comment("\n", n), f.flatSwitchLabels[n])
+			p.w("%s__%d:", tidyComment("\n", n), f.flatSwitchLabels[n])
 		default:
-			p.w("%scase ", comment("\n", n))
+			p.w("%scase ", tidyComment("\n", n))
 			p.constantExpression(f, n.ConstantExpression, n.ConstantExpression.Operand.Type(), exprValue, fOutermost)
 			p.w(":")
 		}
 	case cc.LabeledStatementDefault: // "default" ':' Statement
 		switch {
 		case f.switchCtx == inSwitchFlat:
-			p.w("%s__%d:", comment("\n", n), f.flatSwitchLabels[n])
+			p.w("%s__%d:", tidyComment("\n", n), f.flatSwitchLabels[n])
 		default:
-			p.w("%sdefault:", comment("\n", n))
+			p.w("%sdefault:", tidyComment("\n", n))
 		}
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -9703,9 +9937,9 @@ func (p *project) constantExpression(f *function, n *cc.ConstantExpression, t cc
 func (p *project) functionDefinitionSignature(f *function, tld *tld) {
 	switch {
 	case f.mainSignatureForced:
-		p.w("%sfunc %s(%s *%sTLS, _ int32, _ uintptr) int32", comment("\n", f.fndef), tld.name, f.tlsName, p.task.crt)
+		p.w("%sfunc %s(%s *%sTLS, _ int32, _ uintptr) int32", tidyComment("\n", f.fndef), tld.name, f.tlsName, p.task.crt)
 	default:
-		p.w("%s", comment("\n", f.fndef))
+		p.w("%s", tidyComment("\n", f.fndef))
 		p.functionSignature(f, f.fndef.Declarator.Type(), tld.name)
 	}
 }

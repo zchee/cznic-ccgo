@@ -44,7 +44,7 @@ package main // import "modernc.org/ccgo/v3"
 //
 //	a = b = c = d
 //
-// where all but the first and last of a,b,c,... are declarators, into
+// where all but the first and last of a, b, c, ... are declarators, into
 //
 //	c = d
 //	b = c
@@ -54,7 +54,7 @@ package main // import "modernc.org/ccgo/v3"
 
 //TODO define and use all tagged struct types, including inner ones, for example SQLite's SrcList_item.
 
-//TODO turn return conditionalExpression so it has no closures.
+//TODO rewrite return conditionalExpression so it has no closures. Partially done.
 
 //TODO merge _equivalent_ typedefs into one Go type definition.
 
@@ -88,18 +88,6 @@ package main // import "modernc.org/ccgo/v3"
 //
 //	func __bswap_16(tls *crt.TLS, __bsx uint16) uint16 { /* byteswap.h:34:1: */
 
-//TODO turn comments like
-//
-//	/*
-//	** This is the callback routine that the shell
-//	** invokes for each row of a query result.
-//	 */
-//
-// into
-//
-//	// This is the callback routine that the shell
-//	// invokes for each row of a query result.
-
 //TODO turn
 //
 //	if (*ShellState)(unsafe.Pointer(pState)).expert.pExpert != 0 {
@@ -114,14 +102,6 @@ package main // import "modernc.org/ccgo/v3"
 //	}
 
 //TODO drop all non-referenced declarators unless forced by a command line flag.
-
-//TODO turn single line comments
-//
-//	/* --help lists all file-controls */
-//
-// ending in a newline into
-//
-//	// --help lists all file-controls
 
 import (
 	"bufio"
