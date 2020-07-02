@@ -422,6 +422,7 @@
 930526-1.c
 930527-1.c
 930529-1.c
+930603-1.c
 930603-2.c
 930603-3.c
 930608-1.c
@@ -1091,6 +1092,7 @@ strlen-4.c
 strlen-7.c
 strncmp-1.c
 struct-aliasing-1.c
+struct-cpy-1.c
 struct-ret-1.c
 struct-ret-2.c
 switch-1.c
