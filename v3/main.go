@@ -8,24 +8,6 @@ package main // import "modernc.org/ccgo/v3"
 
 //TODO merge VaList slots of distinct top level statements.
 
-//TODO turn
-//
-//	if foo {
-//		...
-//	} else {
-//		if bar {
-//			...
-//		}
-//	}
-//
-// into
-//
-//	if foo {
-//		...
-//	} else if bar {
-//		...
-//	}
-
 //TODO turn void
 //
 //	a = b = c = d
@@ -41,10 +23,6 @@ package main // import "modernc.org/ccgo/v3"
 //TODO define and use all tagged struct types, including inner ones, for example SQLite's SrcList_item.
 
 //TODO rewrite return conditionalExpression so it has no closures. Partially done.
-
-//TODO merge _equivalent_ typedefs into one Go type definition.
-
-//TODO merge _equivalent_ tagged struct/unions into one Go type definition.
 
 //TODO define and restore simple named constants. Having
 //
@@ -69,23 +47,6 @@ package main // import "modernc.org/ccgo/v3"
 // or
 //
 //	var sqlite3_data_directory = uintptr(0) /* sqlite3.c:156345:17 */
-
-//TODO drop unreferenced declarators having a __ prefix.
-//
-//	func __bswap_16(tls *crt.TLS, __bsx uint16) uint16 { /* byteswap.h:34:1: */
-
-//TODO turn
-//
-//	if (*ShellState)(unsafe.Pointer(pState)).expert.pExpert != 0 {
-//	} else {
-//		crt.X__assert_fail(tls, ts+7572, ts+725, uint32(11438), uintptr(unsafe.Pointer(&__func__15)))
-//	}
-//
-// into
-//
-//	if !((*ShellState)(unsafe.Pointer(pState)).expert.pExpert != 0) {
-//		crt.X__assert_fail(tls, ts+7572, ts+725, uint32(11438), uintptr(unsafe.Pointer(&__func__15)))
-//	}
 
 //TODO drop all non-referenced declarators unless forced by a command line flag.
 

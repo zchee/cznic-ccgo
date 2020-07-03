@@ -144,3 +144,55 @@ func dumpLayout(t cc.Type) string {
 	}
 	return t.String() + "\n" + strings.Join(a, "\n")
 }
+
+func typeSignature(n cc.Node, t cc.Type) (r string) {
+	var b strings.Builder
+	typeSignature2(n, &b, t)
+	return b.String()
+}
+
+func typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
+	t = t.Alias()
+	if t.IsIntegerType() {
+		if !t.IsSignedType() {
+			b.WriteByte('u')
+		}
+		fmt.Fprintf(b, "int%d", t.Size()*8)
+		return
+	}
+
+	if t.IsArithmeticType() {
+		b.WriteString(t.Kind().String())
+		return
+	}
+
+	structOrUnion := "struct"
+	switch t.Kind() {
+	case cc.Ptr:
+		fmt.Sprintf("*%s", t.Elem())
+	case cc.Array:
+		fmt.Sprintf("[%d]%s", t.Len(), t.Elem())
+	case cc.Union:
+		structOrUnion = "union"
+		fallthrough
+	case cc.Struct:
+		b.WriteString(structOrUnion)
+		b.WriteByte('{')
+		nf := t.NumField()
+		for idx := []int{0}; idx[0] < nf; idx[0]++ {
+			f := t.FieldByIndex(idx)
+			fmt.Fprintf(b, "%s:%d:%d:%v:%d:%d:",
+				f.Name(), f.BitFieldOffset(), f.BitFieldWidth(), f.IsBitField(), f.Offset(), f.Padding(),
+			)
+			typeSignature2(n, b, f.Type())
+			b.WriteByte(';')
+		}
+		b.WriteByte('}')
+	case cc.Void:
+		b.WriteString("void")
+	case cc.Invalid:
+		b.WriteString("invalid") //TODO fix cc/v3
+	default:
+		panic(todo("", pos(n), t, t.Kind()))
+	}
+}

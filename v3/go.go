@@ -87,7 +87,8 @@ type taggedStruct struct {
 	gotyp string
 	name  string
 
-	emitted bool
+	conflicts bool
+	emitted   bool
 }
 
 func (s *taggedStruct) emit(p *project, ds *cc.DeclarationSpecifiers) {
@@ -1225,32 +1226,39 @@ func (n *enumSpec) emit(p *project, enumConsts map[cc.StringID]string) {
 	p.w(")")
 }
 
+type typedef struct {
+	sig string
+	tld *tld
+}
+
 type project struct {
-	ast         *cc.AST
-	buf         bytes.Buffer
-	capi        []string
-	defines     []string
-	enumConsts  map[cc.StringID]string
-	enumSpecs   map[*cc.EnumSpecifier]*enumSpec
-	errors      scanner.ErrorList
-	externs     map[cc.StringID]*tld
-	imports     map[string]*imported // C name: import info
-	mainName    string
-	scope       scope
-	staticQueue []*cc.InitDeclarator
-	structs     map[cc.StringID]*taggedStruct // key: C tag
-	task        *task
-	tlds        map[*cc.Declarator]*tld
-	ts          bytes.Buffer // Text segment
-	ts4         []rune       // Text segment, alignment 4
-	ts4Name     string
-	ts4NameP    string
-	ts4Offs     map[cc.StringID]uintptr
-	tsName      string
-	tsNameP     string
-	tsOffs      map[cc.StringID]uintptr
-	typedefs    map[string]struct{}
-	wanted      map[*cc.Declarator]struct{}
+	ast                *cc.AST
+	buf                bytes.Buffer
+	capi               []string
+	defines            []string
+	enumConsts         map[cc.StringID]string
+	enumSpecs          map[*cc.EnumSpecifier]*enumSpec
+	errors             scanner.ErrorList
+	externs            map[cc.StringID]*tld
+	imports            map[string]*imported // C name: import info
+	localTaggedStructs []func()
+	mainName           string
+	scope              scope
+	staticQueue        []*cc.InitDeclarator
+	structs            map[cc.StringID]*taggedStruct // key: C tag
+	task               *task
+	tlds               map[*cc.Declarator]*tld
+	ts                 bytes.Buffer // Text segment
+	ts4                []rune       // Text segment, alignment 4
+	ts4Name            string
+	ts4NameP           string
+	ts4Offs            map[cc.StringID]uintptr
+	tsName             string
+	tsNameP            string
+	tsOffs             map[cc.StringID]uintptr
+	typedefTypes       map[cc.StringID]*typedef
+	typedefsEmited     map[string]struct{}
+	wanted             map[*cc.Declarator]struct{}
 
 	isMain bool
 }
@@ -1261,16 +1269,17 @@ func newProject(t *task) (*project, error) {
 	}
 
 	p := &project{
-		enumConsts: map[cc.StringID]string{},
-		externs:    map[cc.StringID]*tld{},
-		imports:    map[string]*imported{},
-		scope:      newScope(),
-		task:       t,
-		tlds:       map[*cc.Declarator]*tld{},
-		ts4Offs:    map[cc.StringID]uintptr{},
-		tsOffs:     map[cc.StringID]uintptr{},
-		typedefs:   map[string]struct{}{},
-		wanted:     map[*cc.Declarator]struct{}{},
+		enumConsts:     map[cc.StringID]string{},
+		externs:        map[cc.StringID]*tld{},
+		imports:        map[string]*imported{},
+		scope:          newScope(),
+		task:           t,
+		tlds:           map[*cc.Declarator]*tld{},
+		ts4Offs:        map[cc.StringID]uintptr{},
+		tsOffs:         map[cc.StringID]uintptr{},
+		typedefTypes:   map[cc.StringID]*typedef{},
+		typedefsEmited: map[string]struct{}{},
+		wanted:         map[*cc.Declarator]struct{}{},
 	}
 	p.scope.take("CAPI")
 	for _, v := range t.imported {
@@ -1559,31 +1568,73 @@ func (p *project) layoutStructs() error {
 	m := map[cc.StringID]*taggedStruct{}
 	var tags []cc.StringID
 	for _, v := range p.task.asts {
-		for tag, v := range v.StructTypes {
-			tags = append(tags, tag)
-			s := m[tag]
-			if s == nil {
-				m[tag] = &taggedStruct{ctyp: v}
-				continue
-			}
+		cc.Inspect(v.TranslationUnit, func(n cc.Node, entry bool) bool {
+			if entry {
+				switch d := n.(type) {
+				case *cc.Declarator:
+					if nm := d.Name().String(); strings.HasPrefix(nm, "_") {
+						break
+					}
 
-			if v.String() != s.ctyp.String() { // Conflict, cannot use named struct/union types w/o tag renaming
-				return nil
+					captureStructTags(d.Type(), m, &tags)
+				}
 			}
-		}
+			return true
+		})
 	}
-
-	p.structs = m
 	sort.Slice(tags, func(i, j int) bool { return tags[i].String() < tags[j].String() })
 	for _, k := range tags {
 		v := m[k]
+		if v.conflicts {
+			delete(m, k)
+			continue
+		}
+
 		v.name = p.scope.take(k.String())
 	}
 	for _, k := range tags {
 		v := m[k]
-		v.gotyp = p.structType(v.ctyp)
+		if v != nil {
+			v.gotyp = p.structType(v.ctyp)
+		}
 	}
+	p.structs = m
 	return nil
+}
+
+func captureStructTags(t cc.Type, m map[cc.StringID]*taggedStruct, tags *[]cc.StringID) {
+	t = t.Alias()
+	for t.Kind() == cc.Ptr {
+		t = t.Alias().Elem().Alias()
+	}
+	if t.Kind() == cc.Invalid || t.IsIncomplete() {
+		return
+	}
+
+	switch t.Kind() {
+	case cc.Struct, cc.Union:
+		tag := t.Tag()
+		if tag == 0 {
+			return
+		}
+
+		ex := m[tag]
+		if ex != nil {
+			ts := typeSignature(nil, t)
+			exs := typeSignature(nil, ex.ctyp)
+			if ts != exs {
+				ex.conflicts = true
+			}
+			return
+		}
+
+		nf := t.NumField()
+		m[tag] = &taggedStruct{ctyp: t}
+		for idx := []int{0}; idx[0] < nf; idx[0]++ {
+			captureStructTags(t.FieldByIndex(idx).Type(), m, tags)
+		}
+		*tags = append(*tags, tag)
+	}
 }
 
 func (p *project) structType(t cc.Type) string {
@@ -1868,8 +1919,8 @@ func (p *project) layoutTLDs() error {
 			nm := d.Name()
 			switch d.Linkage {
 			case cc.External:
-				if p.externs[nm] != nil {
-					panic(todo(""))
+				if ex := p.externs[nm]; ex != nil {
+					panic(todo("", ex.name, d.Position(), d.Name()))
 				}
 
 				isMain := p.isMain && nm == idMain
@@ -1918,6 +1969,20 @@ func (p *project) layoutTLDs() error {
 						break
 					}
 
+					ex, ok := p.typedefTypes[d.Name()]
+					if ok {
+						sig := typeSignature(d, d.Type())
+						if ex.sig == sig {
+							tld := ex.tld
+							for _, v := range ast.Scope[nm] {
+								if d, ok := v.(*cc.Declarator); ok {
+									p.tlds[d] = tld
+								}
+							}
+							break
+						}
+					}
+
 					switch exportTypedef {
 					case doNotExport:
 						// nop
@@ -1927,6 +1992,7 @@ func (p *project) layoutTLDs() error {
 						name = p.task.exportExterns + name
 					}
 					tld := &tld{name: p.scope.take(name)}
+					p.typedefTypes[d.Name()] = &typedef{typeSignature(d, d.Type()), tld}
 					for _, v := range ast.Scope[nm] {
 						if d, ok := v.(*cc.Declarator); ok {
 							p.tlds[d] = tld
@@ -2304,7 +2370,15 @@ func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
 			p.enumSpecs[x].emit(p, p.enumConsts)
 		case *cc.StructOrUnionSpecifier:
 			if tag := x.Token.Value; tag != 0 {
-				p.structs[tag].emit(p, n.DeclarationSpecifiers)
+				switch {
+				case f == nil:
+					p.structs[tag].emit(p, n.DeclarationSpecifiers)
+				default:
+					p.localTaggedStructs = append(p.localTaggedStructs, func() {
+						p.structs[tag].emit(p, n.DeclarationSpecifiers)
+					})
+				}
+
 			}
 		}
 		return true
@@ -2441,21 +2515,21 @@ func (p *project) isConditionalAssignmentExpr(n *cc.AssignmentExpression) bool {
 		n.ConditionalExpression.Case == cc.ConditionalExpressionCond
 }
 
-func typedef(n cc.Node) (r cc.StringID) {
-	cc.Inspect(n, func(n cc.Node, entry bool) bool {
-		if !entry {
-			return true
-		}
-
-		if x, ok := n.(*cc.TypeSpecifier); ok && x.Case == cc.TypeSpecifierTypedefName {
-			r = x.Token.Value
-			return false
-		}
-
-		return true
-	})
-	return r
-}
+//TODO- func typedef(n cc.Node) (r cc.StringID) {
+//TODO- 	cc.Inspect(n, func(n cc.Node, entry bool) bool {
+//TODO- 		if !entry {
+//TODO- 			return true
+//TODO- 		}
+//TODO-
+//TODO- 		if x, ok := n.(*cc.TypeSpecifier); ok && x.Case == cc.TypeSpecifierTypedefName {
+//TODO- 			r = x.Token.Value
+//TODO- 			return false
+//TODO- 		}
+//TODO-
+//TODO- 		return true
+//TODO- 	})
+//TODO- 	return r
+//TODO- }
 
 func (p *project) initDeclaratorDecl(f *function, n *cc.InitDeclarator, sep string) {
 	d := n.Declarator
@@ -3495,11 +3569,11 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 
 	t := d.Type()
 	if d.IsTypedefName {
-		if _, ok := p.typedefs[tld.name]; ok {
+		if _, ok := p.typedefsEmited[tld.name]; ok {
 			return
 		}
 
-		p.typedefs[tld.name] = struct{}{}
+		p.typedefsEmited[tld.name] = struct{}{}
 		if t.Kind() != cc.Void {
 			p.w("%stype %s = %s; /* %v */", sep, tld.name, p.typ(n, t), pos(n))
 		}
@@ -3533,6 +3607,10 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	// DeclarationSpecifiers Declarator DeclarationList CompoundStatement
 	d := n.Declarator
+	if d.Linkage == cc.Internal && d.Read == 0 && !d.AddressTaken && strings.HasPrefix(d.Name().String(), "__") {
+		return
+	}
+
 	tld := p.tlds[d]
 	if tld == nil {
 		return
@@ -3556,7 +3634,15 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	}
 	p.compoundStatement(f, n.CompoundStatement, comment, false)
 	p.w(";")
+	p.flushLocalTaggesStructs()
 	p.flushStaticTLDs()
+}
+
+func (p *project) flushLocalTaggesStructs() {
+	for _, v := range p.localTaggedStructs {
+		v()
+	}
+	p.localTaggedStructs = nil
 }
 
 func (p *project) flushStaticTLDs() {
@@ -4124,6 +4210,9 @@ func (p *project) assignmentExpressionValue(f *function, n *cc.AssignmentExpress
 
 func (p *project) assignmentExpressionValueAssign(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
 	// UnaryExpression '=' AssignmentExpression
+	if mode == exprCondReturn {
+		p.w("return ")
+	}
 	lhs := n.UnaryExpression
 	switch k := p.opKind(f, lhs, lhs.Operand.Type()); k {
 	case opNormal:
@@ -10011,7 +10100,7 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 	}
 	if t.IsVariadic() {
 		switch {
-		case f == nil:
+		case f == nil || nm == "":
 			p.w(", uintptr")
 		default:
 			p.w(", %s uintptr", f.vaName)
