@@ -177,8 +177,9 @@ func typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
 		fallthrough
 	case cc.Struct:
 		b.WriteString(structOrUnion)
-		b.WriteByte('{')
 		nf := t.NumField()
+		fmt.Fprintf(b, " %d{", nf)
+		b.WriteByte('{')
 		for idx := []int{0}; idx[0] < nf; idx[0]++ {
 			f := t.FieldByIndex(idx)
 			fmt.Fprintf(b, "%s:%d:%d:%v:%d:%d:",
