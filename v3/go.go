@@ -1577,7 +1577,7 @@ func (p *project) layoutStructs() error {
 						break
 					}
 
-					captureStructTags(d.Type(), m, &tags)
+					captureStructTags(d, d.Type(), m, &tags)
 				}
 			}
 			return true
@@ -1586,6 +1586,7 @@ func (p *project) layoutStructs() error {
 	sort.Slice(tags, func(i, j int) bool { return tags[i].String() < tags[j].String() })
 	for _, k := range tags {
 		v := m[k]
+		//TODO rename conflicts
 		if v.conflicts {
 			delete(m, k)
 			continue
@@ -1603,7 +1604,7 @@ func (p *project) layoutStructs() error {
 	return nil
 }
 
-func captureStructTags(t cc.Type, m map[cc.StringID]*taggedStruct, tags *[]cc.StringID) {
+func captureStructTags(n cc.Node, t cc.Type, m map[cc.StringID]*taggedStruct, tags *[]cc.StringID) {
 	t = t.Alias()
 	for t.Kind() == cc.Ptr {
 		t = t.Alias().Elem().Alias()
@@ -1632,9 +1633,11 @@ func captureStructTags(t cc.Type, m map[cc.StringID]*taggedStruct, tags *[]cc.St
 		nf := t.NumField()
 		m[tag] = &taggedStruct{ctyp: t}
 		for idx := []int{0}; idx[0] < nf; idx[0]++ {
-			captureStructTags(t.FieldByIndex(idx).Type(), m, tags)
+			captureStructTags(n, t.FieldByIndex(idx).Type(), m, tags)
 		}
 		*tags = append(*tags, tag)
+	case cc.Array:
+		captureStructTags(n, t.Elem(), m, tags)
 	}
 }
 
@@ -2379,7 +2382,6 @@ func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
 						p.structs[tag].emit(p, n.DeclarationSpecifiers)
 					})
 				}
-
 			}
 		}
 		return true
