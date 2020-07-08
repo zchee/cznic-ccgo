@@ -41,11 +41,12 @@ func _() {
 	_ = x[opFunction-3]
 	_ = x[opUnion-4]
 	_ = x[opBitfield-5]
+	_ = x[opStruct-6]
 }
 
-const _opKind_name = "opNormalopArrayopArrayParameteropFunctionopUnionopBitfield"
+const _opKind_name = "opNormalopArrayopArrayParameteropFunctionopUnionopBitfieldopStruct"
 
-var _opKind_index = [...]uint8{0, 8, 15, 31, 41, 48, 58}
+var _opKind_index = [...]uint8{0, 8, 15, 31, 41, 48, 58, 66}
 
 func (i opKind) String() string {
 	if i < 0 || i >= opKind(len(_opKind_index)-1) {
