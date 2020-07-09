@@ -171,6 +171,7 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 		default:
 			p.initializer(f, n.Initializer, ft, tld, fld)
 		}
+		p.w(",")
 		idx[0]++
 	}
 	p.w("%s}", tidyComment("", &n0.Token3))

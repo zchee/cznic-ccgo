@@ -557,6 +557,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			f.pin(v.Declarator())
 		}
 	}
+
 	cc.Inspect(n, func(n cc.Node, entry bool) bool {
 		if !entry {
 			return true
@@ -600,6 +601,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		case *cc.AssignmentExpression:
 			switch x.Case {
 			case cc.AssignmentExpressionAssign: // foo = bar;
+				// UnaryExpression '=' AssignmentExpression
 				if d := x.AssignmentExpression.Declarator(); d != nil { // bar
 					if f.project.isArrayDeclarator(d) {
 						f.pin(d)
@@ -1833,7 +1835,7 @@ func (p *project) typ(nd cc.Node, t cc.Type) string {
 	}
 
 	switch t.Kind() {
-	case cc.Ptr:
+	case cc.Ptr, cc.Function:
 		return "uintptr"
 	case cc.Double:
 		return "float64"
@@ -2815,7 +2817,7 @@ func (p *project) declaratorFuncFunc(n cc.Node, f *function, d *cc.Declarator, t
 
 func (p *project) declaratorLValue(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	switch k := p.declaratorKind(d); k {
-	case opNormal, opArrayParameter:
+	case opNormal, opArrayParameter, opUnion:
 		p.declaratorLValueNormal(n, f, d, t, mode, flags)
 	case opArray:
 		p.declaratorLValueArray(n, f, d, t, mode, flags)
@@ -3146,7 +3148,7 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 				}
 			}
 
-			panic(todo("", pos(d), d.Name(), d.Type(), d.IsParameter))
+			panic(todo("", pos(d), d.Name(), d.Type(), d.IsParameter, d.AddressTaken))
 		}
 	}
 
@@ -3220,7 +3222,7 @@ func (p *project) convertType(n cc.Node, from, to cc.Type, flags flags) string {
 		case from.Kind() == to.Kind():
 			return ""
 		default:
-			p.w("%s(", p.typ(nil, to))
+			p.w("%s(", p.typ(n, to))
 			return ")"
 		}
 	}
@@ -3233,7 +3235,7 @@ func (p *project) convertType(n cc.Node, from, to cc.Type, flags flags) string {
 
 		panic(todo("", from, to))
 	case cc.Double, cc.Float:
-		p.w("%s(", p.typ(nil, to))
+		p.w("%s(", p.typ(n, to))
 		return ")"
 	}
 
@@ -4297,6 +4299,9 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 		lt := lhs.Operand.Type()
 		sv := f.condInitPrefix
 		switch k := p.opKind(f, lhs, lt); k {
+		case opArrayParameter:
+			lt = lt.Decay()
+			fallthrough
 		case opNormal, opStruct:
 			mode = exprValue
 			if p.isArrayOrPinnedArray(f, n.AssignmentExpression, n.AssignmentExpression.Operand.Type()) {
@@ -5942,9 +5947,13 @@ func (p *project) additiveExpressionPSelect(f *function, n *cc.AdditiveExpressio
 	case cc.AdditiveExpressionMul: // MultiplicativeExpression
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, t, mode, flags)
 	case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
-		panic(todo(""))
+		p.w("(*%s)(unsafe.Pointer(", p.typ(n, t.Elem()))
+		p.additiveExpression(f, n, t, exprValue, flags)
+		p.w("))")
 	case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
-		panic(todo(""))
+		p.w("(*%s)(unsafe.Pointer(", p.typ(n, t.Elem()))
+		p.additiveExpression(f, n, t, exprValue, flags)
+
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -8564,14 +8573,30 @@ func (p *project) postfixExpressionIncDec(f *function, n *cc.PostfixExpression, 
 
 func (p *project) postfixExpressionIncDecValue(f *function, n *cc.PostfixExpression, oper, oper2 string, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "++"
-	switch k := p.opKind(f, n, n.Operand.Type()); k {
+	pe := n.PostfixExpression.Operand.Type()
+	switch k := p.opKind(f, n.PostfixExpression, pe); k {
 	case opNormal:
 		p.postfixExpressionIncDecValueNormal(f, n, oper, oper2, t, mode, flags)
 	case opBitfield:
 		p.postfixExpressionIncDecValueBitfield(f, n, oper, oper2, t, mode, flags)
+	case opArrayParameter:
+		p.postfixExpressionIncDecValueArrayParameter(f, n, oper, oper2, t, mode, flags)
 	default:
-		panic(todo("", n.Position(), k))
+		panic(todo("", n.Position(), pe, pe.Kind(), k))
 	}
+}
+
+func (p *project) postfixExpressionIncDecValueArrayParameter(f *function, n *cc.PostfixExpression, oper, oper2 string, t cc.Type, mode exprMode, flags flags) {
+	// PostfixExpression "++"
+	pe := n.PostfixExpression.Operand.Type()
+	defer p.w("%s", p.convert(n, n.PostfixExpression.Operand, t, flags))
+	x := "Dec"
+	if oper == "++" {
+		x = "Inc"
+	}
+	p.w("%sPost%s%s(&", p.task.crt, x, p.helperType(n, pe.Decay()))
+	p.postfixExpression(f, n.PostfixExpression, pe, exprLValue, flags)
+	p.w(", %d)", p.incDelta(n.PostfixExpression, pe.Elem()))
 }
 
 func (p *project) postfixExpressionIncDecValueBitfield(f *function, n *cc.PostfixExpression, oper, oper2 string, t cc.Type, mode exprMode, flags flags) {
