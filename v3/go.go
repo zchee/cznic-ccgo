@@ -518,6 +518,10 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 }
 
 func (f *function) flatLabel() int {
+	if f.project.pass1 {
+		return 1
+	}
+
 	f.flatLabels++
 	return f.flatLabels
 }
@@ -551,10 +555,8 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		switch {
 		case v.Type().Kind() == cc.Array && v.Type().IsVLA():
 			f.project.err(f.fndef, "variable length arrays not supported")
-		case v.Type().Kind() == cc.Union:
-			f.pin(v.Declarator())
 		case v.Type().Kind() == cc.Struct && mustPinStruct(v.Type()):
-			f.pin(v.Declarator())
+			f.pin(v.Declarator()) //TODO-
 		}
 	}
 
@@ -571,11 +573,9 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			switch {
 			case x.IsTypedefName:
 				// nop
-			case x.Linkage == cc.None && x.Type().Kind() == cc.Union:
-				f.pin(x)
 			case x.Linkage == cc.None && x.Type().Kind() == cc.Struct && mustPinStruct(x.Type()):
-				f.pin(x)
-			case x.Linkage == cc.None && x.Type().Kind() == cc.Array:
+				f.pin(x) //TODO-
+			case x.Linkage == cc.None && x.Type().Kind() == cc.Array: //TODO-
 				t := x.Type().Elem()
 				for ; t.Kind() == cc.Array; t = t.Elem() {
 				}
@@ -603,16 +603,9 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			case cc.AssignmentExpressionAssign: // foo = bar;
 				// UnaryExpression '=' AssignmentExpression
 				if d := x.AssignmentExpression.Declarator(); d != nil { // bar
-					if f.project.isArrayDeclarator(d) {
+					if f.project.isArrayDeclarator(d) { //TODO-
 						f.pin(d)
 					}
-				}
-				lhs := x.UnaryExpression
-				if t := lhs.Operand.Type(); t.IsBitFieldType() {
-					if d := lhs.Declarator(); d != nil {
-						f.pin(d)
-					}
-
 				}
 			case
 				cc.AssignmentExpressionMul,
@@ -627,38 +620,21 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 				cc.AssignmentExpressionOr:
 
 				var d *cc.Declarator
-				if f.project.detectArray(f, x.UnaryExpression, false, true, &d) {
+				if f.project.detectArray(f, x.UnaryExpression, false, true, &d) { //TODO-
 					f.pin(d)
 				}
 			}
 		case *cc.AdditiveExpression:
 			var d *cc.Declarator
-			if f.project.detectArray(f, x, false, true, &d) {
+			if f.project.detectArray(f, x, false, true, &d) { //TODO-
 				f.pin(d)
 			}
 		case *cc.PostfixExpression:
 			switch x.Case {
 			case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
 				var d *cc.Declarator
-				if f.project.detectArray(f, x.PostfixExpression, false, false, &d) {
+				if f.project.detectArray(f, x.PostfixExpression, false, false, &d) { //TODO-
 					f.pin(d)
-				}
-			case
-				cc.PostfixExpressionInc, // PostfixExpression "++"
-				cc.PostfixExpressionDec: // PostfixExpression "--"
-				if x.Operand.Type().IsBitFieldType() {
-					var d *cc.Declarator
-					switch pe := x.PostfixExpression; pe.Case {
-					case cc.PostfixExpressionSelect:
-						d = pe.PostfixExpression.Declarator()
-					case cc.PostfixExpressionPSelect:
-						// nop
-					default:
-						panic(todo("", pe.Case))
-					}
-					if d != nil {
-						f.pin(d)
-					}
 				}
 			}
 		}
@@ -682,7 +658,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			}
 
 			var d *cc.Declarator
-			if f.project.detectArray(f, list.AssignmentExpression, false, false, &d) {
+			if f.project.detectArray(f, list.AssignmentExpression, false, false, &d) { //TODO-
 				f.pin(d)
 			}
 		}
@@ -1174,9 +1150,6 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 			local.forceRead = true
 		}
 		f.locals[d] = local
-		if d.AddressTaken {
-			f.pin(d)
-		}
 		local.name = block.scope.take(d.Name().String())
 	}
 }
@@ -1216,7 +1189,7 @@ type enumSpec struct {
 }
 
 func (n *enumSpec) emit(p *project, enumConsts map[cc.StringID]string) {
-	if n == nil || n.emitted {
+	if n == nil || n.emitted || p.pass1 {
 		return
 	}
 
@@ -1265,6 +1238,7 @@ type project struct {
 	wanted             map[*cc.Declarator]struct{}
 
 	isMain bool
+	pass1  bool
 }
 
 func newProject(t *task) (*project, error) {
@@ -1355,6 +1329,10 @@ func (p *project) o(s string, args ...interface{}) {
 }
 
 func (p *project) w(s string, args ...interface{}) {
+	if p.pass1 {
+		return
+	}
+
 	if oTraceW {
 		fmt.Printf(s, args...)
 	}
@@ -2414,7 +2392,9 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 	}
 
 	if tld := p.tlds[d]; tld != nil && !topDecl { // static local
-		p.staticQueue = append(p.staticQueue, n)
+		if !p.pass1 {
+			p.staticQueue = append(p.staticQueue, n)
+		}
 		return
 	}
 
@@ -3101,6 +3081,11 @@ func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declara
 }
 
 func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator) {
+	if p.pass1 {
+		f.pin(d)
+		return
+	}
+
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -3134,6 +3119,11 @@ func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator
 }
 
 func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarator, flags flags) {
+	if p.pass1 && flags&fAddrOfFuncPtrOk == 0 {
+		f.pin(d)
+		return
+	}
+
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -3174,6 +3164,11 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 }
 
 func (p *project) declaratorAddrOfArray(n cc.Node, f *function, d *cc.Declarator) {
+	if p.pass1 {
+		f.pin(d)
+		return
+	}
+
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
@@ -3624,6 +3619,9 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	}
 
 	f := newFunction(p, n)
+	p.pass1 = true
+	p.compoundStatement(f, n.CompoundStatement, "", false)
+	p.pass1 = false
 	p.functionDefinitionSignature(f, tld)
 	p.w(" ")
 	comment := fmt.Sprintf("/* %v: */", pos(d))
@@ -9194,6 +9192,10 @@ func (p *project) primaryExpressionLValue(f *function, n *cc.PrimaryExpression, 
 }
 
 func (p *project) stringLiteralString(s string) string {
+	if p.pass1 {
+		return ""
+	}
+
 	id := cc.String(s)
 	off, ok := p.tsOffs[id]
 	if !ok {
@@ -9206,6 +9208,10 @@ func (p *project) stringLiteralString(s string) string {
 }
 
 func (p *project) stringLiteral(v cc.Value) string {
+	if p.pass1 {
+		return ""
+	}
+
 	switch x := v.(type) {
 	case cc.StringValue:
 		id := cc.StringID(x)
@@ -9235,6 +9241,10 @@ func (p *project) stringSnippet(s string) string {
 }
 
 func (p *project) wideStringLiteral(v cc.Value) string {
+	if p.pass1 {
+		return ""
+	}
+
 	switch x := v.(type) {
 	case cc.WideStringValue:
 		id := cc.StringID(x)
@@ -9246,7 +9256,7 @@ func (p *project) wideStringLiteral(v cc.Value) string {
 			p.ts4 = append(p.ts4, 0)
 			p.tsOffs[id] = off
 		}
-		return fmt.Sprintf("%s%s", p.ts4NameP, nonZeroUintptr(off))
+		return fmt.Sprintf("uintptr(%s)%s", p.ts4NameP, nonZeroUintptr(off))
 	default:
 		panic(todo("%T", x))
 	}
@@ -9895,7 +9905,10 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			break
 		}
 
-		v := f.scope.take("ok")
+		v := "ok"
+		if !p.pass1 {
+			v = f.scope.take(v)
+		}
 		p.w("for %v := true; %[1]v; %[1]v = ", v)
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 		p.statement(f, n.Statement, true, false)
