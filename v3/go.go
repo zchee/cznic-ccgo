@@ -555,8 +555,6 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		switch {
 		case v.Type().Kind() == cc.Array && v.Type().IsVLA():
 			f.project.err(f.fndef, "variable length arrays not supported")
-		case v.Type().Kind() == cc.Struct && mustPinStruct(v.Type()):
-			f.pin(v.Declarator()) //TODO-
 		}
 	}
 
@@ -570,21 +568,6 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			if x.Type().Kind() == cc.Array && x.Type().IsVLA() {
 				f.project.err(x, "variable length arrays not supported")
 			}
-			switch {
-			case x.IsTypedefName:
-				// nop
-			case x.Linkage == cc.None && x.Type().Kind() == cc.Struct && mustPinStruct(x.Type()):
-				f.pin(x) //TODO-
-			case x.Linkage == cc.None && x.Type().Kind() == cc.Array: //TODO-
-				t := x.Type().Elem()
-				for ; t.Kind() == cc.Array; t = t.Elem() {
-				}
-				if t.Kind() == cc.Struct || t.Kind() == cc.Union {
-					f.pin(x)
-				}
-			case x.Linkage == cc.None && x.Type().Kind() == cc.Ptr && x.Type().Elem().Kind() == cc.Function:
-				f.pin(x)
-			}
 		case *cc.CastExpression:
 			switch x.Case {
 			case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
@@ -596,32 +579,6 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 					if local := f.locals[d]; local != nil {
 						local.forceRead = true
 					}
-				}
-			}
-		case *cc.AssignmentExpression:
-			switch x.Case {
-			case cc.AssignmentExpressionAssign: // foo = bar;
-				// UnaryExpression '=' AssignmentExpression
-				if d := x.AssignmentExpression.Declarator(); d != nil { // bar
-					if f.project.isArrayDeclarator(d) { //TODO-
-						f.pin(d)
-					}
-				}
-			case
-				cc.AssignmentExpressionMul,
-				cc.AssignmentExpressionDiv,
-				cc.AssignmentExpressionMod,
-				cc.AssignmentExpressionAdd,
-				cc.AssignmentExpressionSub,
-				cc.AssignmentExpressionLsh,
-				cc.AssignmentExpressionRsh,
-				cc.AssignmentExpressionAnd,
-				cc.AssignmentExpressionXor,
-				cc.AssignmentExpressionOr:
-
-				var d *cc.Declarator
-				if f.project.detectArray(f, x.UnaryExpression, false, true, &d) { //TODO-
-					f.pin(d)
 				}
 			}
 		case *cc.AdditiveExpression:
@@ -650,12 +607,12 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		}
 
 		for list := x.ArgumentExpressionList; list != nil; list = list.ArgumentExpressionList {
-			if d := list.AssignmentExpression.Declarator(); d != nil {
-				if f.project.isArrayDeclarator(d) {
-					f.pin(d)
-					continue
-				}
-			}
+			//TODO- if d := list.AssignmentExpression.Declarator(); d != nil {
+			//TODO- 	if f.project.isArrayDeclarator(d) {
+			//TODO- 		f.pin(d)
+			//TODO- 		continue
+			//TODO- 	}
+			//TODO- }
 
 			var d *cc.Declarator
 			if f.project.detectArray(f, list.AssignmentExpression, false, false, &d) { //TODO-
