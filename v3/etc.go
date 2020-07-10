@@ -169,9 +169,9 @@ func typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
 	structOrUnion := "struct"
 	switch t.Kind() {
 	case cc.Ptr:
-		fmt.Sprintf("*%s", t.Elem())
+		fmt.Fprintf(b, "*%s", t.Elem())
 	case cc.Array:
-		fmt.Sprintf("[%d]%s", t.Len(), t.Elem())
+		fmt.Fprintf(b, "[%d]%s", t.Len(), t.Elem())
 	case cc.Union:
 		structOrUnion = "union"
 		fallthrough

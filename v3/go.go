@@ -581,19 +581,6 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 					}
 				}
 			}
-		case *cc.AdditiveExpression:
-			var d *cc.Declarator
-			if f.project.detectArray(f, x, false, true, &d) { //TODO-
-				f.pin(d)
-			}
-		case *cc.PostfixExpression:
-			switch x.Case {
-			case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
-				var d *cc.Declarator
-				if f.project.detectArray(f, x.PostfixExpression, false, false, &d) { //TODO-
-					f.pin(d)
-				}
-			}
 		}
 
 		x, ok := n.(*cc.PostfixExpression)
@@ -606,19 +593,6 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			return true
 		}
 
-		for list := x.ArgumentExpressionList; list != nil; list = list.ArgumentExpressionList {
-			//TODO- if d := list.AssignmentExpression.Declarator(); d != nil {
-			//TODO- 	if f.project.isArrayDeclarator(d) {
-			//TODO- 		f.pin(d)
-			//TODO- 		continue
-			//TODO- 	}
-			//TODO- }
-
-			var d *cc.Declarator
-			if f.project.detectArray(f, list.AssignmentExpression, false, false, &d) { //TODO-
-				f.pin(d)
-			}
-		}
 		if !ft.IsVariadic() {
 			return true
 		}
@@ -651,43 +625,6 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		}
 		return true
 	})
-}
-
-func mustPinStruct(t cc.Type) bool {
-	for idx := []int{0}; idx[0] < t.NumField(); idx[0]++ {
-		f := t.FieldByIndex(idx)
-		if f.IsBitField() {
-			return true
-		}
-
-		switch ft := f.Type(); ft.Kind() {
-		case cc.Struct:
-			if mustPinStruct(f.Type()) {
-				return true
-			}
-		case cc.Array, cc.Union:
-			return true
-		case cc.Ptr:
-			if ft.Elem().Kind() == cc.Function {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (f *function) mustFlatten(n *cc.CompoundStatement) bool {
-	if !n.IsJumpTarget() {
-		return false
-	}
-
-	for _, v := range n.Children() {
-		if v.IsJumpTarget() {
-			return true
-		}
-	}
-
-	return false
 }
 
 func funcType(t cc.Type) cc.Type {
@@ -2843,7 +2780,7 @@ func (p *project) declaratorKind(d *cc.Declarator) opKind {
 	switch {
 	case p.isArrayParameterDeclarator(d):
 		return opArrayParameter
-	case p.isArrayDeclarator(d):
+	case !p.pass1 && p.isArrayDeclarator(d):
 		return opArray
 	case d.Type().Kind() == cc.Function:
 		return opFunction
@@ -3910,7 +3847,7 @@ func (p *project) opKind(f *function, d declarator, t cc.Type) opKind {
 	switch {
 	case p.isArrayParameter(d, t):
 		return opArrayParameter
-	case p.isArray(f, d, t):
+	case !p.pass1 && p.isArray(f, d, t):
 		return opArray
 	case t.Kind() == cc.Union:
 		return opUnion
@@ -6841,29 +6778,38 @@ func (p *project) unaryExpressionPSelect(f *function, n *cc.UnaryExpression, t c
 	case cc.UnaryExpressionDec: // "--" UnaryExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
-		p.w("(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
-		p.unaryExpression(f, n, t, exprValue, flags)
-		p.w("))")
+		panic(todo("", n.Position()))
+		//TODO- p.w("(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
+		//TODO- p.unaryExpression(f, n, t, exprValue, flags)
+		//TODO- p.w("))")
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		ot := n.CastExpression.Operand.Type()
-		switch ot.Kind() {
-		case cc.Ptr:
-			switch et := ot.Elem(); {
-			case et.Kind() == cc.Ptr:
-				switch et2 := et.Elem(); et2.Kind() {
-				case cc.Struct:
-					p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
-					p.castExpression(f, n.CastExpression, t, exprValue, flags)
-					p.w(")))")
-				default:
-					panic(todo("", pos(n), et2, et2.Kind()))
-				}
-			default:
-				panic(todo("", pos(n), et, et.Kind()))
-			}
-		default:
-			panic(todo("", pos(n), ot, ot.Kind()))
-		}
+		panic(todo("", n.Position()))
+		//TODO- ot := n.CastExpression.Operand.Type()
+		//TODO- switch ot.Kind() {
+		//TODO- case cc.Ptr:
+		//TODO- 	switch et := ot.Elem(); {
+		//TODO- 	case et.Kind() == cc.Ptr:
+		//TODO- 		switch et2 := et.Elem(); et2.Kind() {
+		//TODO- 		case cc.Struct:
+		//TODO- 			if et2.IsIncomplete() {
+		//TODO- 				p.w("(*(**uintptr)(unsafe.Pointer(")
+		//TODO- 				p.castExpression(f, n.CastExpression, t, exprValue, flags)
+		//TODO- 				p.w(")))")
+		//TODO- 				break
+		//TODO- 			}
+
+		//TODO- 			p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
+		//TODO- 			p.castExpression(f, n.CastExpression, t, exprValue, flags)
+		//TODO- 			p.w(")))")
+		//TODO- 		default:
+		//TODO- 			panic(todo("", pos(n), et2, et2.Kind()))
+		//TODO- 		}
+		//TODO- 	default:
+		//TODO- 		panic(todo("", pos(n), et, et.Kind()))
+		//TODO- 	}
+		//TODO- default:
+		//TODO- 	panic(todo("", pos(n), ot, ot.Kind()))
+		//TODO- }
 	case cc.UnaryExpressionPlus: // '+' CastExpression
 		panic(todo(""))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
@@ -7322,8 +7268,22 @@ func (p *project) unaryExpressionPreIncDecVoid(f *function, n *cc.UnaryExpressio
 	switch k := p.opKind(f, n.UnaryExpression, n.UnaryExpression.Operand.Type()); k {
 	case opNormal:
 		p.unaryExpressionPreIncDecVoidNormal(f, n, oper, oper2, t, mode, flags)
+	case opArrayParameter:
+		p.unaryExpressionPreIncDecVoidArrayParameter(f, n, oper, oper2, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), k))
+	}
+}
+
+func (p *project) unaryExpressionPreIncDecVoidArrayParameter(f *function, n *cc.UnaryExpression, oper, oper2 string, t cc.Type, mode exprMode, flags flags) {
+	// "++" UnaryExpression etc.
+	ut := n.UnaryExpression.Operand.Type()
+	p.unaryExpression(f, n.UnaryExpression, n.UnaryExpression.Operand.Type(), exprLValue, flags)
+	switch d := p.incDelta(n, ut); d {
+	case 1:
+		p.w("%s", oper)
+	default:
+		p.w("%s %d", oper2, d)
 	}
 }
 
@@ -7428,7 +7388,7 @@ func (p *project) unaryExpressionDerefLValueNormal(f *function, n *cc.UnaryExpre
 func (p *project) unaryExpressionDerefValue(f *function, n *cc.UnaryExpression, t cc.Type, mode exprMode, flags flags) {
 	// '*' CastExpression
 	switch k := p.opKind(f, n.CastExpression, n.CastExpression.Operand.Type()); k {
-	case opNormal:
+	case opNormal, opArrayParameter:
 		p.unaryExpressionDerefValueNormal(f, n, t, mode, flags)
 	case opArray:
 		p.unaryExpressionDerefValueArray(f, n, t, mode, flags)
@@ -8119,6 +8079,7 @@ func (p *project) postfixExpressionValuePSelectUnion(f *function, n *cc.PostfixE
 func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
 	pe := n.PostfixExpression.Operand.Type()
+	k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type())
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		fld := n.Field
@@ -8147,10 +8108,15 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 	case n.Operand.Type().Kind() == cc.Array:
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
 		p.fldOff(n.PostfixExpression.Operand.Type().Elem(), n.Token2)
+	case k == opArray:
+		defer p.w("%s", p.convert(n, n.Operand, t, flags))
+		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		p.w("[0].%s", p.fieldName(n.Token2.Value))
 	default:
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		p.postfixExpression(f, n.PostfixExpression, pe, exprPSelect, flags)
-		p.w(".%s", p.fieldName(n.Token2.Value))
+		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
+		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		p.w(")).%s", p.fieldName(n.Token2.Value))
 	}
 }
 
@@ -8389,12 +8355,14 @@ func (p *project) postfixExpressionLValuePSelect(f *function, n *cc.PostfixExpre
 	switch k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type().Elem()); k {
 	case opStruct:
 		p.postfixExpressionLValuePSelectStruct(f, n, t, mode, flags)
+	case opUnion:
+		p.postfixExpressionLValuePSelectUnion(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), k))
 	}
 }
 
-func (p *project) postfixExpressionLValuePSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+func (p *project) postfixExpressionLValuePSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
 	switch {
 	case n.Operand.Type().IsBitFieldType():
@@ -8402,8 +8370,29 @@ func (p *project) postfixExpressionLValuePSelectStruct(f *function, n *cc.Postfi
 	default:
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		p.postfixExpression(f, n.PostfixExpression, pe, exprPSelect, flags)
-		p.w(".%s", p.fieldName(n.Token2.Value))
+		p.w("(*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
+		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		p.w("/* .%s */", p.fieldName(n.Token2.Value))
+		p.w(")))")
+	}
+}
+
+func (p *project) postfixExpressionLValuePSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	pe := n.PostfixExpression.Operand.Type()
+	k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type())
+	// PostfixExpression "->" IDENTIFIER
+	switch {
+	case n.Operand.Type().IsBitFieldType():
+		panic(todo(""))
+	case k == opArray:
+		defer p.w("%s", p.convert(n, n.Operand, t, flags))
+		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		p.w("[0].%s", p.fieldName(n.Token2.Value))
+	default:
+		defer p.w("%s", p.convert(n, n.Operand, t, flags))
+		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
+		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		p.w(")).%s", p.fieldName(n.Token2.Value))
 	}
 }
 
@@ -9789,26 +9778,6 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t 
 	}
 }
 
-func opOverflows(op cc.Operand, t cc.Type) bool {
-	a, ok := getIntOperand(op)
-	if !ok {
-		return false
-	}
-
-	return overflows(a, t)
-}
-
-func getIntOperand(a cc.Operand) (x *big.Int, ok bool) {
-	switch n := a.Value().(type) {
-	case cc.Int64Value:
-		return big.NewInt(int64(n)), true
-	case cc.Uint64Value:
-		return big.NewInt(0).SetUint64(uint64(n)), true
-	default:
-		return nil, false
-	}
-}
-
 func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 	sv := f.switchCtx
 	sv2 := f.continueCtx
@@ -10070,11 +10039,6 @@ func (p *project) flatSwitch(f *function, n *cc.SelectionStatement) {
 	f.flatSwitchLabels = svLabels
 	p.w("__%d:", f.breakCtx)
 	f.breakCtx = svBreakCtx
-}
-
-func isJumpTarget(n *cc.Statement) bool {
-	return n.Case == cc.StatementLabeled && n.LabeledStatement.Case == cc.LabeledStatementLabel ||
-		n.Case == cc.StatementCompound && n.CompoundStatement.IsJumpTarget()
 }
 
 func (p *project) expressionStatement(f *function, n *cc.ExpressionStatement) {
