@@ -112,7 +112,9 @@ func comment(dflt string, n cc.Node) string {
 }
 
 // tidyComment is like comment but makes comment more Go-like.
-func tidyComment(dflt string, n cc.Node) (r string) {
+func tidyComment(dflt string, n cc.Node) (r string) { return tidyCommentString(comment(dflt, n)) }
+
+func tidyCommentString(s string) (r string) {
 	defer func() {
 		if !strings.Contains(r, "// <blockquote><pre>") {
 			return
@@ -140,7 +142,7 @@ func tidyComment(dflt string, n cc.Node) (r string) {
 		r = strings.Join(a, "\n")
 	}()
 
-	s := comment(dflt, n)
+	s = strings.ReplaceAll(s, "\f", "")
 	var b strings.Builder
 	for len(s) != 0 {
 		c := s[0]
@@ -353,7 +355,7 @@ func tokenSeparator(n cc.Node) (r string) {
 		}
 		return true
 	})
-	return strings.ReplaceAll(tok.Sep.String(), "\x0c", "")
+	return tok.Sep.String()
 }
 
 type initPatch struct {
@@ -1094,7 +1096,7 @@ func (n *enumSpec) emit(p *project, enumConsts map[cc.StringID]string) {
 		en := list.Enumerator
 		p.w("%s%s = %v;", tidyComment("\n", en), enumConsts[en.Token.Value], en.Operand.Value())
 	}
-	p.w(")")
+	p.w(");")
 }
 
 type typedef struct {
@@ -2005,8 +2007,9 @@ package %s
 		p.w("%s", strings.Join(p.defines, "\n"))
 		p.w("\n)\n\n")
 	}
-	for _, v := range p.task.asts {
+	for i, v := range p.task.asts {
 		p.oneAST(v)
+		p.task.asts[i] = nil
 	}
 	sort.Slice(p.task.imported, func(i, j int) bool { return p.task.imported[i].path < p.task.imported[j].path })
 	p.o(`import (
@@ -2180,6 +2183,7 @@ func (p *project) Err() error {
 func (p *project) flushTS() {
 	b := p.ts.Bytes()
 	if len(b) != 0 {
+		p.w("\n\n")
 		//TODO add cmd line option for this
 		//TODO s := strings.TrimSpace(hex.Dump(b))
 		//TODO a := strings.Split(s, "\n")
@@ -2215,7 +2219,7 @@ func (p *project) oneAST(ast *cc.AST) {
 	for list := ast.TranslationUnit; list != nil; list = list.TranslationUnit {
 		p.externalDeclaration(list.ExternalDeclaration)
 	}
-	p.w("\n%s\n", ast.TrailingSeperator)
+	p.w("%s", tidyCommentString(ast.TrailingSeperator.String()))
 }
 
 func (p *project) externalDeclaration(n *cc.ExternalDeclaration) {
@@ -2242,6 +2246,10 @@ func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
 		switch x := m.(type) {
 		case *cc.EnumSpecifier:
 			if f != nil {
+				if f.hasJumps {
+					break
+				}
+
 				f.block.enumSpecs[x].emit(p, f.block.enumConsts)
 				break
 			}
@@ -2437,8 +2445,8 @@ func (p *project) declarator(n cc.Node, f *function, d *cc.Declarator, t cc.Type
 		p.declaratorAddrOf(n, f, d, t, flags)
 	case exprSelect:
 		p.declaratorSelect(n, f, d)
-	case exprPSelect:
-		p.declaratorPSelect(n, f, d, t)
+	//TODO- case exprPSelect:
+	//TODO- 	p.declaratorPSelect(n, f, d, t)
 	default:
 		panic(todo("", mode))
 	}
@@ -2807,6 +2815,8 @@ func (p *project) declaratorPSelectArray(n cc.Node, f *function, d *cc.Declarato
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
+				//TODO type error
+				panic(todo(""))
 				p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type().Elem()), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
@@ -2832,6 +2842,8 @@ func (p *project) declaratorPSelectNormal(n cc.Node, f *function, d *cc.Declarat
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
+				//TODO type error
+				panic(todo(""))
 				p.w("(*%s)(unsafe.Pointer(*(*unsafe.Pointer)(unsafe.Pointer(%s%s/* &%s */))))", p.typ(d, d.Type().Elem()), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
@@ -2839,6 +2851,8 @@ func (p *project) declaratorPSelectNormal(n cc.Node, f *function, d *cc.Declarat
 			if t == nil {
 				t = d.Type()
 			}
+			//TODO type error
+			panic(todo(""))
 			p.w("(*%s)(unsafe.Pointer(%s))", p.typ(d, t.Elem()), local.name)
 			return
 		}
@@ -2871,6 +2885,7 @@ func (p *project) declaratorSelectArray(n cc.Node, f *function, d *cc.Declarator
 	if local := f.locals[d]; local != nil {
 		if local.isPinned {
 			panic(todo(""))
+			//TODO type error
 			p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
 			return
 		}
@@ -7656,7 +7671,6 @@ func (p *project) postfixExpressionPSelectPSelectStruct(f *function, n *cc.Postf
 	default:
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		//TODO- p.w("(*%s/*6655 %v -> %v -> %v */)(unsafe.Pointer(", p.typ(n, t.Elem()), pe, n.Operand.Type(), t)
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, t.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprPSelect, flags)
 		p.w(".%s", p.fieldName(n.Token2.Value))
@@ -7700,8 +7714,9 @@ func (p *project) postfixExpressionSelectPSelectStruct(f *function, n *cc.Postfi
 	default:
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		p.postfixExpression(f, n.PostfixExpression, pe, exprPSelect, flags)
-		p.w(".%s", p.fieldName(n.Token2.Value))
+		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
+		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		p.w(")).%s", p.fieldName(n.Token2.Value))
 	}
 }
 
@@ -9070,6 +9085,11 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 		p.floatConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionEnum: // ENUMCONST
 		if f != nil {
+			if f.hasJumps {
+				p.intConst(n, "", n.Operand, t, flags)
+				break
+			}
+
 			for block := f.block; block != nil; block = block.parent {
 				if s := block.enumConsts[n.Token.Value]; s != "" {
 					p.w("%s", s)

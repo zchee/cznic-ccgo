@@ -358,8 +358,10 @@ func (t *task) main() (err error) {
 		}
 
 		switch filepath.Ext(arg) {
-		case ".c", ".h":
+		case ".h":
 			t.sources = append(t.sources, cc.Source{Name: arg})
+		case ".c":
+			t.sources = append(t.sources, cc.Source{Name: arg, DoNotCache: true})
 		default:
 			return fmt.Errorf("unexpected file type: %s", arg)
 		}
