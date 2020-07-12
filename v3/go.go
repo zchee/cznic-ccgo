@@ -2445,8 +2445,6 @@ func (p *project) declarator(n cc.Node, f *function, d *cc.Declarator, t cc.Type
 		p.declaratorAddrOf(n, f, d, t, flags)
 	case exprSelect:
 		p.declaratorSelect(n, f, d)
-	//TODO- case exprPSelect:
-	//TODO- 	p.declaratorPSelect(n, f, d, t)
 	default:
 		panic(todo("", mode))
 	}
@@ -2796,77 +2794,6 @@ func (p *project) declaratorKind(d *cc.Declarator) opKind {
 		return opUnion
 	default:
 		return opNormal
-	}
-}
-
-func (p *project) declaratorPSelect(n cc.Node, f *function, d *cc.Declarator, t cc.Type) {
-	switch k := p.declaratorKind(d); k {
-	case opNormal:
-		p.declaratorPSelectNormal(n, f, d, t)
-	case opArray:
-		panic(todo(""))
-		p.declaratorPSelectArray(n, f, d)
-	default:
-		panic(todo("", d.Position(), k))
-	}
-}
-
-func (p *project) declaratorPSelectArray(n cc.Node, f *function, d *cc.Declarator) {
-	if f != nil {
-		if local := f.locals[d]; local != nil {
-			if local.isPinned {
-				//TODO type error
-				panic(todo(""))
-				p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type().Elem()), f.bpName, nonZeroUintptr(local.off), local.name)
-				return
-			}
-
-			panic(todo(""))
-			return
-		}
-	}
-
-	tld := p.tlds[d]
-	if tld == nil {
-		tld = p.externs[d.Name()]
-	}
-	switch {
-	case tld != nil:
-		panic(todo(""))
-	default:
-		panic(todo(""))
-	}
-}
-
-func (p *project) declaratorPSelectNormal(n cc.Node, f *function, d *cc.Declarator, t cc.Type) {
-	if f != nil {
-		if local := f.locals[d]; local != nil {
-			if local.isPinned {
-				//TODO type error
-				panic(todo(""))
-				p.w("(*%s)(unsafe.Pointer(*(*unsafe.Pointer)(unsafe.Pointer(%s%s/* &%s */))))", p.typ(d, d.Type().Elem()), f.bpName, nonZeroUintptr(local.off), local.name)
-				return
-			}
-
-			if t == nil {
-				t = d.Type()
-			}
-			//TODO type error
-			panic(todo(""))
-			p.w("(*%s)(unsafe.Pointer(%s))", p.typ(d, t.Elem()), local.name)
-			return
-		}
-	}
-
-	tld := p.tlds[d]
-	if tld == nil {
-		tld = p.externs[d.Name()]
-	}
-	switch {
-	case tld != nil:
-		p.w("(*%s)(unsafe.Pointer(%s))", p.typ(d, d.Type().Elem()), tld.name)
-	default:
-		panic(todo(""))
 	}
 }
 
@@ -3614,6 +3541,9 @@ func (p *project) blockItem(f *function, n *cc.BlockItem) (r *cc.JumpStatement) 
 	case cc.BlockItemStmt: // Statement
 		r = p.statement(f, n.Statement, false, false)
 		p.w(";")
+		if r == nil && p.task.watch {
+			p.w("%sWatch();", p.task.crt)
+		}
 	case cc.BlockItemLabel: // LabelDeclaration
 		panic(todo("", pos(n)))
 		p.w(";")
@@ -5369,7 +5299,7 @@ func (p *project) equalityExpressionVoid(f *function, n *cc.EqualityExpression, 
 	case cc.EqualityExpressionRel: // RelationalExpression
 		p.relationalExpression(f, n.RelationalExpression, t, mode, flags)
 	case cc.EqualityExpressionEq: // EqualityExpression "==" RelationalExpression
-		panic(todo(""))
+		panic(todo("", pos(n)))
 	case cc.EqualityExpressionNeq: // EqualityExpression "!=" RelationalExpression
 		panic(todo(""))
 	default:

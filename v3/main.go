@@ -201,6 +201,7 @@ type task struct {
 	exportExternsValid  bool // -ccgo-export-externs present
 	exportFieldsValid   bool // -ccgo-export-fields present
 	exportTypedefsValid bool // -ccgo-export-typedefs present
+	watch               bool // -ccgo-watch-instrumentation
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -338,6 +339,7 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
+	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Arg("l", true, func(arg, value string) error {
 		value = strings.TrimSpace(value)
 		a := strings.Split(value, ",")
