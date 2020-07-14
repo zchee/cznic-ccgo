@@ -119,7 +119,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 			s := []rune(cc.StringID(x).String())
 			nn := len(s) + 1
 			if t.Len() != uintptr(nn) {
-				panic(todo(""))
+				panic(todo("", pos(n)))
 			}
 
 			p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.wideStringLiteral(x))
@@ -131,7 +131,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 	// type shall be a brace-enclosed list of initializers for the elements or
 	// named members.
 	if n.Case != cc.InitializerInitList { // '{' InitializerList ',' '}'
-		panic(todo(""))
+		panic(todo("", pos(n)))
 	}
 
 	switch t.Kind() {
@@ -152,17 +152,20 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 	idx := []int{0}
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
-			panic(todo(""))
+			panic(todo("", pos(n)))
 		}
 
 		if idx[0] != 0 {
-			panic(todo(""))
+			panic(todo("", pos(n)))
 		}
 
 		fld := t.FieldByIndex(idx)
+		p.w("%s:", p.fieldName(n, fld.Name()))
 		ft := fld.Type()
+		var s string
 		if ft.IsBitFieldType() {
-			panic(todo(""))
+			p.w("%sUint%dFrom%s(", p.task.crt, fld.BitFieldBlockWidth(), p.helperType(n, n.Initializer.Type()))
+			s = ")"
 		}
 
 		switch {
@@ -171,7 +174,7 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 		default:
 			p.initializer(f, n.Initializer, ft, tld, fld)
 		}
-		p.w(",")
+		p.w("%s,", s)
 		idx[0]++
 	}
 	p.w("%s}", tidyComment("", &n0.Token3))
@@ -196,7 +199,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		}
 		nvalues++
 		if fld.IsBitField() {
-			panic(todo(""))
+			panic(todo("", pos(n)))
 			if m == nil {
 				m = map[uintptr][]string{}
 				for _, off := range info.offs {
@@ -208,7 +211,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 			}
 			init := list.Initializer
 			if init.Case != cc.InitializerExpr {
-				panic(todo(""))
+				panic(todo("", pos(n)))
 			}
 
 			switch x := init.AssignmentExpression.Operand.Value().(type) {
@@ -240,7 +243,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		comma := ","
 		switch {
 		case fld.IsBitField():
-			panic(todo(""))
+			panic(todo("", pos(n)))
 			off := fld.Offset()
 			if info.flds[off][0].Name() != fld.Name() {
 				comma = ""
@@ -248,14 +251,14 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 			}
 
 			if keys {
-				p.w("%s: ", p.bitFieldName(fld.BitFieldBlockFirst()))
+				p.w("%s: ", p.bitFieldName(list, fld.BitFieldBlockFirst()))
 			}
 			p.w("%s", strings.Join(m[off], "|"))
 		case isAggregateType(ft) && list.Initializer.Case != cc.InitializerInitList && ft.Kind() != list.Initializer.AssignmentExpression.Operand.Type().Kind():
 			panic(todo("", list.Position(), t, ft))
 		default:
 			if keys {
-				p.w("%s: ", p.fieldName(fld.Name()))
+				p.w("%s: ", p.fieldName(list, fld.Name()))
 			}
 			p.initializer(f, list.Initializer, ft, tld, fld)
 		}
@@ -271,12 +274,12 @@ func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Typ
 	et := t.Elem()
 	for ; n != nil; n = n.InitializerList {
 		if n.Designation != nil {
-			panic(todo(""))
+			panic(todo("", pos(n)))
 		}
 
 		switch {
 		case isAggregateType(et) && n.Initializer.Case != cc.InitializerInitList && et.Kind() != n.Initializer.AssignmentExpression.Operand.Type().Kind():
-			panic(todo(""))
+			panic(todo("", pos(n)))
 		default:
 			p.initializer(f, n.Initializer, et, tld, nil)
 		}

@@ -1430,7 +1430,6 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func TestCSmith(t *testing.T) {
-	return //TODO-
 	gcc, err := exec.LookPath("gcc")
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -1443,6 +1442,7 @@ func TestCSmith(t *testing.T) {
 		return
 	}
 	binaryName := filepath.FromSlash("./a.out")
+	mainName := filepath.FromSlash("main.go")
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -1540,18 +1540,20 @@ out:
 
 		files++
 		var stdout, stderr bytes.Buffer
-		j := newTask([]string{"ccgo", "-o", binaryName, csp, "-ccgo-long-double-is-double", "main.c"}, &stdout, &stderr)
+		j := newTask([]string{"ccgo", "-o", mainName, csp, "-ccgo-long-double-is-double", "main.c"}, &stdout, &stderr)
 
 		func() {
 
 			defer func() {
 				if err := recover(); err != nil {
-					t.Fatalf("%s\n%s\nccgo: %s\n%s\n%v\n%s", extra, csOut, stdout.Bytes(), stderr.Bytes(), err, debug.Stack())
+					t.Errorf("%s\n%s\nccgo: %s\n%s\n%s", extra, csOut, stdout.Bytes(), stderr.Bytes(), debug.Stack())
+					t.Fatal(err)
 				}
 			}()
 
 			if err := j.main(); err != nil || stdout.Len() != 0 {
-				t.Fatalf("%s\n%s\nccgo: %s\n%s\n%v", extra, csOut, stdout.Bytes(), stderr.Bytes(), err)
+				t.Errorf("%s\n%s\nccgo: %s\n%s", extra, csOut, stdout.Bytes(), stderr.Bytes())
+				t.Fatal(err)
 			}
 		}()
 
@@ -1559,10 +1561,10 @@ out:
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 			defer cancel()
 
-			return exec.CommandContext(ctx, binaryName).CombinedOutput()
+			return exec.CommandContext(ctx, "go", "run", mainName).CombinedOutput()
 		}()
 		if err != nil {
-			t.Errorf("%s\n%s\nccgo: %v", extra, csOut, err)
+			t.Errorf("%s\n%s\n%s\nccgo: %v", extra, csOut, binOutB, err)
 			break
 		}
 
@@ -1576,7 +1578,7 @@ out:
 			fmt.Fprintln(os.Stderr, time.Since(t0), files, ok, " no opt")
 		}
 
-		if err := os.Remove(binaryName); err != nil {
+		if err := os.Remove(mainName); err != nil {
 			t.Fatal(err)
 		}
 	}
