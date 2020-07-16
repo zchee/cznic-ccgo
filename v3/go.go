@@ -1114,6 +1114,7 @@ type project struct {
 	errors             scanner.ErrorList
 	externs            map[cc.StringID]*tld
 	imports            map[string]*imported // C name: import info
+	intType            cc.Type
 	localTaggedStructs []func()
 	mainName           string
 	scope              scope
@@ -1138,7 +1139,8 @@ type project struct {
 }
 
 func newProject(t *task) (*project, error) {
-	if t.cfg.ABI.Types[cc.Int].Size != 4 { // We're assuming wchar_t is int32.
+	intType := t.cfg.ABI.Type(cc.Int)
+	if intType.Size() != 4 { // We're assuming wchar_t is int32.
 		return nil, fmt.Errorf("unsupported C int size")
 	}
 
@@ -1146,6 +1148,7 @@ func newProject(t *task) (*project, error) {
 		enumConsts:     map[cc.StringID]string{},
 		externs:        map[cc.StringID]*tld{},
 		imports:        map[string]*imported{},
+		intType:        intType,
 		scope:          newScope(),
 		task:           t,
 		tlds:           map[*cc.Declarator]*tld{},
@@ -3993,7 +3996,7 @@ func (p *project) assignmentExpressionAddrOf(f *function, n *cc.AssignmentExpres
 	case cc.AssignmentExpressionCond: // ConditionalExpression
 		p.conditionalExpression(f, n.ConditionalExpression, t, mode, flags)
 	case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
-		panic(todo("", pos(n)))
+		p.assignmentExpressionValueAddrOf(f, n, t, mode, flags)
 	case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
 		panic(todo("", pos(n)))
 	case cc.AssignmentExpressionDiv: // UnaryExpression "/=" AssignmentExpression
@@ -4017,6 +4020,42 @@ func (p *project) assignmentExpressionAddrOf(f *function, n *cc.AssignmentExpres
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
+}
+
+func (p *project) assignmentExpressionValueAddrOf(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
+	// UnaryExpression '=' AssignmentExpression
+	if mode == exprCondReturn {
+		panic(todo(""))
+	}
+
+	lhs := n.UnaryExpression
+	switch k := p.opKind(f, lhs, lhs.Operand.Type()); k {
+	case opStruct:
+		p.assignmentExpressionValueAssignStructAddrof(f, n, n.Operand.Type(), mode, flags)
+	default:
+		panic(todo("", n.Position(), k))
+	}
+}
+
+func (p *project) assignmentExpressionValueAssignStructAddrof(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
+	// UnaryExpression '=' AssignmentExpression
+	lhs := n.UnaryExpression.Operand.Type()
+	rhs := n.AssignmentExpression.Operand.Type()
+	if d := n.UnaryExpression.Declarator(); d != nil {
+		if local := f.locals[d]; local != nil {
+			if local.isPinned {
+				panic(todo(""))
+			}
+
+			panic(todo(""))
+		}
+	}
+
+	p.w("%sXmemmove(tls, ", p.task.crt)
+	p.unaryExpression(f, n.UnaryExpression, lhs, exprAddrOf, flags|fOutermost)
+	p.w(", ")
+	p.assignmentExpression(f, n.AssignmentExpression, rhs, exprAddrOf, flags|fOutermost)
+	p.w(", %d)", lhs.Size())
 }
 
 func (p *project) assignmentExpressionValue(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
@@ -4061,9 +4100,32 @@ func (p *project) assignmentExpressionValueAssign(f *function, n *cc.AssignmentE
 		p.assignmentExpressionValueAssignNormal(f, n, t, mode, flags)
 	case opBitfield:
 		p.assignmentExpressionValueAssignBitfield(f, n, t, mode, flags)
+	case opStruct:
+		p.assignmentExpressionValueAssignStruct(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), k))
 	}
+}
+
+func (p *project) assignmentExpressionValueAssignStruct(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
+	// UnaryExpression '=' AssignmentExpression
+	lhs := n.UnaryExpression.Operand.Type()
+	rhs := n.AssignmentExpression.Operand.Type()
+	if d := n.UnaryExpression.Declarator(); d != nil {
+		if local := f.locals[d]; local != nil {
+			if local.isPinned {
+				panic(todo(""))
+			}
+
+			panic(todo(""))
+		}
+	}
+
+	p.w("*(*%s)(unsafe.Pointer(%sXmemmove(tls, ", p.typ(n, lhs), p.task.crt)
+	p.unaryExpression(f, n.UnaryExpression, lhs, exprAddrOf, flags|fOutermost)
+	p.w(", ")
+	p.assignmentExpression(f, n.AssignmentExpression, rhs, exprAddrOf, flags|fOutermost)
+	p.w(", %d)))", lhs.Size())
 }
 
 func (p *project) assignmentExpressionValueAssignBitfield(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
@@ -5026,7 +5088,9 @@ func xorOverflows(lo, ro cc.Operand, promote cc.Type) bool {
 		return false
 	}
 
-	return overflows(a.Xor(a, b), promote)
+	return !lo.Type().IsSignedType() && a.Sign() == 0 ||
+		!ro.Type().IsSignedType() && b.Sign() == 0 ||
+		overflows(a.Xor(a, b), promote)
 }
 
 func (p *project) andExpression(f *function, n *cc.AndExpression, t cc.Type, mode exprMode, flags flags) {
@@ -6873,6 +6937,7 @@ func (p *project) unaryExpressionVoid(f *function, n *cc.UnaryExpression, t cc.T
 		cc.UnaryExpressionCpl:   // '~' CastExpression
 
 		p.w("_ = ")
+		defer p.w("%s", p.convert(n, n.CastExpression.Operand, p.intType, flags|fOutermost))
 		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags|fOutermost)
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
 		panic(todo("", n.Position()))
@@ -9465,16 +9530,28 @@ func (p *project) assignOpValue(f *function, n *cc.AssignmentExpression, t cc.Ty
 	switch k := p.opKind(f, n.UnaryExpression, n.UnaryExpression.Operand.Type()); k {
 	case opNormal:
 		p.assignOpValueNormal(f, n, t, oper, oper2, mode, flags)
+	case opBitfield:
+		p.assignOpValueBitfield(f, n, t, oper, oper2, mode, flags)
 	default:
 		panic(todo("", n.Position(), k))
 	}
+}
+
+func (p *project) assignOpValueBitfield(f *function, n *cc.AssignmentExpression, t cc.Type, oper, oper2 string, mode exprMode, flags flags) {
+	lhs := n.UnaryExpression
+	// UnaryExpression "*=" AssignmentExpression etc.
+	if d := lhs.Declarator(); d != nil {
+		panic(todo("", pos(n)))
+	}
+
+	panic(todo("", pos(n)))
 }
 
 func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t cc.Type, oper, oper2 string, mode exprMode, flags flags) {
 	asInt := oper2 == "Shl" || oper2 == "Shr"
 	lhs := n.UnaryExpression
 	// UnaryExpression "*=" AssignmentExpression etc.
-	if d := n.UnaryExpression.Declarator(); d != nil {
+	if d := lhs.Declarator(); d != nil {
 		if local := f.locals[d]; local != nil && local.isPinned {
 			switch {
 			case lhs.Operand.Type().IsArithmeticType():
@@ -9524,28 +9601,6 @@ func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t
 		default:
 			panic(todo("", pos(n), pos(d), d.Name()))
 		}
-		//TODO- p.declarator(f, d, d.Type(), exprLValue, flags|fOutermost)
-		//TODO- switch d.Type().Kind() {
-		//TODO- case cc.Ptr:
-		//TODO- 	if oper != "+" && oper != "-" {
-		//TODO- 		panic(todo("", pos(n)))
-		//TODO- 	}
-
-		//TODO- 	p.w(" %s= ", oper)
-		//TODO- 	if dd := p.incDelta(d, d.Type()); dd != 1 {
-		//TODO- 		p.w("%d*(", dd)
-		//TODO- 		defer p.w(")")
-		//TODO- 	}
-		//TODO- 	defer p.w("%s", p.convertType(n.Promote(), d.Type(), flags))
-		//TODO- 	p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
-		//TODO- default:
-		//TODO- 	p.w(" = ")
-		//TODO- 	defer p.w("%s", p.convertType(n.Promote(), d.Type(), flags))
-		//TODO- 	p.declarator(f, d, n.Promote(), exprValue, flags|fOutermost)
-		//TODO- 	p.w(" %s (", oper)
-		//TODO- 	p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
-		//TODO- 	p.w(")")
-		//TODO- }
 		return
 	}
 
@@ -9563,15 +9618,6 @@ func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t
 			p.w(")")
 		}
 		p.w(")")
-	//TODO- case lhs.Operand.Type().Kind() == cc.Ptr:
-	//TODO- 	p.w("*(*%s)(unsafe.Pointer(", p.typ(lhs.Operand.Type()))
-	//TODO- 	p.unaryExpression(f, lhs, lhs.Operand.Type(), exprAddrOf, flags|fOutermost)
-	//TODO- 	p.w(")) %s= (", oper)
-	//TODO- 	p.assignmentExpression(f, n.AssignmentExpression, lhs.Operand.Type(), exprValue, flags|fOutermost)
-	//TODO- 	p.w(")")
-	//TODO- 	if dd := p.incDelta(n, lhs.Operand.Type()); dd != 1 {
-	//TODO- 		p.w("*%d", dd)
-	//TODO- 	}
 	default:
 		panic(todo("", lhs.Operand.Type()))
 	}
