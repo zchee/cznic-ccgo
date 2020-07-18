@@ -4,6 +4,28 @@
 
 //go:generate stringer -output stringer.go -type=exprMode,opKind
 
+//TODO 2020-07-17
+//
+// Fix += and friends
+//
+// Audit all unsafe.Pointer conversions
+//
+// Remove double dereferencing **
+//
+// Shifts must not use n.Promote on left opearand
+//
+// Try pinning everything for differential debugging.
+//
+// Restore alignof and sizeof
+//
+// emit optionally struct/union layout verifying code
+//
+// Un-array
+//
+// Rewrite init
+//
+// Pass more CSmith tests.
+
 package main // import "modernc.org/ccgo/v3"
 
 //TODO merge VaList slots of distinct top level statements.

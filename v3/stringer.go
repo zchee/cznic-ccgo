@@ -12,17 +12,18 @@ func _() {
 	_ = x[exprBool-2]
 	_ = x[exprCondInit-3]
 	_ = x[exprCondReturn-4]
-	_ = x[exprFunc-5]
-	_ = x[exprLValue-6]
-	_ = x[exprPSelect-7]
-	_ = x[exprSelect-8]
-	_ = x[exprValue-9]
-	_ = x[exprVoid-10]
+	_ = x[exprDecay-5]
+	_ = x[exprFunc-6]
+	_ = x[exprLValue-7]
+	_ = x[exprPSelect-8]
+	_ = x[exprSelect-9]
+	_ = x[exprValue-10]
+	_ = x[exprVoid-11]
 }
 
-const _exprMode_name = "exprAddrOfexprBoolexprCondInitexprCondReturnexprFuncexprLValueexprPSelectexprSelectexprValueexprVoid"
+const _exprMode_name = "exprAddrOfexprBoolexprCondInitexprCondReturnexprDecayexprFuncexprLValueexprPSelectexprSelectexprValueexprVoid"
 
-var _exprMode_index = [...]uint8{0, 10, 18, 30, 44, 52, 62, 73, 83, 92, 100}
+var _exprMode_index = [...]uint8{0, 10, 18, 30, 44, 53, 61, 71, 82, 92, 101, 109}
 
 func (i exprMode) String() string {
 	i -= 1

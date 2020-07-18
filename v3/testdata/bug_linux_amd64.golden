@@ -1,3 +1,4 @@
 fp.c
+paramarray.c
 sqlite.c
 sqlite2.c

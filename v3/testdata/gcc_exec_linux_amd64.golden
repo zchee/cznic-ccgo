@@ -720,6 +720,7 @@ lto-tbaa-1.c
 mayalias-1.c
 mayalias-2.c
 mayalias-3.c
+memchr-1.c
 memcpy-1.c
 memcpy-2.c
 memcpy-bi.c
@@ -1087,6 +1088,7 @@ pr86231.c
 pr86492.c
 pr86844.c
 pr87290.c
+pr88693.c
 pr88714.c
 pr89634.c
 pr89826.c
@@ -1116,6 +1118,7 @@ strlen-2.c
 strlen-3.c
 strlen-4.c
 strlen-5.c
+strlen-6.c
 strlen-7.c
 strncmp-1.c
 struct-aliasing-1.c

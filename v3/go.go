@@ -39,10 +39,11 @@ type exprMode int
 
 const (
 	_              exprMode = iota
-	exprAddrOf              // &foo as uinptr (must be static)
+	exprAddrOf              // &foo as uinptr (must be static/pinned)
 	exprBool                // foo in foo != 0
 	exprCondInit            // foo or bar in int i = x ? foo : bar;
 	exprCondReturn          // foo or bar in return x ? foo : bar;
+	exprDecay               // &foo[0] in foo for array foo.
 	exprFunc                // foo in foo(bar)
 	exprLValue              // foo in foo = bar
 	exprPSelect             // foo in foo->bar
@@ -2413,22 +2414,6 @@ func (p *project) isConditionalAssignmentExpr(n *cc.AssignmentExpression) bool {
 		n.ConditionalExpression.Case == cc.ConditionalExpressionCond
 }
 
-//TODO- func typedef(n cc.Node) (r cc.StringID) {
-//TODO- 	cc.Inspect(n, func(n cc.Node, entry bool) bool {
-//TODO- 		if !entry {
-//TODO- 			return true
-//TODO- 		}
-//TODO-
-//TODO- 		if x, ok := n.(*cc.TypeSpecifier); ok && x.Case == cc.TypeSpecifierTypedefName {
-//TODO- 			r = x.Token.Value
-//TODO- 			return false
-//TODO- 		}
-//TODO-
-//TODO- 		return true
-//TODO- 	})
-//TODO- 	return r
-//TODO- }
-
 func (p *project) initDeclaratorDecl(f *function, n *cc.InitDeclarator, sep string) {
 	d := n.Declarator
 	local := f.locals[d]
@@ -2455,8 +2440,53 @@ func (p *project) declarator(n cc.Node, f *function, d *cc.Declarator, t cc.Type
 		p.declaratorAddrOf(n, f, d, t, flags)
 	case exprSelect:
 		p.declaratorSelect(n, f, d)
+	case exprDecay:
+		p.declaratorDecay(n, f, d, t, mode, flags)
 	default:
 		panic(todo("", mode))
+	}
+}
+
+func (p *project) declaratorDecay(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+	if d.Type().Kind() != cc.Array {
+		panic(todo("", n.Position(), pos(d)))
+	}
+
+	if f != nil {
+		if local := f.locals[d]; local != nil {
+			if d.IsParameter {
+				p.w("%s", local.name)
+				return
+			}
+
+			if p.pass1 {
+				f.pin(d)
+				return
+			}
+
+			p.w("%s%s/* &%s[0] */", f.bpName, nonZeroUintptr(local.off), local.name)
+			return
+		}
+	}
+
+	tld := p.tlds[d]
+	if tld == nil {
+		tld = p.externs[d.Name()]
+	}
+	switch {
+	case tld != nil:
+		p.w("uintptr(unsafe.Pointer(&%s))", tld.name)
+	default:
+		nm := d.Name()
+		imp := p.imports[nm.String()]
+		if imp == nil {
+			p.err(n, "undefined: %s", d.Name())
+			p.w("%s", nm)
+			return
+		}
+
+		imp.used = true
+		p.w("uintptr(unsafe.Pointer(&%sX%s))", imp.qualifier, nm)
 	}
 }
 
@@ -2893,7 +2923,13 @@ func (p *project) declaratorAddrOf(n cc.Node, f *function, d *cc.Declarator, t c
 }
 
 func (p *project) declaratorAddrOfArrayParameter(n cc.Node, f *function, d *cc.Declarator) {
-	p.w("%s", f.locals[d].name)
+	if p.pass1 {
+		f.pin(d)
+		return
+	}
+
+	local := f.locals[d]
+	p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 }
 
 func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declarator) {
@@ -3693,8 +3729,21 @@ func (p *project) expression(f *function, n *cc.Expression, t cc.Type, mode expr
 		p.expressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.expressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.expressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) expressionDecay(f *function, n *cc.Expression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.ExpressionAssign: // AssignmentExpression
+		p.assignmentExpression(f, n.AssignmentExpression, t, mode, flags)
+	case cc.ExpressionComma: // Expression ',' AssignmentExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -3835,8 +3884,41 @@ func (p *project) assignmentExpression(f *function, n *cc.AssignmentExpression, 
 		p.assignmentExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.assignmentExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.assignmentExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) assignmentExpressionDecay(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.AssignmentExpressionCond: // ConditionalExpression
+		p.conditionalExpression(f, n.ConditionalExpression, t, mode, flags)
+	case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionMul: // UnaryExpression "*=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionDiv: // UnaryExpression "/=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionMod: // UnaryExpression "%=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionAdd: // UnaryExpression "+=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionSub: // UnaryExpression "-=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionLsh: // UnaryExpremode, ssion "<<=
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionRsh: // UnaryExpression ">>=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionAnd: // UnaryExpression "&=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionXor: // UnaryExpression "^=" AssignmentExpression
+		panic(todo("", pos(n)))
+	case cc.AssignmentExpressionOr: // UnaryExpression "|=" AssignmentExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -4025,7 +4107,7 @@ func (p *project) assignmentExpressionAddrOf(f *function, n *cc.AssignmentExpres
 func (p *project) assignmentExpressionValueAddrOf(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
 	// UnaryExpression '=' AssignmentExpression
 	if mode == exprCondReturn {
-		panic(todo(""))
+		panic(todo("", pos(n)))
 	}
 
 	lhs := n.UnaryExpression
@@ -4041,13 +4123,17 @@ func (p *project) assignmentExpressionValueAssignStructAddrof(f *function, n *cc
 	// UnaryExpression '=' AssignmentExpression
 	lhs := n.UnaryExpression.Operand.Type()
 	rhs := n.AssignmentExpression.Operand.Type()
+	if lhs.Kind() == cc.Array || rhs.Kind() == cc.Array {
+		panic(todo("", pos(n)))
+	}
+
 	if d := n.UnaryExpression.Declarator(); d != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				panic(todo(""))
+				panic(todo("", pos(n)))
 			}
 
-			panic(todo(""))
+			panic(todo("", pos(n)))
 		}
 	}
 
@@ -4111,13 +4197,17 @@ func (p *project) assignmentExpressionValueAssignStruct(f *function, n *cc.Assig
 	// UnaryExpression '=' AssignmentExpression
 	lhs := n.UnaryExpression.Operand.Type()
 	rhs := n.AssignmentExpression.Operand.Type()
+	if lhs.Kind() == cc.Array || rhs.Kind() == cc.Array {
+		panic(todo("", pos(n)))
+	}
+
 	if d := n.UnaryExpression.Declarator(); d != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				panic(todo(""))
+				panic(todo("", pos(n)))
 			}
 
-			panic(todo(""))
+			panic(todo("", pos(n)))
 		}
 	}
 
@@ -4198,7 +4288,7 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 		case opNormal, opStruct:
 			mode = exprValue
 			if p.isArrayOrPinnedArray(f, n.AssignmentExpression, n.AssignmentExpression.Operand.Type()) {
-				mode = exprAddrOf
+				mode = exprDecay
 			}
 			switch {
 			case flags&fNoCondAssignment == 0 && mode == exprValue && n.UnaryExpression.Declarator() != nil && p.isConditionalAssignmentExpr(n.AssignmentExpression):
@@ -4309,8 +4399,40 @@ func (p *project) conditionalExpression(f *function, n *cc.ConditionalExpression
 		p.conditionalExpressionReturn(f, n, t, mode, flags)
 	case exprCondInit:
 		p.conditionalExpressionInit(f, n, t, mode, flags)
+	case exprDecay:
+		p.conditionalExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) conditionalExpressionDecay(f *function, n *cc.ConditionalExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.ConditionalExpressionLOr: // LogicalOrExpression
+		p.logicalOrExpression(f, n.LogicalOrExpression, t, mode, flags)
+	case cc.ConditionalExpressionCond: // LogicalOrExpression '?' Expression ':' ConditionalExpression
+		t = t.Decay()
+		p.w(" func() %s { if ", p.typ(n, t))
+		p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), exprBool, flags|fOutermost)
+		p.w(" { return ")
+		switch n.Expression.Operand.Type().Kind() {
+		case cc.Array:
+			p.expression(f, n.Expression, t, exprDecay, flags|fOutermost)
+		case cc.Ptr:
+			panic(todo("", n.Expression.Position(), n.Expression.Operand.Type()))
+		default:
+			panic(todo("", n.Expression.Position(), n.Expression.Operand.Type()))
+		}
+		p.w("}; return ")
+		switch n.ConditionalExpression.Operand.Type().Kind() {
+		case cc.Array:
+			p.conditionalExpression(f, n.ConditionalExpression, t, exprDecay, flags|fOutermost)
+		default:
+			p.conditionalExpression(f, n.ConditionalExpression, t, exprValue, flags|fOutermost)
+		}
+		p.w("}()")
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -4493,8 +4615,21 @@ func (p *project) logicalOrExpression(f *function, n *cc.LogicalOrExpression, t 
 		p.logicalOrExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.logicalOrExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.logicalOrExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) logicalOrExpressionDecay(f *function, n *cc.LogicalOrExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.LogicalOrExpressionLAnd: // LogicalAndExpression
+		p.logicalAndExpression(f, n.LogicalAndExpression, t, mode, flags)
+	case cc.LogicalOrExpressionLOr: // LogicalOrExpression "||" LogicalAndExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -4648,8 +4783,21 @@ func (p *project) logicalAndExpression(f *function, n *cc.LogicalAndExpression, 
 		p.logicalAndExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.logicalAndExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.logicalAndExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) logicalAndExpressionDecay(f *function, n *cc.LogicalAndExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.LogicalAndExpressionOr: // InclusiveOrExpression
+		p.inclusiveOrExpression(f, n.InclusiveOrExpression, t, mode, flags)
+	case cc.LogicalAndExpressionLAnd: // LogicalAndExpression "&&" InclusiveOrExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -4786,8 +4934,21 @@ func (p *project) inclusiveOrExpression(f *function, n *cc.InclusiveOrExpression
 		p.inclusiveOrExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.inclusiveOrExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.inclusiveOrExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) inclusiveOrExpressionDecay(f *function, n *cc.InclusiveOrExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.InclusiveOrExpressionXor: // ExclusiveOrExpression
+		p.exclusiveOrExpression(f, n.ExclusiveOrExpression, t, mode, flags)
+	case cc.InclusiveOrExpressionOr: // InclusiveOrExpression '|' ExclusiveOrExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -4964,8 +5125,21 @@ func (p *project) exclusiveOrExpression(f *function, n *cc.ExclusiveOrExpression
 		p.exclusiveOrExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.exclusiveOrExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.exclusiveOrExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) exclusiveOrExpressionDecay(f *function, n *cc.ExclusiveOrExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.ExclusiveOrExpressionAnd: // AndExpression
+		p.andExpression(f, n.AndExpression, t, mode, flags)
+	case cc.ExclusiveOrExpressionXor: // ExclusiveOrExpression '^' AndExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -5111,8 +5285,21 @@ func (p *project) andExpression(f *function, n *cc.AndExpression, t cc.Type, mod
 		p.andExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.andExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.andExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) andExpressionDecay(f *function, n *cc.AndExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.AndExpressionEq: // EqualityExpression
+		p.equalityExpression(f, n.EqualityExpression, t, mode, flags)
+	case cc.AndExpressionAnd: // AndExpression '&' EqualityExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -5273,8 +5460,23 @@ func (p *project) equalityExpression(f *function, n *cc.EqualityExpression, t cc
 		p.equalityExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.equalityExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.equalityExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) equalityExpressionDecay(f *function, n *cc.EqualityExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.EqualityExpressionRel: // RelationalExpression
+		p.relationalExpression(f, n.RelationalExpression, t, mode, flags)
+	case cc.EqualityExpressionEq: // EqualityExpression "==" RelationalExpression
+		panic(todo("", pos(n)))
+	case cc.EqualityExpressionNeq: // EqualityExpression "!=" RelationalExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -5426,8 +5628,27 @@ func (p *project) relationalExpression(f *function, n *cc.RelationalExpression, 
 		p.relationalExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.relationalExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.relationalExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) relationalExpressionDecay(f *function, n *cc.RelationalExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.RelationalExpressionShift: // ShiftExpression
+		p.shiftExpression(f, n.ShiftExpression, t, mode, flags)
+	case cc.RelationalExpressionLt: // RelationalExpression '<' ShiftExpression
+		panic(todo("", pos(n)))
+	case cc.RelationalExpressionGt: // RelationalExpression '>' ShiftExpression
+		panic(todo("", pos(n)))
+	case cc.RelationalExpressionLeq: // RelationalExpression "<=" ShiftExpression
+		panic(todo("", pos(n)))
+	case cc.RelationalExpressionGeq: // RelationalExpression ">=" ShiftExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -5590,8 +5811,23 @@ func (p *project) shiftExpression(f *function, n *cc.ShiftExpression, t cc.Type,
 		p.shiftExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.shiftExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.shiftExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) shiftExpressionDecay(f *function, n *cc.ShiftExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.ShiftExpressionAdd: // AdditiveExpression
+		p.additiveExpression(f, n.AdditiveExpression, t, mode, flags)
+	case cc.ShiftExpressionLsh: // ShiftExpression "<<" AdditiveExpression
+		panic(todo("", pos(n)))
+	case cc.ShiftExpressionRsh: // ShiftExpression ">>" AdditiveExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -5806,8 +6042,23 @@ func (p *project) additiveExpression(f *function, n *cc.AdditiveExpression, t cc
 		p.additiveExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.additiveExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.additiveExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) additiveExpressionDecay(f *function, n *cc.AdditiveExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.AdditiveExpressionMul: // MultiplicativeExpression
+		p.multiplicativeExpression(f, n.MultiplicativeExpression, t, mode, flags)
+	case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
+		panic(todo("", pos(n)))
+	case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -5994,7 +6245,7 @@ func (p *project) binaryAdditiveExpressionValue(f *function, n *cc.AdditiveExpre
 			p.w("*%d", sz)
 		}
 	case lt.Kind() == cc.Array && rt.IsIntegerType(): // p +- i
-		p.additiveExpression(f, n.AdditiveExpression, lt, exprAddrOf, flags)
+		p.additiveExpression(f, n.AdditiveExpression, lt, exprDecay, flags)
 		p.w(" %s%s uintptr(", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, rt, exprValue, flags)
 		p.w(")")
@@ -6023,7 +6274,7 @@ func (p *project) binaryAdditiveExpressionValue(f *function, n *cc.AdditiveExpre
 		p.w("(")
 		p.additiveExpression(f, n.AdditiveExpression, lt, exprValue, flags)
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
-		p.multiplicativeExpression(f, n.MultiplicativeExpression, rt.Decay(), exprAddrOf, flags&^fOutermost)
+		p.multiplicativeExpression(f, n.MultiplicativeExpression, rt.Decay(), exprDecay, flags&^fOutermost)
 		p.w(")/%d", lt.Elem().Size())
 	case lt.Kind() == cc.Array && rt.Kind() == cc.Ptr && oper == "-": // p - q
 		panic(todo("", pos(n)))
@@ -6142,8 +6393,25 @@ func (p *project) multiplicativeExpression(f *function, n *cc.MultiplicativeExpr
 		p.multiplicativeExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.multiplicativeExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.multiplicativeExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) multiplicativeExpressionDecay(f *function, n *cc.MultiplicativeExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.MultiplicativeExpressionCast: // CastExpression
+		p.castExpression(f, n.CastExpression, t, mode, flags)
+	case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
+		panic(todo("", pos(n)))
+	case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
+		panic(todo("", pos(n)))
+	case cc.MultiplicativeExpressionMod: // MultiplicativeExpression '%' CastExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -6391,8 +6659,21 @@ func (p *project) castExpression(f *function, n *cc.CastExpression, t cc.Type, m
 		p.castExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.castExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.castExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) castExpressionDecay(f *function, n *cc.CastExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.CastExpressionUnary: // UnaryExpression
+		p.unaryExpression(f, n.UnaryExpression, t, mode, flags)
+	case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -6588,7 +6869,7 @@ func (p *project) castExpressionValueArray(f *function, n *cc.CastExpression, t 
 	switch {
 	case tn.IsScalarType():
 		defer p.w("%s", p.convertType(n, nil, t, flags))
-		p.castExpression(f, n.CastExpression, tn, exprAddrOf, flags)
+		p.castExpression(f, n.CastExpression, tn, exprDecay, flags)
 	default:
 		panic(todo("", pos(n)))
 	}
@@ -6651,8 +6932,49 @@ func (p *project) unaryExpression(f *function, n *cc.UnaryExpression, t cc.Type,
 		p.unaryExpressionFunc(f, n, t, mode, flags)
 	case exprSelect:
 		p.unaryExpressionSelect(f, n, t, mode, flags)
+	case exprDecay:
+		p.unaryExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) unaryExpressionDecay(f *function, n *cc.UnaryExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.UnaryExpressionPostfix: // PostfixExpression
+		p.postfixExpression(f, n.PostfixExpression, t, mode, flags)
+	case cc.UnaryExpressionInc: // "++" UnaryExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionDec: // "--" UnaryExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionAddrof: // '&' CastExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionDeref: // '*' CastExpression
+		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags)
+	case cc.UnaryExpressionPlus: // '+' CastExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionMinus: // '-' CastExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionCpl: // '~' CastExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionNot: // '!' CastExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionLabelAddr: // "&&" IDENTIFIER
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionAlignofExpr: // "_Alignof" UnaryExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionAlignofType: // "_Alignof" '(' TypeName ')'
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionImag: // "__imag__" UnaryExpression
+		panic(todo("", pos(n)))
+	case cc.UnaryExpressionReal: // "__real__" UnaryExpression
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -6925,7 +7247,12 @@ func (p *project) unaryExpressionVoid(f *function, n *cc.UnaryExpression, t cc.T
 		p.unaryExpressionPreIncDec(f, n, "--", "-=", t, mode, flags)
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
 		p.w("_ = ")
-		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprAddrOf, flags|fOutermost)
+		switch {
+		case n.CastExpression.Operand.Type().Kind() == cc.Array:
+			panic(todo("", pos(n)))
+		default:
+			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprAddrOf, flags|fOutermost)
+		}
 	case cc.UnaryExpressionDeref: // '*' CastExpression
 		p.w("_ = *(*byte)(unsafe.Pointer(")
 		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags|fOutermost)
@@ -6970,7 +7297,12 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 		if t.Kind() != cc.Ptr {
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		}
-		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprAddrOf, flags&^fOutermost)
+		switch {
+		case n.CastExpression.Operand.Type().Kind() == cc.Array:
+			panic(todo("", pos(n)))
+		default:
+			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprAddrOf, flags&^fOutermost)
+		}
 	case cc.UnaryExpressionDeref: // '*' CastExpression
 		ot := n.CastExpression.Operand.Type()
 		switch ot.Kind() {
@@ -7431,8 +7763,52 @@ func (p *project) postfixExpression(f *function, n *cc.PostfixExpression, t cc.T
 		p.postfixExpressionPSelect(f, n, t, mode, flags)
 	case exprBool:
 		p.postfixExpressionBool(f, n, t, mode, flags)
+	case exprDecay:
+		p.postfixExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) postfixExpressionDecay(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.PostfixExpressionPrimary: // PrimaryExpression
+		p.primaryExpression(f, n.PrimaryExpression, t, mode, flags)
+	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
+		defer p.w("%s", p.convert(n, n.Operand, t, flags))
+		pe := n.PostfixExpression.Operand.Type()
+		p.w("(")
+		switch {
+		case pe.Kind() == cc.Array:
+			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags&^fOutermost)
+		case pe.Kind() == cc.Ptr:
+			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
+		default:
+			panic(todo("", pos(n)))
+		}
+		p.w(" + ")
+		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+		if sz := pe.Elem().Size(); sz != 1 {
+			p.w("*%d", sz)
+		}
+		p.w(")")
+	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
+		panic(todo("", pos(n)))
+	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
+		p.postfixExpression(f, n, t, exprAddrOf, flags)
+	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+		p.postfixExpression(f, n, t, exprAddrOf, flags)
+	case cc.PostfixExpressionInc: // PostfixExpression "++"
+		panic(todo("", pos(n)))
+	case cc.PostfixExpressionDec: // PostfixExpression "--"
+		panic(todo("", pos(n)))
+	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
+		panic(todo("", pos(n)))
+		panic(todo("", pos(n)))
+	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", pos(n)))
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -8020,7 +8396,7 @@ func (p *project) postfixExpressionValue(f *function, n *cc.PostfixExpression, t
 	switch n.Case {
 	case cc.PostfixExpressionPrimary: // PrimaryExpression
 		if p.isArray(f, n.PrimaryExpression, n.Operand.Type()) && t.Kind() == cc.Ptr {
-			mode = exprAddrOf
+			mode = exprDecay
 		}
 		p.primaryExpression(f, n.PrimaryExpression, t, mode, flags)
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
@@ -8085,7 +8461,7 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 		case cc.Array:
 			x := p.convertType(n, nil, fld.Promote(), flags)
 			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
-			p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
+			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags)
 			p.fldOff(pe.Elem(), n.Token2)
 			p.w("))")
 			p.w("&%#x>>%d%s", fld.Mask(), fld.BitFieldOffset(), x)
@@ -8190,7 +8566,7 @@ func (p *project) postfixExpressionValueIndexNormal(f *function, n *cc.PostfixEx
 		case cc.Array:
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
-			p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags&^fOutermost)
+			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags&^fOutermost)
 			p.w(" + ")
 			p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
 			if sz := pe.Elem().Size(); sz != 1 {
@@ -8213,7 +8589,7 @@ func (p *project) postfixExpressionValueIndexArray(f *function, n *cc.PostfixExp
 			p.w("(")
 			defer p.w(")")
 		}
-		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
+		p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags|fOutermost)
 		p.w(" + ")
 		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
 		if sz := pe.Elem().Size(); sz != 1 {
@@ -8271,7 +8647,7 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 	fld := n.Field
 	switch {
 	case n.Operand.Type().Kind() == cc.Array:
-		p.postfixExpression(f, n, t, exprAddrOf, flags)
+		p.postfixExpression(f, n, t, exprDecay, flags)
 	case n.Operand.Type().IsBitFieldType():
 		defer p.w("%s", p.convertType(n, fld.Promote(), t, flags))
 		x := p.convertType(n, nil, fld.Promote(), flags)
@@ -8450,7 +8826,7 @@ func (p *project) postfixExpressionLValueIndexNormal(f *function, n *cc.PostfixE
 		case cc.Array:
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
-			p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags&^fOutermost)
+			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags&^fOutermost)
 			p.w(" + ")
 			p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
 			if sz := pe.Elem().Size(); sz != 1 {
@@ -8487,6 +8863,8 @@ func (p *project) postfixExpressionLValueSelect(f *function, n *cc.PostfixExpres
 func (p *project) postfixExpressionLValueSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	pe := n.PostfixExpression.Operand.Type()
 	switch {
+	case pe.Kind() == cc.Array:
+		panic(todo("", pos(n)))
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", pos(n)))
 	default:
@@ -8779,8 +9157,8 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 	for i, arg := range args {
 		p.w(",%s", tidyComment(" ", arg))
 		mode := exprValue
-		if at := arg.Operand.Type(); at.Kind() == cc.Array && p.detectArray(f, arg, true, true, nil) {
-			mode = exprAddrOf
+		if at := arg.Operand.Type(); at.Kind() == cc.Array {
+			mode = exprDecay
 		}
 		switch {
 		case i < len(params):
@@ -8833,8 +9211,42 @@ func (p *project) primaryExpression(f *function, n *cc.PrimaryExpression, t cc.T
 		p.primaryExpressionBool(f, n, t, mode, flags)
 	case exprVoid:
 		p.primaryExpressionVoid(f, n, t, mode, flags)
+	case exprDecay:
+		p.primaryExpressionDecay(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), mode))
+	}
+}
+
+func (p *project) primaryExpressionDecay(f *function, n *cc.PrimaryExpression, t cc.Type, mode exprMode, flags flags) {
+	switch n.Case {
+	case cc.PrimaryExpressionIdent: // IDENTIFIER
+		switch d := n.Declarator(); {
+		case d != nil:
+			p.declarator(n, f, d, t, mode, flags)
+		default:
+			panic(todo("", pos(n)))
+		}
+	case cc.PrimaryExpressionInt: // INTCONST
+		p.intConst(n, n.Token.Src.String(), n.Operand, t, flags)
+	case cc.PrimaryExpressionFloat: // FLOATCONST
+		panic(todo("", pos(n)))
+	case cc.PrimaryExpressionEnum: // ENUMCONST
+		panic(todo("", pos(n)))
+	case cc.PrimaryExpressionChar: // CHARCONST
+		panic(todo("", pos(n)))
+	case cc.PrimaryExpressionLChar: // LONGCHARCONST
+		panic(todo("", pos(n)))
+	case cc.PrimaryExpressionString: // STRINGLITERAL
+		p.w("%s", p.stringLiteral(n.Operand.Value()))
+	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
+		panic(todo("", pos(n)))
+	case cc.PrimaryExpressionExpr: // '(' Expression ')'
+		p.expression(f, n.Expression, t, mode, flags)
+	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
+		p.err(n, "statement expressions not supported")
+	default:
+		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
 }
 
@@ -8912,7 +9324,7 @@ func (p *project) primaryExpressionPSelect(f *function, n *cc.PrimaryExpression,
 			switch k := p.declaratorKind(d); k {
 			case opArray:
 				panic(todo("", pos(n)))
-				p.primaryExpression(f, n, t, exprAddrOf, flags)
+				p.primaryExpression(f, n, t, exprDecay, flags)
 			default:
 				p.declarator(n, f, d, t, mode, flags)
 			}
@@ -9192,7 +9604,7 @@ func (p *project) stringSnippet(s string) string {
 	}
 }
 
-func (p *project) wideStringLiteral(v cc.Value) string {
+func (p *project) wideStringLiteral(v cc.Value, pad int) string {
 	if p.pass1 {
 		return ""
 	}
@@ -9204,6 +9616,9 @@ func (p *project) wideStringLiteral(v cc.Value) string {
 		if !ok {
 			off = 4 * uintptr(len(p.ts4))
 			s := []rune(id.String())
+			if pad != 0 {
+				s = append(s, make([]rune, pad)...)
+			}
 			p.ts4 = append(p.ts4, s...)
 			p.ts4 = append(p.ts4, 0)
 			p.tsOffs[id] = off

@@ -80,14 +80,14 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 
 		if x, ok := v.(cc.StringValue); ok {
 			s := cc.StringID(x).String()
-			m := uintptr(len(s) + 1)
+			m := uintptr(len(s)) + 1
 			tn := t.Len()
 			switch {
-			case tn < m:
+			case tn < m-1:
 				panic(todo("", pos(n), t.Len(), m))
-			case tn == m:
-				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.stringLiteral(x))
-			default: // tn > m
+			case tn < m:
+				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.stringLiteralString(s))
+			default: // tn >= m
 				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.stringLiteralString(s+strings.Repeat("\x00", int(tn-m))))
 			}
 			return
@@ -117,12 +117,16 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 
 		if x, ok := v.(cc.WideStringValue); ok {
 			s := []rune(cc.StringID(x).String())
-			nn := len(s) + 1
-			if t.Len() != uintptr(nn) {
+			m := uintptr(len(s)) + 1
+			tn := t.Len()
+			switch {
+			case tn < m-1:
 				panic(todo("", pos(n)))
+			case tn < m:
+				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.wideStringLiteral(x, 0))
+			default: // tn >= m
+				p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.wideStringLiteral(x, int(tn-m)))
 			}
-
-			p.w("*(*%s)(unsafe.Pointer(%s))", p.typ(n, t), p.wideStringLiteral(x))
 			return
 		}
 	}
