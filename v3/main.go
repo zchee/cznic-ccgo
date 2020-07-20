@@ -14,12 +14,6 @@
 //
 // Shifts must not use n.Promote on left opearand
 //
-// Try pinning everything for differential debugging.
-//
-// Restore alignof and sizeof
-//
-// emit optionally struct/union layout verifying code
-//
 // Un-array
 //
 // Rewrite init
@@ -39,8 +33,6 @@ package main // import "modernc.org/ccgo/v3"
 //	c = d
 //	b = c
 //	a = b
-
-//TODO emit optionally struct/union layout verifying code
 
 //TODO define and use all tagged struct types, including inner ones, for example SQLite's SrcList_item.
 
@@ -236,6 +228,7 @@ type task struct {
 	exportExternsValid  bool // -ccgo-export-externs present
 	exportFieldsValid   bool // -ccgo-export-fields present
 	exportTypedefsValid bool // -ccgo-export-typedefs present
+	verifyStructs       bool // -ccgo-verify-structs
 	watch               bool // -ccgo-watch-instrumentation
 }
 
@@ -374,6 +367,7 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
+	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Arg("l", true, func(arg, value string) error {
 		value = strings.TrimSpace(value)

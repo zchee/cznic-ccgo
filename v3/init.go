@@ -232,7 +232,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 		idx[0]++
 	}
 	idx[0] = 0
-	keys := nvalues != t.NumField() || len(info.padBefore) != 0 || info.padAfter != 0
+	keys := info.forceAlign || nvalues != t.NumField() || len(info.padBefore) != 0 || info.padAfter != 0
 	for list := n; list != nil; list = list.InitializerList {
 		if list.Designation != nil {
 			panic(todo("", list.Position(), t))

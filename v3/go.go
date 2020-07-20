@@ -1133,6 +1133,7 @@ type project struct {
 	tsOffs             map[cc.StringID]uintptr
 	typedefTypes       map[cc.StringID]*typedef
 	typedefsEmited     map[string]struct{}
+	verifyStructs      map[string]cc.Type
 	wanted             map[*cc.Declarator]struct{}
 
 	isMain bool
@@ -1142,7 +1143,7 @@ type project struct {
 func newProject(t *task) (*project, error) {
 	intType := t.cfg.ABI.Type(cc.Int)
 	if intType.Size() != 4 { // We're assuming wchar_t is int32.
-		return nil, fmt.Errorf("unsupported C int size")
+		return nil, fmt.Errorf("unsupported C int size: %d", intType.Size())
 	}
 
 	p := &project{
@@ -1157,6 +1158,7 @@ func newProject(t *task) (*project, error) {
 		tsOffs:         map[cc.StringID]uintptr{},
 		typedefTypes:   map[cc.StringID]*typedef{},
 		typedefsEmited: map[string]struct{}{},
+		verifyStructs:  map[string]cc.Type{},
 		wanted:         map[*cc.Declarator]struct{}{},
 	}
 	p.scope.take("CAPI")
@@ -1458,7 +1460,7 @@ func (p *project) layoutStructs() error {
 						break
 					}
 
-					captureStructTags(d, d.Type(), m, &tags)
+					p.captureStructTags(d, d.Type(), m, &tags)
 				}
 			}
 			return true
@@ -1485,7 +1487,7 @@ func (p *project) layoutStructs() error {
 	return nil
 }
 
-func captureStructTags(n cc.Node, t cc.Type, m map[cc.StringID]*taggedStruct, tags *[]cc.StringID) {
+func (p *project) captureStructTags(n cc.Node, t cc.Type, m map[cc.StringID]*taggedStruct, tags *[]cc.StringID) {
 	t = t.Alias()
 	for t.Kind() == cc.Ptr {
 		t = t.Alias().Elem().Alias()
@@ -1503,8 +1505,8 @@ func captureStructTags(n cc.Node, t cc.Type, m map[cc.StringID]*taggedStruct, ta
 
 		ex := m[tag]
 		if ex != nil {
-			ts := typeSignature(nil, t)
-			exs := typeSignature(nil, ex.ctyp)
+			ts := p.typeSignature(n, t)
+			exs := p.typeSignature(n, ex.ctyp)
 			if ts != exs {
 				ex.conflicts = true
 			}
@@ -1514,11 +1516,68 @@ func captureStructTags(n cc.Node, t cc.Type, m map[cc.StringID]*taggedStruct, ta
 		nf := t.NumField()
 		m[tag] = &taggedStruct{ctyp: t}
 		for idx := []int{0}; idx[0] < nf; idx[0]++ {
-			captureStructTags(n, t.FieldByIndex(idx).Type(), m, tags)
+			p.captureStructTags(n, t.FieldByIndex(idx).Type(), m, tags)
 		}
 		*tags = append(*tags, tag)
 	case cc.Array:
-		captureStructTags(n, t.Elem(), m, tags)
+		p.captureStructTags(n, t.Elem(), m, tags)
+	}
+}
+
+func (p *project) typeSignature(n cc.Node, t cc.Type) (r string) {
+	var b strings.Builder
+	p.typeSignature2(n, &b, t)
+	return b.String()
+}
+
+func (p *project) typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
+	t = t.Alias()
+	if t.IsIntegerType() {
+		if !t.IsSignedType() {
+			b.WriteByte('u')
+		}
+		fmt.Fprintf(b, "int%d", t.Size()*8)
+		return
+	}
+
+	if t.IsArithmeticType() {
+		b.WriteString(t.Kind().String())
+		return
+	}
+
+	structOrUnion := "struct"
+	switch t.Kind() {
+	case cc.Ptr:
+		fmt.Fprintf(b, "*%s", t.Elem())
+	case cc.Array:
+		if t.IsVLA() || t.Len() == 0 {
+			p.err(n, "unsupported C type: %v", t)
+		}
+
+		fmt.Fprintf(b, "[%d]%s", t.Len(), t.Elem())
+	case cc.Union:
+		structOrUnion = "union"
+		fallthrough
+	case cc.Struct:
+		b.WriteString(structOrUnion)
+		nf := t.NumField()
+		fmt.Fprintf(b, " %d{", nf)
+		b.WriteByte('{')
+		for idx := []int{0}; idx[0] < nf; idx[0]++ {
+			f := t.FieldByIndex(idx)
+			fmt.Fprintf(b, "%s:%d:%d:%v:%d:%d:",
+				f.Name(), f.BitFieldOffset(), f.BitFieldWidth(), f.IsBitField(), f.Offset(), f.Padding(),
+			)
+			p.typeSignature2(f.Declarator(), b, f.Type())
+			b.WriteByte(';')
+		}
+		b.WriteByte('}')
+	case cc.Void:
+		b.WriteString("void")
+	case cc.Invalid:
+		b.WriteString("invalid") //TODO fix cc/v3
+	default:
+		panic(todo("", pos(n), t, t.Kind()))
 	}
 }
 
@@ -1550,6 +1609,9 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 	case cc.Struct:
 		info := p.structLayout(t)
 		b.WriteString("struct {")
+		if info.forceAlign {
+			fmt.Fprintf(&b, "_[0]uint%d;", 8*t.Align())
+		}
 		for _, off := range info.offs {
 			flds := info.flds[off]
 			f := flds[0]
@@ -1570,6 +1632,10 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 				}
 				fmt.Fprintf(&b, "%s uint%d /* %s */;", p.bitFieldName(n, f), f.BitFieldBlockWidth(), strings.Join(a, ", "))
 			default:
+				if f.Type().Size() == 0 {
+					break
+				}
+
 				fmt.Fprintf(&b, "%s %s;", p.fieldName2(n, f), p.typ(nil, f.Type()))
 			}
 		}
@@ -1587,6 +1653,10 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 
 		f := t.FieldByIndex([]int{0})
 		ft := f.Type()
+		al0 := ft.Align()
+		if al != uintptr(al0) {
+			fmt.Fprintf(&b, "_ [0]uint%d;", 8*al)
+		}
 		fsz := ft.Size()
 		switch {
 		case f.IsBitField():
@@ -1606,7 +1676,13 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 	default:
 		panic(todo("internal error: %v", t.Kind()))
 	}
-	return b.String()
+	r := b.String()
+	if p.task.verifyStructs {
+		if _, ok := p.verifyStructs[r]; !ok {
+			p.verifyStructs[r] = t
+		}
+	}
+	return r
 }
 
 type structInfo struct {
@@ -1614,13 +1690,19 @@ type structInfo struct {
 	flds      map[uintptr][]cc.Field
 	padBefore map[cc.Field]int
 	padAfter  int
+
+	forceAlign bool
 }
 
 func (p *project) structLayout(t cc.Type) *structInfo {
 	nf := t.NumField()
 	flds := map[uintptr][]cc.Field{}
+	var maxAlign int
 	for idx := []int{0}; idx[0] < nf; idx[0]++ {
 		f := t.FieldByIndex(idx)
+		if a := f.Type().Align(); !f.IsBitField() && a > maxAlign {
+			maxAlign = a
+		}
 		off := f.Offset()
 		flds[off] = append(flds[off], f)
 	}
@@ -1652,10 +1734,11 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 		}
 	}
 	return &structInfo{
-		offs:      offs,
-		flds:      flds,
-		padBefore: pads,
-		padAfter:  int(t.Size() - pos),
+		offs:       offs,
+		flds:       flds,
+		padBefore:  pads,
+		padAfter:   int(t.Size() - pos),
+		forceAlign: maxAlign < t.Align(),
 	}
 }
 
@@ -1713,7 +1796,7 @@ func (p *project) typ(nd cc.Node, t cc.Type) string {
 			b.WriteByte('u')
 		}
 		if t.Size() > 8 {
-			p.err(nil, "unsupported C type: %v", t)
+			p.err(nd, "unsupported C type: %v", t)
 		}
 		fmt.Fprintf(&b, "int%d", 8*t.Size())
 		return b.String()
@@ -1728,8 +1811,8 @@ func (p *project) typ(nd cc.Node, t cc.Type) string {
 		return "float32"
 	case cc.Array:
 		n := t.Len()
-		if n == 0 {
-			p.err(nil, "unsupported C type: %v", t)
+		if n == 0 || t.IsVLA() {
+			p.err(nd, "unsupported C type: %v", t)
 		}
 		fmt.Fprintf(&b, "[%d]%s", n, p.typ(nd, t.Elem()))
 		return b.String()
@@ -1863,7 +1946,7 @@ func (p *project) layoutTLDs() error {
 
 					ex, ok := p.typedefTypes[d.Name()]
 					if ok {
-						sig := typeSignature(d, d.Type())
+						sig := p.typeSignature(d, d.Type())
 						if ex.sig == sig {
 							tld := ex.tld
 							for _, v := range ast.Scope[nm] {
@@ -1884,7 +1967,7 @@ func (p *project) layoutTLDs() error {
 						name = p.task.exportExterns + name
 					}
 					tld := &tld{name: p.scope.take(name)}
-					p.typedefTypes[d.Name()] = &typedef{typeSignature(d, d.Type()), tld}
+					p.typedefTypes[d.Name()] = &typedef{p.typeSignature(d, d.Type()), tld}
 					for _, v := range ast.Scope[nm] {
 						if d, ok := v.(*cc.Declarator); ok {
 							p.tlds[d] = tld
@@ -2028,6 +2111,9 @@ package %s
 	"reflect"
 	"unsafe"
 `)
+	if len(p.verifyStructs) != 0 {
+		p.o("\t\"fmt\"\n")
+	}
 	first := true
 	for _, v := range p.task.imported {
 		if v.used {
@@ -2052,11 +2138,59 @@ func main() { %sStart(%s) }`, p.task.crt, p.mainName)
 	p.initPatches()
 	p.flushTS()
 	p.flushCAPI()
+	p.doVerifyStructs()
 	if _, err := p.buf.WriteTo(p.task.out); err != nil {
 		return err
 	}
 
 	return p.Err()
+}
+
+func (p *project) doVerifyStructs() {
+	if len(p.verifyStructs) == 0 {
+		return
+	}
+
+	var a []string
+	for k := range p.verifyStructs {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	p.w("\n\nfunc init() {")
+	n := 0
+	for _, k := range a {
+		t := p.verifyStructs[k]
+		p.w("\nvar v%d %s", n, k)
+		p.w("\nif g, e := unsafe.Sizeof(v%d), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union size, got %%v, expected %%v`, g, e))}", n, t.Size())
+		p.w("\nif g, e := unsafe.Alignof(v%d), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union alignment, got %%v, expected %%v`, g, e))}", n, t.Align())
+		nf := t.NumField()
+		for idx := []int{0}; idx[0] < nf; idx[0]++ {
+			f := t.FieldByIndex(idx)
+			if f.IsBitField() || f.Type().Size() == 0 {
+				continue
+			}
+
+			nm := p.fieldName2(f.Declarator(), f)
+			switch {
+			case t.Kind() == cc.Union:
+				if f.Offset() != 0 {
+					panic(todo(""))
+				}
+
+				if idx[0] != 0 {
+					break
+				}
+
+				fallthrough
+			default:
+				p.w("\nif g, e := unsafe.Offsetof(v%d.%s), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union field offset, got %%v, expected %%v`, g, e))}", n, nm, f.Offset())
+				p.w("\nif g, e := unsafe.Sizeof(v%d.%s), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union field size, got %%v, expected %%v`, g, e))}", n, nm, f.Type().Size())
+				p.w("\nif g, e := unsafe.Alignof(v%d.%s), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union field size, got %%v, expected %%v`, g, e))}", n, nm, f.Type().Align())
+			}
+		}
+		n++
+	}
+	p.w("\n}\n")
 }
 
 func (p *project) flushCAPI() {
@@ -2208,7 +2342,7 @@ func (p *project) flushTS() {
 			p.w("%d, ", v)
 		}
 		p.w("}\n")
-		p.w("var %s = unsafe.Pointer(&%s[0])\n", p.ts4NameP, p.ts4Name)
+		p.w("var %s = uintptr(unsafe.Pointer(&%s[0]))\n", p.ts4NameP, p.ts4Name)
 	}
 }
 
@@ -2963,13 +3097,13 @@ func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declara
 }
 
 func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator) {
-	if p.pass1 {
-		f.pin(d)
-		return
-	}
-
 	if f != nil {
 		if local := f.locals[d]; local != nil {
+			if p.pass1 {
+				f.pin(d)
+				return
+			}
+
 			if local.isPinned {
 				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
@@ -3001,13 +3135,13 @@ func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator
 }
 
 func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarator, flags flags) {
-	if p.pass1 && flags&fAddrOfFuncPtrOk == 0 {
-		f.pin(d)
-		return
-	}
-
 	if f != nil {
 		if local := f.locals[d]; local != nil {
+			if p.pass1 && flags&fAddrOfFuncPtrOk == 0 {
+				f.pin(d)
+				return
+			}
+
 			if local.isPinned {
 				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
@@ -3046,13 +3180,13 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 }
 
 func (p *project) declaratorAddrOfArray(n cc.Node, f *function, d *cc.Declarator) {
-	if p.pass1 {
-		f.pin(d)
-		return
-	}
-
 	if f != nil {
 		if local := f.locals[d]; local != nil {
+			if p.pass1 {
+				f.pin(d)
+				return
+			}
+
 			if local.isPinned {
 				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
@@ -7370,122 +7504,118 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprBool, flags|fOutermost)
 		p.w("))")
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
-		p.intConst(n, "", n.Operand, t, flags)
-		//TODO defer p.w("%s", p.convert(n, nil, t, flags))
-		//TODO if d := n.UnaryExpression.Declarator(); d != nil {
-		//TODO 	if f != nil {
-		//TODO 		if local := f.locals[d]; local != nil && !local.isPinned {
-		//TODO 			p.w("unsafe.Sizeof(%s)", local.name)
-		//TODO 			break
-		//TODO 		}
-		//TODO 	}
+		defer p.w("%s", p.convert(n, nil, t, flags))
+		if d := n.UnaryExpression.Declarator(); d != nil {
+			if f != nil {
+				if local := f.locals[d]; local != nil && !local.isPinned {
+					p.w("unsafe.Sizeof(%s)", local.name)
+					break
+				}
+			}
 
-		//TODO 	if tld := p.tlds[d]; tld != nil {
-		//TODO 		p.w("unsafe.Sizeof(%s)", tld.name)
-		//TODO 		break
-		//TODO 	}
+			if tld := p.tlds[d]; tld != nil {
+				p.w("unsafe.Sizeof(%s)", tld.name)
+				break
+			}
 
-		//TODO 	nm := d.Name().String()
-		//TODO 	if imp := p.imports[nm]; imp != nil {
-		//TODO		imp.used = true
-		//TODO 		p.w("unsafe.Sizeof(%sX%s)", imp.qualifier, nm)
-		//TODO 		break
-		//TODO 	}
-		//TODO }
+			nm := d.Name().String()
+			if imp := p.imports[nm]; imp != nil {
+				imp.used = true
+				p.w("unsafe.Sizeof(%sX%s)", imp.qualifier, nm)
+				break
+			}
+		}
 
-		//TODO t := n.UnaryExpression.Operand.Type()
-		//TODO if p.isArray(f, n.UnaryExpression, t) {
-		//TODO 	p.w("%d", t.Len()*t.Elem().Size())
-		//TODO 	break
-		//TODO }
+		t := n.UnaryExpression.Operand.Type()
+		if p.isArray(f, n.UnaryExpression, t) {
+			p.w("%d", t.Len()*t.Elem().Size())
+			break
+		}
 
-		//TODO s := "(0)"
-		//TODO if !t.IsArithmeticType() {
-		//TODO 	switch t.Kind() {
-		//TODO 	case cc.Ptr:
-		//TODO 		// ok
-		//TODO 	case cc.Struct, cc.Union, cc.Array:
-		//TODO 		s = "{}"
-		//TODO 	default:
-		//TODO 		panic(todo("", t.Kind()))
-		//TODO 	}
-		//TODO }
-		//TODO p.w("unsafe.Sizeof(%s%s)", p.typ(n, t), s)
+		s := "(0)"
+		if !t.IsArithmeticType() {
+			switch t.Kind() {
+			case cc.Ptr:
+				// ok
+			case cc.Struct, cc.Union, cc.Array:
+				s = "{}"
+			default:
+				panic(todo("", t.Kind()))
+			}
+		}
+		p.w("unsafe.Sizeof(%s%s)", p.typ(n, t), s)
 	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
-		p.intConst(n, "", n.Operand, t, flags)
-		//TODO defer p.w("%s", p.convert(n, nil, t, flags))
-		//TODO t := n.TypeName.Type()
-		//TODO if t.Kind() == cc.Array {
-		//TODO 	p.w("%d", t.Len()*t.Elem().Size())
-		//TODO 	break
-		//TODO }
+		defer p.w("%s", p.convert(n, nil, t, flags))
+		t := n.TypeName.Type()
+		if t.Kind() == cc.Array {
+			p.w("%d", t.Len()*t.Elem().Size())
+			break
+		}
 
-		//TODO s := "(0)"
-		//TODO if !t.IsArithmeticType() {
-		//TODO 	switch t.Kind() {
-		//TODO 	case cc.Ptr:
-		//TODO 		// ok
-		//TODO 	case cc.Struct, cc.Union:
-		//TODO 		s = "{}"
-		//TODO 	default:
-		//TODO 		panic(todo("", t.Kind()))
-		//TODO 	}
-		//TODO }
-		//TODO p.w("unsafe.Sizeof(%s%s)", p.typ(n, t), s)
+		s := "(0)"
+		if !t.IsArithmeticType() {
+			switch t.Kind() {
+			case cc.Ptr:
+				// ok
+			case cc.Struct, cc.Union:
+				s = "{}"
+			default:
+				panic(todo("", t.Kind()))
+			}
+		}
+		p.w("unsafe.Sizeof(%s%s)", p.typ(n, t), s)
 	case cc.UnaryExpressionLabelAddr: // "&&" IDENTIFIER
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionAlignofExpr: // "_Alignof" UnaryExpression
-		p.intConst(n, "", n.Operand, t, flags)
-		//TODO if n.TypeName.Type().Kind() == cc.Void {
-		//TODO 	p.intConst(n, "", n.Operand, t, flags)
-		//TODO 	break
-		//TODO }
+		if n.TypeName.Type().Kind() == cc.Void {
+			p.intConst(n, "", n.Operand, t, flags)
+			break
+		}
 
-		//TODO defer p.w("%s", p.convert(n, nil, t, flags))
-		//TODO t := n.UnaryExpression.Operand.Type()
-		//TODO if p.isArray(f, n.UnaryExpression, t) {
-		//TODO 	p.w("%d", t.Len()*t.Elem().Size())
-		//TODO 	break
-		//TODO }
+		defer p.w("%s", p.convert(n, nil, t, flags))
+		t := n.UnaryExpression.Operand.Type()
+		if p.isArray(f, n.UnaryExpression, t) {
+			p.w("%d", t.Len()*t.Elem().Size())
+			break
+		}
 
-		//TODO s := "(0)"
-		//TODO if !t.IsArithmeticType() {
-		//TODO 	switch t.Kind() {
-		//TODO 	case cc.Ptr:
-		//TODO 		// ok
-		//TODO 	case cc.Struct, cc.Union:
-		//TODO 		s = "{}"
-		//TODO 	default:
-		//TODO 		panic(todo("", t.Kind()))
-		//TODO 	}
-		//TODO }
-		//TODO p.w("unsafe.Alignof(%s%s)", p.typ(n, t), s)
+		s := "(0)"
+		if !t.IsArithmeticType() {
+			switch t.Kind() {
+			case cc.Ptr:
+				// ok
+			case cc.Struct, cc.Union:
+				s = "{}"
+			default:
+				panic(todo("", t.Kind()))
+			}
+		}
+		p.w("unsafe.Alignof(%s%s)", p.typ(n, t), s)
 	case cc.UnaryExpressionAlignofType: // "_Alignof" '(' TypeName ')'
-		p.intConst(n, "", n.Operand, t, flags)
-		//TODO if n.TypeName.Type().Kind() == cc.Void {
-		//TODO 	p.intConst(n, "", n.Operand, t, flags)
-		//TODO 	break
-		//TODO }
+		if n.TypeName.Type().Kind() == cc.Void {
+			p.intConst(n, "", n.Operand, t, flags)
+			break
+		}
 
-		//TODO defer p.w("%s", p.convert(n, nil, t, flags))
-		//TODO t := n.TypeName.Type()
-		//TODO if t.Kind() == cc.Array {
-		//TODO 	p.w("%d", t.Len()*t.Elem().Size())
-		//TODO 	break
-		//TODO }
+		defer p.w("%s", p.convert(n, nil, t, flags))
+		t := n.TypeName.Type()
+		if t.Kind() == cc.Array {
+			p.w("%d", t.Len()*t.Elem().Size())
+			break
+		}
 
-		//TODO s := "(0)"
-		//TODO if !t.IsArithmeticType() {
-		//TODO 	switch t.Kind() {
-		//TODO 	case cc.Ptr:
-		//TODO 		// ok
-		//TODO 	case cc.Struct, cc.Union:
-		//TODO 		s = "{}"
-		//TODO 	default:
-		//TODO 		panic(todo("", t.Kind()))
-		//TODO 	}
-		//TODO }
-		//TODO p.w("unsafe.Alignof(%s%s)", p.typ(n, t), s)
+		s := "(0)"
+		if !t.IsArithmeticType() {
+			switch t.Kind() {
+			case cc.Ptr:
+				// ok
+			case cc.Struct, cc.Union:
+				s = "{}"
+			default:
+				panic(todo("", t.Kind()))
+			}
+		}
+		p.w("unsafe.Alignof(%s%s)", p.typ(n, t), s)
 	case cc.UnaryExpressionImag: // "__imag__" UnaryExpression
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionReal: // "__real__" UnaryExpression
@@ -9623,7 +9753,7 @@ func (p *project) wideStringLiteral(v cc.Value, pad int) string {
 			p.ts4 = append(p.ts4, 0)
 			p.tsOffs[id] = off
 		}
-		return fmt.Sprintf("uintptr(%s)%s", p.ts4NameP, nonZeroUintptr(off))
+		return fmt.Sprintf("%s%s", p.ts4NameP, nonZeroUintptr(off))
 	default:
 		panic(todo("%T", x))
 	}

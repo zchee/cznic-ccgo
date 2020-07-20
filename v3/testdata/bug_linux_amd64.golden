@@ -1,4 +1,5 @@
 fp.c
 paramarray.c
+sizeof.c
 sqlite.c
 sqlite2.c

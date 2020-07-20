@@ -504,7 +504,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return err
 		}
 
-		ccgoArgs := []string{"ccgo", "-o", main}
+		ccgoArgs := []string{"ccgo", "-o", main, "-ccgo-verify-structs"}
 		var args []string
 		switch base := filepath.Base(path); base {
 		case "31_args.c":
@@ -784,6 +784,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			"ccgo",
 			"-D__FUNCTION__=__func__",
 			"-o", main,
+			"-ccgo-verify-structs",
 		}
 		if !func() (r bool) {
 			defer func() {
@@ -907,6 +908,7 @@ func testSQLite(t *testing.T, dir string) {
 		"-DSQLITE_OMIT_SHARED_CACHE",
 		"-DSQLITE_THREADSAFE=0",
 		"-ccgo-long-double-is-double", // stddef.h
+		"-ccgo-verify-structs",
 		"-o", main,
 		filepath.Join(dir, "shell.c"),
 		filepath.Join(dir, "sqlite3.c"),
@@ -1007,7 +1009,13 @@ func testMjson(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 
-	ccgoArgs := []string{"ccgo", "-o", main, "-ccgo-long-double-is-double", filepath.Join(dir, "mjson.c"), filepath.Join(dir, "test_microjson.c")}
+	ccgoArgs := []string{
+		"ccgo",
+		"-o", main,
+		"-ccgo-long-double-is-double",
+		"-ccgo-verify-structs",
+		filepath.Join(dir, "mjson.c"), filepath.Join(dir, "test_microjson.c"),
+	}
 	if !func() (r bool) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -1251,7 +1259,12 @@ next:
 					err = fmt.Errorf("%v", e)
 				}
 			}()
-			return newTask([]string{"ccgo", "-o", src, fn, "-ccgo-long-double-is-double"}, nil, nil).main()
+			return newTask([]string{
+				"ccgo",
+				"-o", src,
+				fn,
+				"-ccgo-long-double-is-double",
+			}, nil, nil).main()
 		}(); err != nil {
 			t.Errorf("%s: %s:", base, err)
 			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
@@ -1352,7 +1365,11 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return err
 		}
 
-		ccgoArgs := []string{"ccgo", "-o", main}
+		ccgoArgs := []string{
+			"ccgo",
+			"-o", main,
+			"-ccgo-verify-structs",
+		}
 		var args []string
 		if !func() (r bool) {
 			defer func() {
@@ -1542,7 +1559,14 @@ out:
 
 		files++
 		var stdout, stderr bytes.Buffer
-		j := newTask([]string{"ccgo", "-o", mainName, csp, "-ccgo-long-double-is-double", "main.c"}, &stdout, &stderr)
+		j := newTask([]string{
+			"ccgo",
+			"-o", mainName,
+			csp,
+			"-ccgo-long-double-is-double",
+			"-ccgo-verify-structs",
+			"main.c",
+		}, &stdout, &stderr)
 
 		func() {
 
