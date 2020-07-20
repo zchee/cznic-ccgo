@@ -97,13 +97,12 @@ var (
 	testWD string
 
 	csmithDefaultArgs = strings.Join([]string{
-		//TODO "--bitfields",                     // --bitfields | --no-bitfields: enable | disable full-bitfields structs (disabled by default).
+		"--bitfields",                     // --bitfields | --no-bitfields: enable | disable full-bitfields structs (disabled by default).
 		"--no-bitfields",                  // --bitfields | --no-bitfields: enable | disable full-bitfields structs (disabled by default).
 		"--max-nested-struct-level", "10", // --max-nested-struct-level <num>: limit maximum nested level of structs to <num>(default 0). Only works in the exhaustive mode.
-		"--no-const-pointers", // --const-pointers | --no-const-pointers: enable | disable const pointers (enabled by default).
-		"--no-consts",         // --consts | --no-consts: enable | disable const qualifier (enabled by default).
-		"--no-packed-struct",  // --packed-struct | --no-packed-struct: enable | disable packed structs by adding #pragma pack(1) before struct definition (disabled by default).
-		// "--no-safe-math",         // --safe-math | --no-safe-math: Emit safe math wrapper functions (enabled by default).
+		"--no-const-pointers",    // --const-pointers | --no-const-pointers: enable | disable const pointers (enabled by default).
+		"--no-consts",            // --consts | --no-consts: enable | disable const qualifier (enabled by default).
+		"--no-packed-struct",     // --packed-struct | --no-packed-struct: enable | disable packed structs by adding #pragma pack(1) before struct definition (disabled by default).
 		"--no-volatile-pointers", // --volatile-pointers | --no-volatile-pointers: enable | disable volatile pointers (enabled by default).
 		"--no-volatiles",         // --volatiles | --no-volatiles: enable | disable volatiles (enabled by default).
 		"--paranoid",             // --paranoid | --no-paranoid: enable | disable pointer-related assertions (disabled by default).
@@ -703,6 +702,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"fp-cmp-1.c":   {}, // sigfpe
 		"fp-cmp-2.c":   {}, // sigfpe
 		"fp-cmp-3.c":   {}, // sigfpe
+		"pr15296.c":    {}, // union initializer designates non-first field (gcc extension)
 
 		"20000113-1.c":    {}, //TODO non-const bitfield initializer
 		"20000703-1.c":    {}, //TODO statement expression
@@ -717,6 +717,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"anon-1.c":        {}, //TODO nested field access
 		"pr41317.c":       {}, //TODO nested field access
 		"pr42570":         {}, //TODO uint8_t foo[1][0];
+		"pr88739.c":       {}, //TODO nested initailizer designator
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
 	}
 	wd, err := os.Getwd()
@@ -953,7 +954,7 @@ func testSQLite(t *testing.T, dir string) {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)
 		}
-		t.Errorf("%v", err)
+		t.Errorf("%s\n%v", out, err)
 		return
 	}
 
@@ -1487,14 +1488,14 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3130410542",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1833258637",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3126091077",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2205128324",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3043990076",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2205128324",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3043990076",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2517344771",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 56498550",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3645367888",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3645367888",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 169375684",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3578720023",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1885311141",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3578720023",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1885311141",
 		"--no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3720922579",
 	}
 	ch := time.After(*oCSmith)

@@ -1146,6 +1146,22 @@ func newProject(t *task) (*project, error) {
 		return nil, fmt.Errorf("unsupported C int size: %d", intType.Size())
 	}
 
+	if n := t.cfg.ABI.Types[cc.UChar].Size; n != 1 {
+		return nil, fmt.Errorf("unsupported C unsigned char size: %d", n)
+	}
+
+	if n := t.cfg.ABI.Types[cc.UShort].Size; n != 2 {
+		return nil, fmt.Errorf("unsupported C unsigned short size: %d", n)
+	}
+
+	if n := t.cfg.ABI.Types[cc.UInt].Size; n != 4 {
+		return nil, fmt.Errorf("unsupported C unsigned int size: %d", n)
+	}
+
+	if n := t.cfg.ABI.Types[cc.ULongLong].Size; n != 8 {
+		return nil, fmt.Errorf("unsupported C unsigned long long size: %d", n)
+	}
+
 	p := &project{
 		enumConsts:     map[cc.StringID]string{},
 		externs:        map[cc.StringID]*tld{},
@@ -1604,6 +1620,7 @@ func (p *project) structType(n cc.Node, t cc.Type) string {
 }
 
 func (p *project) structLiteral(n cc.Node, t cc.Type) string {
+	//TODO- trc("%v:\n%s", pos(n), dumpLayout(t))
 	var b strings.Builder
 	switch t.Kind() {
 	case cc.Struct:
@@ -1612,8 +1629,25 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		if info.forceAlign {
 			fmt.Fprintf(&b, "_[0]uint%d;", 8*t.Align())
 		}
+		var max uintptr
 		for _, off := range info.offs {
 			flds := info.flds[off]
+			if off < max {
+				var a []string
+				var nmf cc.Field
+				for _, f := range flds {
+					if f.Name() != 0 && nmf == nil {
+						nmf = f
+					}
+					if !f.IsBitField() {
+						panic(todo("internal error"))
+					}
+					a = append(a, fmt.Sprintf("%s %s: %d", f.Type(), f.Name(), f.BitFieldWidth()))
+				}
+				fmt.Fprintf(&b, "/* %s */", strings.Join(a, ", "))
+				continue
+			}
+
 			f := flds[0]
 			switch pad := info.padBefore[f]; {
 			case pad < 0:
@@ -1623,19 +1657,25 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			}
 			switch {
 			case f.IsBitField():
+				max += uintptr(f.BitFieldBlockWidth()) >> 3
 				var a []string
+				var nmf cc.Field
 				for _, f := range flds {
+					if f.Name() != 0 && nmf == nil {
+						nmf = f
+					}
 					if !f.IsBitField() {
 						panic(todo("internal error"))
 					}
 					a = append(a, fmt.Sprintf("%s %s: %d", f.Type(), f.Name(), f.BitFieldWidth()))
 				}
-				fmt.Fprintf(&b, "%s uint%d /* %s */;", p.bitFieldName(n, f), f.BitFieldBlockWidth(), strings.Join(a, ", "))
+				fmt.Fprintf(&b, "%s uint%d /* %s */;", p.bitFieldName(n, nmf), f.BitFieldBlockWidth(), strings.Join(a, ", "))
 			default:
 				if f.Type().Size() == 0 {
 					break
 				}
 
+				max += f.Type().Size()
 				fmt.Fprintf(&b, "%s %s;", p.fieldName2(n, f), p.typ(nil, f.Type()))
 			}
 		}
@@ -1713,11 +1753,17 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 	sort.Slice(offs, func(i, j int) bool { return offs[i] < offs[j] })
 	var pads map[cc.Field]int
 	var pos uintptr
-	for i, off := range offs {
+	for _, off := range offs {
 		f := flds[off][0]
 		ft := f.Type()
-		pos = roundup(pos, uintptr(ft.Align()))
-		if i > 0 {
+		switch {
+		case ft.IsBitFieldType():
+			if f.BitFieldOffset() != 0 {
+				break
+			}
+
+			sz := f.BitFieldBlockWidth() >> 3
+			pos = roundup(pos, uintptr(sz))
 			if p := int(off - pos); p != 0 {
 				if pads == nil {
 					pads = map[cc.Field]int{}
@@ -1725,11 +1771,16 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 				pads[f] = p
 				pos = off
 			}
-		}
-		switch {
-		case ft.IsBitFieldType():
 			pos += uintptr(f.BitFieldBlockWidth()) >> 3
 		default:
+			pos = roundup(pos, uintptr(ft.Align()))
+			if p := int(off - pos); p != 0 {
+				if pads == nil {
+					pads = map[cc.Field]int{}
+				}
+				pads[f] = p
+				pos = off
+			}
 			pos += ft.Size()
 		}
 	}

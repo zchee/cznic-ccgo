@@ -16,8 +16,6 @@
 //
 // Un-array
 //
-// Rewrite init
-//
 // Pass more CSmith tests.
 
 package main // import "modernc.org/ccgo/v3"
@@ -432,7 +430,12 @@ func (t *task) main() (err error) {
 	}
 
 	t.cfg.ABI = abi
-	t.cfg.Config3 = cc.Config3{PreserveWhiteSpace: true, IgnoreInclude: re, UnsignedEnums: true}
+	t.cfg.Config3 = cc.Config3{
+		IgnoreInclude:             re,
+		NoFieldAndBitfieldOverlap: true,
+		PreserveWhiteSpace:        true,
+		UnsignedEnums:             true,
+	}
 	hostPredefined, hostIncludes, hostSysIncludes, err := cc.HostConfig("")
 	if err != nil {
 		return err
