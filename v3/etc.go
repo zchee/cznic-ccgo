@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sort"
 	"strings"
 
 	"modernc.org/cc/v3"
@@ -112,7 +113,7 @@ func (s scope) take(t string) string {
 	}
 }
 
-func dumpLayout(t cc.Type) string {
+func dumpLayout(t cc.Type, info *structInfo) string {
 	switch t.Kind() {
 	case cc.Struct, cc.Union:
 		// ok
@@ -142,5 +143,20 @@ func dumpLayout(t cc.Type) string {
 			f.BitFieldBlockWidth(), bf, f.Type(),
 		))
 	}
-	return t.String() + "\n" + strings.Join(a, "\n")
+	var b strings.Builder
+	fmt.Fprintf(&b, "%v\n%s\n----\n", t, strings.Join(a, "\n"))
+	fmt.Fprintf(&b, "offs: %v\n", info.offs)
+	a = a[:0]
+	for k, v := range info.flds {
+		var b []string
+		for _, w := range v {
+			b = append(b, w.Name().String())
+		}
+		a = append(a, fmt.Sprintf("%4d %q", k, b))
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		fmt.Fprintf(&b, "%s\n", v)
+	}
+	return b.String()
 }

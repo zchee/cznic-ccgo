@@ -1,3 +1,5 @@
+csmith.c
+csmith2.c
 fp.c
 paramarray.c
 sizeof.c

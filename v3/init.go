@@ -256,7 +256,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 			p.w(",")
 		}
 	default:
-		panic(todo("", pos(n), seenBitfield, seenNonKeyableBitfield, t, dumpLayout(t)))
+		panic(todo("", pos(n), seenBitfield, seenNonKeyableBitfield, t, dumpLayout(t, p.structLayout(t))))
 	}
 	p.w("%s}", tidyComment("", &n0.Token3))
 }
@@ -288,7 +288,7 @@ func (p *project) collectInitializerBitfields(n *cc.Initializer) (r map[uintptr]
 
 func (p *project) checkInitializerBitFields(n *cc.Initializer, t cc.Type) (seenBitfield, seenNonKeyableBitfield bool) {
 	for _, v := range p.initializerList(n.InitializerList) {
-		if f := v.Field; f != nil && f.IsBitField() {
+		if f := v.Field; f != nil && f.IsBitField() && f.BitFieldWidth() != 0 {
 			seenBitfield = true
 			if !f.BitFieldBlockFirst().IsBitField() {
 				seenNonKeyableBitfield = true
