@@ -1620,11 +1620,11 @@ func (p *project) structType(n cc.Node, t cc.Type) string {
 }
 
 func (p *project) structLiteral(n cc.Node, t cc.Type) string {
-	//TODO- trc("%v:\n%s", pos(n), dumpLayout(t))
 	var b strings.Builder
 	switch t.Kind() {
 	case cc.Struct:
 		info := p.structLayout(t)
+		// trc("%v:\n%s", pos(n), dumpLayout(t, info))
 		b.WriteString("struct {")
 		if info.forceAlign {
 			fmt.Fprintf(&b, "_[0]uint%d;", 8*t.Align())
