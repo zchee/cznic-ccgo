@@ -4,6 +4,17 @@
 
 //go:generate stringer -output stringer.go -type=exprMode,opKind
 
+//TODO gmp
+//TODO gsl
+//TODO minigmp
+//TODO mpc
+//TODO mpfr
+//TODO pcre
+//TODO pcre2
+//TODO quickjs
+//TODO zdat
+//TODO zlib
+
 //TODO 2020-07-17
 //
 // Fix += and friends
