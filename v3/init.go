@@ -256,7 +256,7 @@ func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Ty
 			p.w(",")
 		}
 	default:
-		panic(todo("", pos(n), seenBitfield, seenNonKeyableBitfield, t, dumpLayout(t, p.structLayout(t))))
+		panic(todo("", pos(n), seenBitfield, seenNonKeyableBitfield, t, dumpLayout(t, p.structLayout(n0, t))))
 	}
 	p.w("%s}", tidyComment("", &n0.Token3))
 }

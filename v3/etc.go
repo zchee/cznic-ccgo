@@ -150,13 +150,14 @@ func dumpLayout(t cc.Type, info *structInfo) string {
 	for k, v := range info.flds {
 		var b []string
 		for _, w := range v {
-			b = append(b, w.Name().String())
+			b = append(b, fmt.Sprintf("%q padBefore: %d ", w.Name(), info.padBefore[w]))
 		}
-		a = append(a, fmt.Sprintf("%4d %q", k, b))
+		a = append(a, fmt.Sprintf("%4d %s", k, b))
 	}
 	sort.Strings(a)
 	for _, v := range a {
 		fmt.Fprintf(&b, "%s\n", v)
 	}
+	fmt.Fprintf(&b, "padAfter: %v\n", info.padAfter)
 	return b.String()
 }

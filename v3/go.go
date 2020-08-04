@@ -26,6 +26,7 @@ import (
 var (
 	idAligned = cc.String("aligned") // int __attribute__ ((aligned (8))) foo;
 	idMain    = cc.String("main")
+	idPacked  = cc.String("packed") // __attribute__((packed))
 	idVaArg   = cc.String("__ccgo_va_arg")
 	idVaEnd   = cc.String("__ccgo_va_end")
 	idVaList  = cc.String("va_list")
@@ -36,6 +37,12 @@ var (
 )
 
 type exprMode int
+
+const (
+	doNotExport = iota
+	exportCapitalize
+	exportPrefix
+)
 
 const (
 	_              exprMode = iota
@@ -371,13 +378,11 @@ type tld struct {
 }
 
 type block struct {
-	block      *cc.CompoundStatement
-	decls      []*cc.Declaration // What to declare in this block.
-	enumConsts map[cc.StringID]string
-	enumSpecs  map[*cc.EnumSpecifier]*enumSpec
-	params     []*cc.Parameter
-	parent     *block
-	scope      scope
+	block  *cc.CompoundStatement
+	decls  []*cc.Declaration // What to declare in this block.
+	params []*cc.Parameter
+	parent *block
+	scope  scope
 
 	noDecl  bool // Locals declared in one of the parent scopes.
 	topDecl bool // Declare locals at block start to avoid "jumps over declaration".
@@ -991,37 +996,10 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 
 		work = append(work, item{nil, v.Declarator()})
 	}
-	var enumList []*cc.EnumSpecifier
-	enums := map[*cc.EnumSpecifier]*enumSpec{}
 	for _, decl := range block.decls {
 		ds := decl.DeclarationSpecifiers
-		cc.Inspect(ds, func(n cc.Node, entry bool) bool {
-			if !entry {
-				return true
-			}
-
-			x, ok := n.(*cc.EnumSpecifier)
-			if !ok || x.Case != cc.EnumSpecifierDef {
-				return true
-			}
-
-			enumList = append(enumList, x)
-			enums[x] = &enumSpec{decl: decl, spec: x}
-			return true
-		})
 		for list := decl.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
 			work = append(work, item{ds, list.InitDeclarator.Declarator})
-		}
-	}
-	if len(enums) != 0 {
-		block.enumSpecs = enums
-		block.enumConsts = map[cc.StringID]string{}
-		for _, v := range enumList {
-			for list := v.EnumeratorList; list != nil; list = list.EnumeratorList {
-				en := list.Enumerator
-				nm := en.Token.Value
-				block.enumConsts[nm] = block.scope.take(nm.String())
-			}
 		}
 	}
 	block.scope.take(f.tlsName)
@@ -1085,17 +1063,38 @@ type enumSpec struct {
 	emitted bool
 }
 
-func (n *enumSpec) emit(p *project, enumConsts map[cc.StringID]string) {
-	if n == nil || n.emitted || p.pass1 {
+func (n *enumSpec) emit(p *project) {
+	if n == nil || p.pass1 || n.emitted {
 		return
 	}
 
 	n.emitted = true
+	ok := false
+	for list := n.spec.EnumeratorList; list != nil; list = list.EnumeratorList {
+		nm := list.Enumerator.Token.Value
+		if _, ok2 := p.emitedEnums[nm]; !ok2 && p.enumConsts[nm] != "" {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return
+	}
+
 	p.w("%s", tidyComment("\n", n.decl))
 	p.w("const ( /* %v: */", pos(n.decl))
 	for list := n.spec.EnumeratorList; list != nil; list = list.EnumeratorList {
 		en := list.Enumerator
-		p.w("%s%s = %v;", tidyComment("\n", en), enumConsts[en.Token.Value], en.Operand.Value())
+		nm := en.Token.Value
+		if _, ok := p.emitedEnums[nm]; ok || p.enumConsts[nm] == "" {
+			continue
+		}
+
+		p.emitedEnums[nm] = struct{}{}
+		p.w("%s%s = ", tidyComment("\n", en), p.enumConsts[nm])
+		//TODO src when applicable
+		p.intConst(en, "", en.Operand, en.Operand.Type(), fOutermost)
+		p.w(";")
 	}
 	p.w(");")
 }
@@ -1110,6 +1109,7 @@ type project struct {
 	buf                bytes.Buffer
 	capi               []string
 	defines            []string
+	emitedEnums        map[cc.StringID]struct{}
 	enumConsts         map[cc.StringID]string
 	enumSpecs          map[*cc.EnumSpecifier]*enumSpec
 	errors             scanner.ErrorList
@@ -1163,7 +1163,9 @@ func newProject(t *task) (*project, error) {
 	}
 
 	p := &project{
+		emitedEnums:    map[cc.StringID]struct{}{},
 		enumConsts:     map[cc.StringID]string{},
+		enumSpecs:      map[*cc.EnumSpecifier]*enumSpec{},
 		externs:        map[cc.StringID]*tld{},
 		imports:        map[string]*imported{},
 		intType:        intType,
@@ -1204,21 +1206,13 @@ func newProject(t *task) (*project, error) {
 
 func (p *project) newScope() scope {
 	s := newScope()
-	var b []cc.StringID
+	var a []cc.StringID
 	for k := range p.structs {
-		b = append(b, k)
+		a = append(a, k)
 	}
-	sort.Slice(b, func(i, j int) bool { return b[i].String() < b[j].String() })
-	for _, k := range b {
+	sort.Slice(a, func(i, j int) bool { return a[i].String() < a[j].String() })
+	for _, k := range a {
 		s.take(p.structs[k].name)
-	}
-	b = b[:0]
-	for k := range p.enumConsts {
-		b = append(b, k)
-	}
-	sort.Slice(b, func(i, j int) bool { return b[i].String() < b[j].String() })
-	for _, k := range b {
-		s.take(p.enumConsts[k])
 	}
 	return s
 }
@@ -1374,11 +1368,17 @@ func evalMacro2(m *cc.Macro, ast *cc.AST) string {
 }
 
 func (p *project) layoutEnums() error {
-	return nil //TODO
-	m := map[cc.StringID]cc.Value{}
+	var export int
+	if p.task.exportEnumsValid {
+		switch {
+		case p.task.exportEnums != "":
+			export = exportPrefix
+		default:
+			export = exportCapitalize
+		}
+	}
+
 	var enumList []*cc.EnumSpecifier
-	enums := map[*cc.EnumSpecifier]*enumSpec{}
-out:
 	for _, v := range p.task.asts {
 		for list := v.TranslationUnit; list != nil; list = list.TranslationUnit {
 			decl := list.ExternalDeclaration
@@ -1399,41 +1399,68 @@ out:
 					return true
 				}
 
-				enumList = append(enumList, x)
-				enums[x] = &enumSpec{decl: decl.Declaration, spec: x}
-				for list := x.EnumeratorList; list != nil; list = list.EnumeratorList {
-					en := list.Enumerator
-					nm := en.Token.Value
-					v := en.Operand.Value()
-					if ex := m[nm]; ex != nil {
-						if ex != v { // Conflict, cannot use named enumeration constants.
-							enums = nil
-							m = nil
-							return false
-						}
-
-						continue
-					}
-
-					m[nm] = v
+				if _, ok := p.enumSpecs[x]; !ok {
+					enumList = append(enumList, x)
+					p.enumSpecs[x] = &enumSpec{decl: decl.Declaration, spec: x}
 				}
 				return true
 			})
-			if enums == nil {
-				enumList = enumList[:0]
-				break out
-			}
 		}
 	}
 
+	vals := map[cc.StringID]interface{}{}
 	for _, v := range enumList {
 		for list := v.EnumeratorList; list != nil; list = list.EnumeratorList {
 			en := list.Enumerator
 			nm := en.Token.Value
-			p.enumConsts[nm] = p.scope.take(nm.String())
+			var val int64
+			switch x := en.Operand.Value().(type) {
+			case cc.Int64Value:
+				val = int64(x)
+			case cc.Uint64Value:
+				val = int64(x)
+			default:
+				panic(todo(""))
+			}
+			switch ex, ok := vals[nm]; {
+			case ok:
+				switch {
+				case ex == nil: //
+					continue
+				case ex == val: // same name and same value
+					continue
+				default: // same name, different value
+					vals[nm] = nil
+				}
+			default:
+				vals[nm] = val
+			}
+			p.enumConsts[nm] = ""
 		}
 	}
-	p.enumSpecs = enums
+	var a []cc.StringID
+	for nm := range p.enumConsts {
+		if val, ok := vals[nm]; ok && val == nil {
+			delete(p.enumConsts, nm)
+			continue
+		}
+
+		a = append(a, nm)
+	}
+	sort.Slice(a, func(i, j int) bool { return a[i].String() < a[j].String() })
+	for _, nm := range a {
+		name := nm.String()
+		switch export {
+		case doNotExport:
+			// nop
+		case exportCapitalize:
+			name = capitalize(name)
+		case exportPrefix:
+			name = p.task.exportEnums + name
+		}
+		name = p.scope.take(name)
+		p.enumConsts[nm] = name
+	}
 	return nil
 }
 
@@ -1465,18 +1492,37 @@ func (p *project) layoutStaticLocals() error {
 }
 
 func (p *project) layoutStructs() error {
+	var export int
+	if p.task.exportStructsValid {
+		switch {
+		case p.task.exportStructs != "":
+			export = exportPrefix
+		default:
+			export = exportCapitalize
+		}
+	}
 	m := map[cc.StringID]*taggedStruct{}
 	var tags []cc.StringID
 	for _, v := range p.task.asts {
 		cc.Inspect(v.TranslationUnit, func(n cc.Node, entry bool) bool {
 			if entry {
-				switch d := n.(type) {
+				switch x := n.(type) {
 				case *cc.Declarator:
-					if nm := d.Name().String(); strings.HasPrefix(nm, "_") {
+					if nm := x.Name().String(); strings.HasPrefix(nm, "_") {
 						break
 					}
 
-					p.captureStructTags(d, d.Type(), m, &tags)
+					p.captureStructTags(x, x.Type(), m, &tags)
+				case *cc.Declaration:
+					cc.Inspect(x.DeclarationSpecifiers, func(nn cc.Node, entry bool) bool {
+						switch y := nn.(type) {
+						case *cc.StructOrUnionSpecifier:
+							if tag := y.Token.Value; tag != 0 {
+								p.captureStructTags(y, y.Type(), m, &tags)
+							}
+						}
+						return true
+					})
 				}
 			}
 			return true
@@ -1491,7 +1537,14 @@ func (p *project) layoutStructs() error {
 			continue
 		}
 
-		v.name = p.scope.take(k.String())
+		name := k.String()
+		switch export {
+		case exportCapitalize:
+			name = capitalize(name)
+		case exportPrefix:
+			name = p.task.exportExterns + name
+		}
+		v.name = p.scope.take(name)
 	}
 	for _, k := range tags {
 		v := m[k]
@@ -1566,7 +1619,7 @@ func (p *project) typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
 	case cc.Ptr:
 		fmt.Fprintf(b, "*%s", t.Elem())
 	case cc.Array:
-		if t.IsVLA() || t.Len() == 0 {
+		if t.IsVLA() {
 			p.err(n, "unsupported C type: %v", t)
 		}
 
@@ -1623,7 +1676,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 	var b strings.Builder
 	switch t.Kind() {
 	case cc.Struct:
-		info := p.structLayout(t)
+		info := p.structLayout(n, t)
 		// trc("%v:\n%s", pos(n), dumpLayout(t, info))
 		b.WriteString("struct {")
 		if info.forceAlign {
@@ -1671,7 +1724,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 				}
 				fmt.Fprintf(&b, "%s uint%d /* %s */;", p.bitFieldName(n, nmf), f.BitFieldBlockWidth(), strings.Join(a, ", "))
 			default:
-				if f.Type().Size() == 0 {
+				if t := f.Type(); t.Kind() == cc.Array && t.IsIncomplete() || t.Size() == 0 {
 					break
 				}
 
@@ -1734,7 +1787,7 @@ type structInfo struct {
 	forceAlign bool
 }
 
-func (p *project) structLayout(t cc.Type) *structInfo {
+func (p *project) structLayout(n cc.Node, t cc.Type) *structInfo {
 	nf := t.NumField()
 	flds := map[uintptr][]cc.Field{}
 	var maxAlign int
@@ -1757,9 +1810,11 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 	sort.Slice(offs, func(i, j int) bool { return offs[i] < offs[j] })
 	var pads map[cc.Field]int
 	var pos uintptr
+	var forceAlign bool
 	for _, off := range offs {
 		f := flds[off][0]
 		ft := f.Type()
+		//trc("%q off %d pos %d %v %v %v", f.Name(), off, pos, ft, ft.Kind(), ft.IsIncomplete())
 		switch {
 		case ft.IsBitFieldType():
 			if f.BitFieldOffset() != 0 {
@@ -1777,7 +1832,14 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 			}
 			pos += uintptr(f.BitFieldBlockWidth()) >> 3
 		default:
-			pos = roundup(pos, uintptr(ft.Align()))
+			var sz uintptr
+			switch {
+			case ft.Kind() != cc.Array || ft.Len() != 0:
+				sz = ft.Size()
+				pos = roundup(pos, uintptr(ft.Align()))
+			default:
+				forceAlign = true
+			}
 			if p := int(off - pos); p != 0 {
 				if pads == nil {
 					pads = map[cc.Field]int{}
@@ -1785,7 +1847,7 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 				pads[f] = p
 				pos = off
 			}
-			pos += ft.Size()
+			pos += sz
 		}
 	}
 	return &structInfo{
@@ -1793,7 +1855,7 @@ func (p *project) structLayout(t cc.Type) *structInfo {
 		flds:       flds,
 		padBefore:  pads,
 		padAfter:   int(t.Size() - pos),
-		forceAlign: maxAlign < t.Align(),
+		forceAlign: forceAlign || maxAlign < t.Align(),
 	}
 }
 
@@ -1866,7 +1928,7 @@ func (p *project) typ(nd cc.Node, t cc.Type) string {
 		return "float32"
 	case cc.Array:
 		n := t.Len()
-		if n == 0 || t.IsVLA() {
+		if t.IsVLA() {
 			p.err(nd, "unsupported C type: %v", t)
 		}
 		fmt.Fprintf(&b, "[%d]%s", n, p.typ(nd, t.Elem()))
@@ -1889,12 +1951,6 @@ func (p *project) typ(nd cc.Node, t cc.Type) string {
 }
 
 func (p *project) layoutTLDs() error {
-	const (
-		doNotExport = iota
-		exportCapitalize
-		exportPrefix
-	)
-
 	var exportExtern, exportTypedef int
 	if p.task.exportExternsValid {
 		switch {
@@ -1944,7 +2000,7 @@ func (p *project) layoutTLDs() error {
 		for _, d := range a {
 			switch d.Type().Kind() {
 			case cc.Struct, cc.Union:
-				p.checkAlignAttr(d.Type())
+				p.checkAttributes(d.Type())
 			}
 			nm := d.Name()
 			switch d.Linkage {
@@ -2019,7 +2075,7 @@ func (p *project) layoutTLDs() error {
 					case exportCapitalize:
 						name = capitalize(name)
 					case exportPrefix:
-						name = p.task.exportExterns + name
+						name = p.task.exportTypedefs + name
 					}
 					tld := &tld{name: p.scope.take(name)}
 					p.typedefTypes[d.Name()] = &typedef{p.typeSignature(d, d.Type()), tld}
@@ -2069,7 +2125,8 @@ func (p *project) layoutTLDs() error {
 	return nil
 }
 
-func (p *project) checkAlignAttr(t cc.Type) (r bool) {
+func (p *project) checkAttributes(t cc.Type) (r bool) {
+	//TODO typedefs seem to not have attributes set from cc/v3
 	r = true
 	for _, v := range t.Attributes() {
 		cc.Inspect(v, func(n cc.Node, entry bool) bool {
@@ -2095,7 +2152,7 @@ func (p *project) checkAlignAttr(t cc.Type) (r bool) {
 	case cc.Struct, cc.Union:
 		for i := []int{0}; i[0] < t.NumField(); i[0]++ {
 			f := t.FieldByIndex(i)
-			if !p.checkAlignAttr(f.Type()) {
+			if !p.checkAttributes(f.Type()) {
 				return false
 			}
 
@@ -2111,6 +2168,12 @@ func (p *project) checkAlignAttr(t cc.Type) (r bool) {
 
 				switch x := n.(type) {
 				case *cc.AttributeValue:
+					if x.Token.Value == idPacked {
+						p.err(sd, "unsupported attribute: packed")
+						r = false
+						return false
+					}
+
 					if x.Token.Value != idAligned {
 						break
 					}
@@ -2118,7 +2181,7 @@ func (p *project) checkAlignAttr(t cc.Type) (r bool) {
 					switch v := x.ExpressionList.AssignmentExpression.Operand.Value().(type) {
 					case cc.Int64Value:
 						if int(v) != t.Align() {
-							p.err(sd, "unsupported alignment")
+							p.err(sd, "unsupported attribute: alignment")
 							r = false
 							return false
 						}
@@ -2137,6 +2200,9 @@ func (p *project) checkAlignAttr(t cc.Type) (r bool) {
 }
 
 func capitalize(s string) string {
+	if strings.HasPrefix(s, "_") {
+		s = "X" + s
+	}
 	a := []rune(s)
 	return strings.ToUpper(string(a[0])) + string(a[1:])
 }
@@ -2155,6 +2221,18 @@ package %s
 		p.w("\nconst (")
 		p.w("%s", strings.Join(p.defines, "\n"))
 		p.w("\n)\n\n")
+	}
+	var a []*enumSpec
+	for _, es := range p.enumSpecs {
+		if es.spec.LexicalScope().Parent() == nil && !es.emitted {
+			a = append(a, es)
+		}
+	}
+	sort.Slice(a, func(i, j int) bool {
+		return a[i].decl.Position().String() < a[j].decl.Position().String()
+	})
+	for _, es := range a {
+		es.emit(p)
 	}
 	for i, v := range p.task.asts {
 		p.oneAST(v)
@@ -2445,16 +2523,9 @@ func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
 	cc.Inspect(n.DeclarationSpecifiers, func(m cc.Node, entry bool) bool {
 		switch x := m.(type) {
 		case *cc.EnumSpecifier:
-			if f != nil {
-				if f.hasJumps {
-					break
-				}
-
-				f.block.enumSpecs[x].emit(p, f.block.enumConsts)
-				break
+			if f == nil {
+				p.enumSpecs[x].emit(p)
 			}
-
-			p.enumSpecs[x].emit(p, p.enumConsts)
 		case *cc.StructOrUnionSpecifier:
 			if tag := x.Token.Value; tag != 0 {
 				switch {
@@ -2475,7 +2546,7 @@ func (p *project) declaration(f *function, n *cc.Declaration, topDecl bool) {
 	}
 
 	// DeclarationSpecifiers InitDeclaratorList ';'
-	sep := tidyComment("\n", n)
+	sep := tidyComment("\n", n) //TODO repeats
 	for list := n.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
 		p.initDeclarator(f, list.InitDeclarator, sep, topDecl)
 		sep = "\n"
@@ -3642,6 +3713,7 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 
 	t := d.Type()
 	if d.IsTypedefName {
+		p.checkAttributes(t)
 		if _, ok := p.typedefsEmited[tld.name]; ok {
 			return
 		}
@@ -9659,26 +9731,16 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 	case cc.PrimaryExpressionFloat: // FLOATCONST
 		p.floatConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionEnum: // ENUMCONST
-		if f != nil {
-			if f.hasJumps {
-				p.intConst(n, "", n.Operand, t, flags)
+		en := n.ResolvedTo().(*cc.Enumerator)
+		if n.ResolvedIn().Parent() == nil {
+			if nm := p.enumConsts[en.Token.Value]; nm != "" {
+				p.w(" %s ", nm)
 				break
 			}
-
-			for block := f.block; block != nil; block = block.parent {
-				if s := block.enumConsts[n.Token.Value]; s != "" {
-					p.w("%s", s)
-					return
-				}
-			}
-		}
-
-		if s := p.enumConsts[n.Token.Value]; s != "" {
-			p.w("%s", s)
-			return
 		}
 
 		p.intConst(n, "", n.Operand, t, flags)
+		p.w("/* %s */", en.Token.Value)
 	case cc.PrimaryExpressionChar: // CHARCONST
 		p.charConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionLChar: // LONGCHARCONST

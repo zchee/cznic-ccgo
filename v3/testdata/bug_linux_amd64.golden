@@ -1,7 +1,9 @@
 csmith.c
 csmith2.c
+enums.c
 fp.c
 paramarray.c
 sizeof.c
+sizeof2.c
 sqlite.c
 sqlite2.c

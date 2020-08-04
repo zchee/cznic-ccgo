@@ -718,6 +718,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr42570":         {}, //TODO uint8_t foo[1][0];
 		"pr88739.c":       {}, //TODO nested initailizer designator
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
+		"20050613-1.c":    {}, //TODO nested initailizer designator
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -943,8 +944,12 @@ func testSQLite(t *testing.T, dir string) {
 	}() {
 		return
 	}
-	if err := exec.Command("go", "build", "-o", "shell", main).Run(); err != nil {
-		t.Error(err)
+	if out, err := exec.Command("go", "build", "-o", "shell", main).CombinedOutput(); err != nil {
+		s := strings.TrimSpace(string(out))
+		if s != "" {
+			s += "\n"
+		}
+		t.Errorf("%s%v", s, err)
 		return
 	}
 

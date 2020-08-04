@@ -217,8 +217,10 @@ type task struct {
 	crt             string
 	crtImportPath   string // -ccgo-crt-import-path
 	exportDefines   string // -ccgo-export-defines
+	exportEnums     string // -ccgo-export-enums
 	exportExterns   string // -ccgo-export-externs
 	exportFields    string // -ccgo-export-fields
+	exportStructs   string // -ccgo-export-structs
 	exportTypedefs  string // -ccgo-export-typedefs
 	goarch          string
 	goos            string
@@ -234,8 +236,10 @@ type task struct {
 
 	E                   bool // -E
 	exportDefinesValid  bool // -ccgo-export-defines present
+	exportEnumsValid    bool // -ccgo-export-enums present
 	exportExternsValid  bool // -ccgo-export-externs present
 	exportFieldsValid   bool // -ccgo-export-fields present
+	exportStructsValid  bool // -ccgo-export-structs present
 	exportTypedefsValid bool // -ccgo-export-typedefs present
 	verifyStructs       bool // -ccgo-verify-structs
 	watch               bool // -ccgo-watch-instrumentation
@@ -369,8 +373,10 @@ func (t *task) main() (err error) {
 	opts.Arg("U", true, func(arg, value string) error { t.U = append(t.U, value); return nil })
 	opts.Arg("ccgo-crt-import-path", false, func(arg, value string) error { t.crtImportPath = value; return nil })
 	opts.Arg("ccgo-export-defines", false, func(arg, value string) error { t.exportDefines = value; t.exportDefinesValid = true; return nil })
+	opts.Arg("ccgo-export-enums", false, func(arg, value string) error { t.exportEnums = value; t.exportEnumsValid = true; return nil })
 	opts.Arg("ccgo-export-externs", false, func(arg, value string) error { t.exportExterns = value; t.exportExternsValid = true; return nil })
 	opts.Arg("ccgo-export-fields", false, func(arg, value string) error { t.exportFields = value; t.exportFieldsValid = true; return nil })
+	opts.Arg("ccgo-export-structs", false, func(arg, value string) error { t.exportStructs = value; t.exportStructsValid = true; return nil })
 	opts.Arg("ccgo-export-typedefs", false, func(arg, value string) error { t.exportTypedefs = value; t.exportTypedefsValid = true; return nil })
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
@@ -414,20 +420,18 @@ func (t *task) main() (err error) {
 		return fmt.Errorf("no input files specified")
 	}
 
-	if t.crtImportPath == "" {
-		return fmt.Errorf("empty crt import path")
-	}
-
-	t.l = append(t.l, t.crtImportPath)
-	m := map[string]struct{}{}
-	for _, v := range t.l {
-		v = strings.TrimSpace(v)
-		if _, ok := m[v]; !ok {
-			t.imported = append(t.imported, &imported{path: v})
-			m[v] = struct{}{}
+	if t.crtImportPath != "" {
+		t.l = append(t.l, t.crtImportPath)
+		m := map[string]struct{}{}
+		for _, v := range t.l {
+			v = strings.TrimSpace(v)
+			if _, ok := m[v]; !ok {
+				t.imported = append(t.imported, &imported{path: v})
+				m[v] = struct{}{}
+			}
 		}
+		t.imported[len(t.imported)-1].used = true // crt is always imported
 	}
-	t.imported[len(t.imported)-1].used = true // crt is always imported
 	abi, err := cc.NewABIFromEnv()
 	if err != nil {
 		return err
