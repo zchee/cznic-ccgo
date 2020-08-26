@@ -33,7 +33,6 @@ import (
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
-	"modernc.org/crt/v3"
 )
 
 func caller(s string, va ...interface{}) {
@@ -90,7 +89,7 @@ var (
 	gccDir    = filepath.FromSlash("testdata/gcc-9.1.0")
 	gpsdDir   = filepath.FromSlash("testdata/gpsd-3.20/")
 	ntpsecDir = filepath.FromSlash("testdata/ntpsec-master")
-	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3320300")
+	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3330000")
 	tccDir    = filepath.FromSlash("testdata/tcc-0.9.27")
 	mjsonDir  = filepath.FromSlash("testdata/microjson-1.5")
 
@@ -116,7 +115,7 @@ var (
 		{gpsdDir, "http://download-mirror.savannah.gnu.org/releases/gpsd/gpsd-3.20.tar.gz", 3600, false},
 		{mjsonDir, "https://gitlab.com/esr/microjson/-/archive/1.5/microjson-1.5.tar.gz", 22, false},
 		{ntpsecDir, "https://gitlab.com/NTPsec/ntpsec/-/archive/master/ntpsec-master.tar.gz", 2600, false},
-		{sqliteDir, "https://www.sqlite.org/2020/sqlite-amalgamation-3320300.zip", 2400, false},
+		{sqliteDir, "https://www.sqlite.org/2020/sqlite-amalgamation-3330000.zip", 2400, false},
 		{tccDir, "http://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2", 620, false},
 	}
 )
@@ -422,6 +421,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		"76_dollars_in_identifiers.c": {}, // `int $ = 10;` etc.
 		"77_push_pop_macro.c":         {}, //
 		"81_types.c":                  {}, // invalid function type cast
+		"86_memory-model.c":           {},
 		"93_integer_promotion.c":      {}, // The expected output does not agree with gcc.
 		"95_bitfields.c":              {}, // Included from 95_bitfields_ms.c
 		"95_bitfields_ms.c":           {}, // The expected output does not agree with gcc.
@@ -502,7 +502,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return err
 		}
 
-		ccgoArgs := []string{"ccgo", "-o", main, "-ccgo-verify-structs"}
+		ccgoArgs := []string{"ccgo", "-o", main, "-ccgo-verify-structs", "-ccgo-long-double-is-double"}
 		var args []string
 		switch base := filepath.Base(path); base {
 		case "31_args.c":
@@ -633,15 +633,14 @@ func skipDir(path string) error {
 }
 
 func TestCAPI(t *testing.T) {
-	var _ crt.Intptr
 	task := newTask(nil, nil, nil)
-	pkgName, capi, err := task.capi("modernc.org/crt/v3")
+	pkgName, capi, err := task.capi("modernc.org/libc")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if _, ok := capi["printf"]; !ok {
-		t.Fatal("default crt does not export printf")
+		t.Fatal("default libc does not export printf")
 	}
 
 	t.Log(pkgName, capi)
@@ -713,12 +712,13 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20030714-1.c":    {}, //TODO select nested field
 		"20040411-1.c":    {}, //TODO VLA
 		"20040423-1.c":    {}, //TODO VLA
+		"20050613-1.c":    {}, //TODO nested initailizer designator
 		"anon-1.c":        {}, //TODO nested field access
 		"pr41317.c":       {}, //TODO nested field access
+		"pr41463.c":       {}, //TODO link error (report bug?)
 		"pr42570":         {}, //TODO uint8_t foo[1][0];
 		"pr88739.c":       {}, //TODO nested initailizer designator
 		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
-		"20050613-1.c":    {}, //TODO nested initailizer designator
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -894,6 +894,7 @@ func testSQLite(t *testing.T, dir string) {
 
 	ccgoArgs := []string{
 		"ccgo",
+		"-DHAVE_USLEEP",
 		"-DLONGDOUBLE_TYPE=double",
 		"-DSQLITE_DEBUG",
 		"-DSQLITE_DEFAULT_MEMSTATUS=0",
@@ -1373,6 +1374,7 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		ccgoArgs := []string{
 			"ccgo",
 			"-o", main,
+			"-ccgo-export-defines", "",
 			"-ccgo-verify-structs",
 		}
 		var args []string

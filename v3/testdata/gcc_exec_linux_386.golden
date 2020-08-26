@@ -10,7 +10,6 @@
 20000314-1.c
 20000314-2.c
 20000314-3.c
-20000402-1.c
 20000403-1.c
 20000412-1.c
 20000412-2.c
@@ -144,7 +143,6 @@
 20020508-1.c
 20020508-2.c
 20020508-3.c
-20020510-1.c
 20020529-1.c
 20020611-1.c
 20020614-1.c
@@ -211,7 +209,6 @@
 20031010-1.c
 20031011-1.c
 20031012-1.c
-20031020-1.c
 20031201-1.c
 20031204-1.c
 20031211-1.c
@@ -318,7 +315,6 @@
 20080813-1.c
 20081103-1.c
 20081112-1.c
-20081117-1.c
 20081218-1.c
 20090113-1.c
 20090113-2.c
@@ -602,12 +598,10 @@
 991019-1.c
 991023-1.c
 991030-1.c
-991118-1.c
 991202-1.c
 991202-2.c
 991202-3.c
 991216-1.c
-991216-2.c
 991216-4.c
 991221-1.c
 alias-1.c
@@ -621,12 +615,9 @@ ashrdi-1.c
 bf-layout-1.c
 bf-pack-1.c
 bf-sign-1.c
-bf-sign-2.c
-bf64-1.c
 bitfld-1.c
 bitfld-2.c
 bitfld-4.c
-bitfld-5.c
 bitfld-6.c
 bitfld-7.c
 builtin-prefetch-1.c
@@ -664,8 +655,6 @@ enum-3.c
 extzvsi.c
 float-floor.c
 floatunsisf-1.c
-fprintf-1.c
-fprintf-chk-1.c
 func-ptr-1.c
 gofast.c
 20000320-1.c
@@ -698,7 +687,6 @@ pr30704.c
 pr67218.c
 pr72824.c
 pr84235.c
-rbug.c
 unsafe-fp-assoc-1.c
 unsafe-fp-assoc.c
 ifcvt-onecmpl-abs-1.c
@@ -873,6 +861,7 @@ pr40668.c
 pr40747.c
 pr41395-1.c
 pr41395-2.c
+pr41463.c
 pr41750.c
 pr41917.c
 pr41919.c
@@ -1026,7 +1015,6 @@ pr64957.c
 pr64979.c
 pr65215-1.c
 pr65215-2.c
-pr65215-3.c
 pr65215-4.c
 pr65215-5.c
 pr65216.c
@@ -1184,13 +1172,9 @@ va-arg-24.c
 va-arg-26.c
 va-arg-4.c
 va-arg-5.c
-va-arg-6.c
 va-arg-7.c
-va-arg-8.c
 va-arg-9.c
 va-arg-trap-1.c
-vfprintf-1.c
-vfprintf-chk-1.c
 vprintf-1.c
 vprintf-chk-1.c
 vrp-1.c

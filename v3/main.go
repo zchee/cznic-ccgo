@@ -119,8 +119,10 @@ typedef __WCHAR_TYPE__ wchar_t;
 #define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
 #define asm __asm__
+#define in6addr_any (*__ccgo_in6addr_anyp())
 
 typedef void *__builtin_va_list;
+typedef long double __float128;
 
 char *__builtin_strchr(const char *s, int c);
 char *__builtin_strcpy(char *dest, const char *src);
@@ -154,7 +156,7 @@ void __ccgo_va_start(__builtin_va_list ap);
 
 #undef __GNUC__
 `
-	defaultCrt = "modernc.org/crt/v3"
+	defaultCrt = "modernc.org/libc"
 )
 
 func origin(skip int) string {
@@ -224,7 +226,10 @@ type task struct {
 	exportTypedefs  string // -ccgo-export-typedefs
 	goarch          string
 	goos            string
-	ignoredIncludes string // -ccgo-ignored-includes
+	hide            map[string]struct{} // -ccgo-hide
+	hostConfigCmd   string              // -ccgo-host-config-cmd
+	hostConfigOpts  string              // -ccgo-host-config-opts
+	ignoredIncludes string              // -ccgo-ignored-includes
 	imported        []*imported
 	l               []string // -l
 	o               string   // -o
@@ -233,6 +238,7 @@ type task struct {
 	sources         []cc.Source
 	stderr          io.Writer
 	stdout          io.Writer
+	symSearchOrder  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
 	E                   bool // -E
 	exportDefinesValid  bool // -ccgo-export-defines present
@@ -243,6 +249,7 @@ type task struct {
 	exportTypedefsValid bool // -ccgo-export-typedefs present
 	verifyStructs       bool // -ccgo-verify-structs
 	watch               bool // -ccgo-watch-instrumentation
+	cover               bool // -ccgo-cover-instrumentation
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -255,10 +262,11 @@ func newTask(args []string, stdout, stderr io.Writer) *task {
 	return &task{
 		args:          args,
 		cfg:           &cc.Config{},
-		crt:           "crt.",
+		crt:           "libc.",
 		crtImportPath: defaultCrt,
-		goarch:        env("GOARCH", runtime.GOARCH),
-		goos:          env("GOOS", runtime.GOOS),
+		goarch:        env("TARGET_GOARCH", env("GOARCH", runtime.GOARCH)),
+		goos:          env("TARGET_GOOS", env("GOOS", runtime.GOOS)),
+		hide:          map[string]struct{}{},
 		pkgName:       "main",
 		stderr:        stderr,
 		stdout:        stdout,
@@ -378,16 +386,30 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-export-fields", false, func(arg, value string) error { t.exportFields = value; t.exportFieldsValid = true; return nil })
 	opts.Arg("ccgo-export-structs", false, func(arg, value string) error { t.exportStructs = value; t.exportStructsValid = true; return nil })
 	opts.Arg("ccgo-export-typedefs", false, func(arg, value string) error { t.exportTypedefs = value; t.exportTypedefsValid = true; return nil })
+	opts.Arg("ccgo-host-config-cmd", false, func(arg, value string) error { t.hostConfigCmd = value; return nil })
+	opts.Arg("ccgo-host-config-opts", false, func(arg, value string) error { t.hostConfigOpts = value; return nil })
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
+	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
+	opts.Arg("ccgo-hide", true, func(arg, value string) error {
+		value = strings.TrimSpace(value)
+		a := strings.Split(value, ",")
+		for _, v := range a {
+			t.hide[v] = struct{}{}
+		}
+		return nil
+	})
 	opts.Arg("l", true, func(arg, value string) error {
 		value = strings.TrimSpace(value)
 		a := strings.Split(value, ",")
-		t.l = append(t.l, a...)
+		for _, v := range a {
+			t.l = append(t.l, v)
+			t.symSearchOrder = append(t.symSearchOrder, -len(t.l))
+		}
 		return nil
 	})
 	opts.Arg("o", false, func(arg, value string) error {
@@ -405,8 +427,10 @@ func (t *task) main() (err error) {
 
 		switch filepath.Ext(arg) {
 		case ".h":
+			t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
 			t.sources = append(t.sources, cc.Source{Name: arg})
 		case ".c":
+			t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
 			t.sources = append(t.sources, cc.Source{Name: arg, DoNotCache: true})
 		default:
 			return fmt.Errorf("unexpected file type: %s", arg)
@@ -422,6 +446,7 @@ func (t *task) main() (err error) {
 
 	if t.crtImportPath != "" {
 		t.l = append(t.l, t.crtImportPath)
+		t.symSearchOrder = append(t.symSearchOrder, -len(t.l))
 		m := map[string]struct{}{}
 		for _, v := range t.l {
 			v = strings.TrimSpace(v)
@@ -432,7 +457,7 @@ func (t *task) main() (err error) {
 		}
 		t.imported[len(t.imported)-1].used = true // crt is always imported
 	}
-	abi, err := cc.NewABIFromEnv()
+	abi, err := cc.NewABI(t.goos, t.goarch)
 	if err != nil {
 		return err
 	}
@@ -451,7 +476,11 @@ func (t *task) main() (err error) {
 		PreserveWhiteSpace:        true,
 		UnsignedEnums:             true,
 	}
-	hostPredefined, hostIncludes, hostSysIncludes, err := cc.HostConfig("")
+	hostConfigOpts := strings.Split(t.hostConfigOpts, ",")
+	if t.hostConfigOpts == "" {
+		hostConfigOpts = nil
+	}
+	hostPredefined, hostIncludes, hostSysIncludes, err := cc.HostConfig(t.hostConfigCmd, hostConfigOpts...)
 	if err != nil {
 		return err
 	}
