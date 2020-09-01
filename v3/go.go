@@ -2251,7 +2251,7 @@ func capitalize(s string) string {
 }
 
 func (p *project) main() error {
-	targs := append([]string(nil), p.task.args[1:]...)
+	targs := append([]string(nil), p.task.args...)
 	for i, v := range targs {
 		if v == "" {
 			targs[i] = `""`
