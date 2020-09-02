@@ -7917,6 +7917,8 @@ func (p *project) unaryExpressionDerefLValue(f *function, n *cc.UnaryExpression,
 	case opArray:
 		panic(todo("", pos(n)))
 		p.unaryExpressionDerefLValueArray(f, n, t, mode, flags)
+	case opArrayParameter:
+		p.unaryExpressionDerefLValueNormal(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), k))
 	}
