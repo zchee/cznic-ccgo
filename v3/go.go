@@ -2046,14 +2046,18 @@ func (p *project) layoutTLDs() error {
 				p.checkAttributes(d.Type())
 			}
 			nm := d.Name()
+			name := nm.String()
 			switch d.Linkage {
 			case cc.External:
 				if ex := p.externs[nm]; ex != nil {
+					if _, ok := p.task.hide[name]; ok {
+						break
+					}
+
 					panic(todo("", ex.name, d.Position(), d.Name()))
 				}
 
 				isMain := p.isMain && nm == idMain
-				name := d.Name().String()
 				switch exportExtern {
 				case doNotExport:
 					// nop
@@ -2077,7 +2081,6 @@ func (p *project) layoutTLDs() error {
 					p.capi = append(p.capi, d.Name().String())
 				}
 			case cc.Internal:
-				name := nm.String()
 				if token.IsExported(name) && !p.isMain && p.task.exportExternsValid {
 					name = "s" + name
 				}
@@ -2868,6 +2871,11 @@ func (p *project) declaratorDefault(n cc.Node, d *cc.Declarator) {
 					return
 				}
 			}
+		}
+
+		if d.Linkage == cc.External && p.task.libc {
+			p.w("X%s", d.Name())
+			return
 		}
 
 		p.err(n, "undefined: %s", d.Name())
@@ -8691,6 +8699,7 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			}
 		}
 	case n.Operand.Type().Kind() == cc.Array:
+		defer p.w("%s", p.convertType(n, n.Operand.Type().Decay(), t, flags))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
 		p.fldOff(n.PostfixExpression.Operand.Type().Elem(), n.Token2)
 	case k == opArray:

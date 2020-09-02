@@ -241,15 +241,17 @@ type task struct {
 	symSearchOrder  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
 	E                   bool // -E
+	cover               bool // -ccgo-cover-instrumentation
 	exportDefinesValid  bool // -ccgo-export-defines present
 	exportEnumsValid    bool // -ccgo-export-enums present
 	exportExternsValid  bool // -ccgo-export-externs present
 	exportFieldsValid   bool // -ccgo-export-fields present
 	exportStructsValid  bool // -ccgo-export-structs present
 	exportTypedefsValid bool // -ccgo-export-typedefs present
+	libc                bool // -ccgo-libc
+	nostdinc            bool // -nostdinc
 	verifyStructs       bool // -ccgo-verify-structs
 	watch               bool // -ccgo-watch-instrumentation
-	cover               bool // -ccgo-cover-instrumentation
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -391,11 +393,18 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
+	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
-	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
-	opts.Arg("ccgo-hide", true, func(arg, value string) error {
+	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
+	opts.Opt("ccgo-libc", func(opt string) error {
+		t.libc = true
+		t.crt = ""
+		t.crtImportPath = ""
+		return nil
+	})
+	opts.Arg("ccgo-hide", false, func(arg, value string) error {
 		value = strings.TrimSpace(value)
 		a := strings.Split(value, ",")
 		for _, v := range a {
@@ -431,7 +440,8 @@ func (t *task) main() (err error) {
 			t.sources = append(t.sources, cc.Source{Name: arg})
 		case ".c":
 			t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
-			t.sources = append(t.sources, cc.Source{Name: arg, DoNotCache: true})
+			t.sources = append(t.sources, cc.Source{Name: arg})
+
 		default:
 			return fmt.Errorf("unexpected file type: %s", arg)
 		}
@@ -485,6 +495,10 @@ func (t *task) main() (err error) {
 		return err
 	}
 
+	if t.nostdinc {
+		hostIncludes = nil
+		hostSysIncludes = nil
+	}
 	var sources []cc.Source
 	if hostPredefined != "" {
 		sources = append(sources, cc.Source{Name: "<predefined>", Value: hostPredefined})
