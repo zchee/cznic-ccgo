@@ -8701,7 +8701,7 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			}
 		}
 	case n.Operand.Type().Kind() == cc.Array:
-		defer p.w("%s", p.convertType(n, n.Operand.Type().Decay(), t, flags))
+		defer p.w("%s", p.convertType(n, n.Operand.Type().Decay(), t.Decay(), flags))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
 		p.fldOff(n.PostfixExpression.Operand.Type().Elem(), n.Token2)
 	case k == opArray:
