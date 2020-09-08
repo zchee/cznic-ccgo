@@ -113,6 +113,7 @@ typedef __WCHAR_TYPE__ wchar_t;
 #error __WCHAR_TYPE__ undefined
 #endif
 
+#define _FILE_OFFSET_BITS 64
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 #define __builtin_va_copy(dst, src) dst = src
@@ -242,12 +243,14 @@ type task struct {
 
 	E                   bool // -E
 	cover               bool // -ccgo-cover-instrumentation
+	coverC              bool // -ccgo-cover-instrumentation-c
 	exportDefinesValid  bool // -ccgo-export-defines present
 	exportEnumsValid    bool // -ccgo-export-enums present
 	exportExternsValid  bool // -ccgo-export-externs present
 	exportFieldsValid   bool // -ccgo-export-fields present
 	exportStructsValid  bool // -ccgo-export-structs present
 	exportTypedefsValid bool // -ccgo-export-typedefs present
+	fullPathComments    bool // -ccgo-full-path-comments
 	libc                bool // -ccgo-libc
 	nostdinc            bool // -nostdinc
 	verifyStructs       bool // -ccgo-verify-structs
@@ -269,6 +272,7 @@ func newTask(args []string, stdout, stderr io.Writer) *task {
 		goarch:        env("TARGET_GOARCH", env("GOARCH", runtime.GOARCH)),
 		goos:          env("TARGET_GOOS", env("GOOS", runtime.GOOS)),
 		hide:          map[string]struct{}{},
+		hostConfigCmd: env("CCGO_CPP", ""),
 		pkgName:       "main",
 		stderr:        stderr,
 		stdout:        stdout,
@@ -394,6 +398,8 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
+	opts.Opt("ccgo-cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
+	opts.Opt("ccgo-full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })

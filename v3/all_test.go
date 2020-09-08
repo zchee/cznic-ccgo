@@ -694,12 +694,14 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20021127-1.c": {}, // gcc specific optimization
 		"20030323-1.c": {}, // __builtin_return_address
 		"20101011-1.c": {}, // sigfpe
+		"960830-1.c":   {}, // assembler statements not supported
 		"991014-1.c":   {}, // Struct type too big
 		"align-3.c":    {}, // __attribute__((aligned(256)))
 		"eeprof-1.c":   {}, // requires instrumentation
 		"fp-cmp-1.c":   {}, // sigfpe
 		"fp-cmp-2.c":   {}, // sigfpe
 		"fp-cmp-3.c":   {}, // sigfpe
+		"rbug.c":       {}, // cannot pass on 386
 		"pr15296.c":    {}, // union initializer designates non-first field (gcc extension)
 
 		"20000113-1.c":    {}, //TODO non-const bitfield initializer
@@ -896,18 +898,9 @@ func testSQLite(t *testing.T, dir string) {
 		"ccgo",
 		"-DHAVE_USLEEP",
 		"-DLONGDOUBLE_TYPE=double",
-		"-DSQLITE_DEBUG",
 		"-DSQLITE_DEFAULT_MEMSTATUS=0",
-		"-DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1",
-		"-DSQLITE_DQS=0",
 		"-DSQLITE_ENABLE_DBPAGE_VTAB",
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
-		"-DSQLITE_MAX_EXPR_DEPTH=0",
-		"-DSQLITE_MEMDEBUG",
-		"-DSQLITE_OMIT_DECLTYPE",
-		"-DSQLITE_OMIT_DEPRECATED",
-		"-DSQLITE_OMIT_PROGRESS_CALLBACK",
-		"-DSQLITE_OMIT_SHARED_CACHE",
 		"-DSQLITE_THREADSAFE=0",
 		"-ccgo-long-double-is-double", // stddef.h
 		"-ccgo-verify-structs",

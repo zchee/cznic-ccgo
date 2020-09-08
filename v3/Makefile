@@ -6,31 +6,34 @@
 
 grep=--include=*.go
 ngrep='TODOOK\|internalError\|testdata'
+log=log-$(shell go env GOOS)-$(shell go env GOARCH)
 
 all:
-	touch log
-	cp log log-0
+	touch $(log)
+	cp $(log) $(log)-0
 	date
-	go version 2>&1 | tee log
+	go version 2>&1 | tee $(log)
 	./unconvert.sh
 	gofmt -l -s -w *.go
 	go install -v
 	go test -i
-	go test -v 2>&1 -timeout 1h | tee -a log
+	GOOS=linux GOARCH=386 go build -v -o /dev/null
+	GOOS=linux GOARCH=amd64 go build -v -o /dev/null
+	go test -v 2>&1 -timeout 1h | tee -a $(log)
 	go vet 2>&1 | grep -v $(ngrep) || true
 	golint 2>&1 | grep -v $(ngrep) || true
 	make todo
 	misspell *.go
 	staticcheck | grep -v 'lexer\.go' || true
 	maligned || true
-	grep -n 'files.*, ok' log 
-	grep -n --color=never 'FAIL\|PASS' log 
-	grep -n --color=always 'FAIL' log 
-	grep -n --color=always 'nil pointer' log 
-	grep -c 'exit status 1' log || true
-	grep -c 'exit status 2' log || true
+	grep -n 'files.*, ok' $(log)
+	grep -n --color=never 'FAIL\|PASS' $(log)
+	grep -n --color=always 'FAIL' $(log)
+	grep -n --color=always 'nil pointer' $(log)
+	grep -c 'exit status 1' $(log) || true
+	grep -c 'exit status 2' $(log) || true
 	go version
-	date 2>&1 | tee -a log
+	date 2>&1 | tee -a $(log)
 
 devbench:
 	date 2>&1 | tee log-devbench

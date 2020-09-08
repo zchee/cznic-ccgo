@@ -533,7 +533,6 @@
 960608-1.c
 960801-1.c
 960802-1.c
-960830-1.c
 960909-1.c
 961004-1.c
 961017-1.c
@@ -698,7 +697,6 @@ pr30704.c
 pr67218.c
 pr72824.c
 pr84235.c
-rbug.c
 unsafe-fp-assoc-1.c
 unsafe-fp-assoc.c
 ifcvt-onecmpl-abs-1.c
@@ -720,6 +718,8 @@ loop-2b.c
 loop-2c.c
 loop-2d.c
 loop-2e.c
+loop-2f.c
+loop-2g.c
 loop-3.c
 loop-3b.c
 loop-3c.c
