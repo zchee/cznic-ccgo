@@ -1883,8 +1883,6 @@ func (p *project) structLayout(n cc.Node, t cc.Type) *structInfo {
 				break
 			}
 
-			sz := f.BitFieldBlockWidth() >> 3
-			pos = roundup(pos, uintptr(sz))
 			if p := int(off - pos); p != 0 {
 				if pads == nil {
 					pads = map[cc.Field]int{}
@@ -1898,7 +1896,6 @@ func (p *project) structLayout(n cc.Node, t cc.Type) *structInfo {
 			switch {
 			case ft.Kind() != cc.Array || ft.Len() != 0:
 				sz = ft.Size()
-				pos = roundup(pos, uintptr(ft.Align()))
 			default:
 				forceAlign = true
 			}
@@ -2366,7 +2363,6 @@ func (p *project) doVerifyStructs() {
 		t := p.verifyStructs[k]
 		p.w("\nvar v%d %s", n, k)
 		p.w("\nif g, e := unsafe.Sizeof(v%d), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union size, got %%v, expected %%v`, g, e))}", n, t.Size())
-		p.w("\nif g, e := unsafe.Alignof(v%d), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union alignment, got %%v, expected %%v`, g, e))}", n, t.Align())
 		nf := t.NumField()
 		for idx := []int{0}; idx[0] < nf; idx[0]++ {
 			f := t.FieldByIndex(idx)
@@ -2393,7 +2389,6 @@ func (p *project) doVerifyStructs() {
 			default:
 				p.w("\nif g, e := unsafe.Offsetof(v%d.%s), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union field offset, got %%v, expected %%v`, g, e))}", n, nm, f.Offset())
 				p.w("\nif g, e := unsafe.Sizeof(v%d.%s), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union field size, got %%v, expected %%v`, g, e))}", n, nm, f.Type().Size())
-				p.w("\nif g, e := unsafe.Alignof(v%d.%s), uintptr(%d); g != e { panic(fmt.Sprintf(`invalid struct/union field size, got %%v, expected %%v`, g, e))}", n, nm, f.Type().Align())
 			}
 		}
 		n++

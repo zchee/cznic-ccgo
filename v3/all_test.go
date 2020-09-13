@@ -125,6 +125,9 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}()
 
+	fmt.Printf("test binary compiled for %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("CCGO_CPP=%q\n", os.Getenv("CCGO_CPP"))
+
 	flag.BoolVar(&oTraceW, "trcw", false, "Print generator writes")
 	flag.BoolVar(&oTraceG, "trcg", false, "Print generator output")
 	flag.Parse()

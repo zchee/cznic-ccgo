@@ -113,7 +113,13 @@ typedef __WCHAR_TYPE__ wchar_t;
 #error __WCHAR_TYPE__ undefined
 #endif
 
+#ifdef __SIZEOF_INT128__
+typedef __INT64_TYPE__ __int128_t[2];	//TODO
+typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
+#endif;
+
 #define _FILE_OFFSET_BITS 64
+#define __attribute__(x)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 #define __builtin_va_copy(dst, src) dst = src
@@ -154,8 +160,6 @@ void __builtin_trap (void);
 void __builtin_unreachable (void);
 void __ccgo_va_end(__builtin_va_list ap);
 void __ccgo_va_start(__builtin_va_list ap);
-
-#undef __GNUC__
 `
 	defaultCrt = "modernc.org/libc"
 )
@@ -446,7 +450,7 @@ func (t *task) main() (err error) {
 			t.sources = append(t.sources, cc.Source{Name: arg})
 		case ".c":
 			t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
-			t.sources = append(t.sources, cc.Source{Name: arg})
+			t.sources = append(t.sources, cc.Source{Name: arg, DoNotCache: true})
 
 		default:
 			return fmt.Errorf("unexpected file type: %s", arg)
@@ -500,6 +504,16 @@ func (t *task) main() (err error) {
 	if err != nil {
 		return err
 	}
+	a := strings.Split(hostPredefined, "\n")
+	wi := 0
+	for _, v0 := range a {
+		v := strings.TrimSpace(strings.ToLower(v0))
+		if !strings.HasPrefix(v, "#define __gnu") && !strings.HasPrefix(v, "#define __gcc") {
+			a[wi] = v0
+			wi++
+		}
+	}
+	hostPredefined = strings.Join(a[:wi], "\n")
 
 	if t.nostdinc {
 		hostIncludes = nil
@@ -521,7 +535,7 @@ func (t *task) main() (err error) {
 			a = append(a, fmt.Sprintf("#define %s 1", v))
 		}
 		a = append(a, "\n")
-		sources = append(sources, cc.Source{Name: "<defines>", Value: strings.Join(a, "\n")})
+		sources = append(sources, cc.Source{Name: "<defines>", Value: strings.Join(a, "\n"), DoNotCache: true})
 	}
 	if len(t.U) != 0 {
 		var a []string
@@ -529,7 +543,7 @@ func (t *task) main() (err error) {
 			a = append(a, fmt.Sprintf("#undef %s", v))
 		}
 		a = append(a, "\n")
-		sources = append(sources, cc.Source{Name: "<undefines>", Value: strings.Join(a, "\n")})
+		sources = append(sources, cc.Source{Name: "<undefines>", Value: strings.Join(a, "\n"), DoNotCache: true})
 	}
 
 	// https://pubs.opengroup.org/onlinepubs/9699919799/utilities/c99.html
