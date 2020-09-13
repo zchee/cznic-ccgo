@@ -48,14 +48,14 @@ test_linux_amd64:
 test_linux_386:
 	GOOS=linux GOARCH=386 make test
 
-test_linux_386_hosted:
-	GOOS=linux GOARCH=386 CCGO_CPP=i686-linux-gnu-cpp-8 CCGO_TEST_SUFFIX=-hosted-$(host) make test
-
 test_linux_arm:
 	GOOS=linux GOARCH=arm make test
 
 test_linux_arm64:
 	GOOS=linux GOARCH=arm64 make test
+
+test_windows_amd64:
+	GOOS=windows GOARCH=amd64 make test
 
 devbench:
 	date 2>&1 | tee log-devbench

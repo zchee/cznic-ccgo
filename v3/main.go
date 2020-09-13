@@ -131,6 +131,12 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 typedef void *__builtin_va_list;
 typedef long double __float128;
 
+#if defined(__MINGW32__) || defined(__MINGW64__)
+typedef __builtin_va_list va_list;
+#define _VA_LIST_DEFINED
+#define __extension__
+#endif
+
 char *__builtin_strchr(const char *s, int c);
 char *__builtin_strcpy(char *dest, const char *src);
 double __builtin_copysign ( double x, double y );
@@ -256,6 +262,7 @@ type task struct {
 	exportTypedefsValid bool // -ccgo-export-typedefs present
 	fullPathComments    bool // -ccgo-full-path-comments
 	libc                bool // -ccgo-libc
+	mingw               bool
 	nostdinc            bool // -nostdinc
 	verifyStructs       bool // -ccgo-verify-structs
 	watch               bool // -ccgo-watch-instrumentation
@@ -504,16 +511,20 @@ func (t *task) main() (err error) {
 	if err != nil {
 		return err
 	}
-	a := strings.Split(hostPredefined, "\n")
-	wi := 0
-	for _, v0 := range a {
-		v := strings.TrimSpace(strings.ToLower(v0))
-		if !strings.HasPrefix(v, "#define __gnu") && !strings.HasPrefix(v, "#define __gcc") {
-			a[wi] = v0
-			wi++
+
+	t.mingw = detectMingw(hostPredefined)
+	if !t.mingw {
+		a := strings.Split(hostPredefined, "\n")
+		wi := 0
+		for _, v0 := range a {
+			v := strings.TrimSpace(strings.ToLower(v0))
+			if !strings.HasPrefix(v, "#define __gnu") && !strings.HasPrefix(v, "#define __gcc") {
+				a[wi] = v0
+				wi++
+			}
 		}
+		hostPredefined = strings.Join(a[:wi], "\n")
 	}
-	hostPredefined = strings.Join(a[:wi], "\n")
 
 	if t.nostdinc {
 		hostIncludes = nil
@@ -617,4 +628,8 @@ func (t *task) main() (err error) {
 	}
 
 	return p.main()
+}
+
+func detectMingw(s string) bool {
+	return strings.Contains(s, "#define __MINGW")
 }

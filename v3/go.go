@@ -2581,7 +2581,7 @@ func (p *project) externalDeclaration(n *cc.ExternalDeclaration) {
 	case cc.ExternalDeclarationAsmStmt: // AsmStatement
 		panic(todo("", p.pos(n)))
 	case cc.ExternalDeclarationEmpty: // ';'
-		panic(todo("", p.pos(n)))
+		// nop
 	case cc.ExternalDeclarationPragma: // PragmaSTDC
 		panic(todo("", p.pos(n)))
 	default:
@@ -3878,7 +3878,7 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 		//         Asm AttributeSpecifierList ';'
 		// Asm:
 		//         "__asm__" AsmQualifierList '(' STRINGLITERAL AsmArgList ')'
-		if n.AsmStatement.Asm.Token3.Value == 0 && n.AsmStatement.Asm.AsmArgList == nil {
+		if p.task.mingw || n.AsmStatement.Asm.Token3.Value == 0 && n.AsmStatement.Asm.AsmArgList == nil {
 			break
 		}
 
