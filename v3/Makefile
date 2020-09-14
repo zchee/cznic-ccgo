@@ -6,20 +6,22 @@
 
 grep=--include=*.go
 ngrep='TODOOK\|internalError\|testdata'
-host=$(shell go env GOOS)-$(shell go env GOARCH)
-testlog=testdata/testlog-$(shell echo $$GOOS)-$(shell echo $$GOARCH)$(shell echo $$CCGO_TEST_SUFFIX)
+testlog=testdata/testlog-$(shell echo $$GOOS)-$(shell echo $$GOARCH)-on-$(shell go env GOOS)-$(shell go env GOARCH)
 
 all:
-	touch log
-	cp log log-0
+	LC_ALL=C make all_log 2>&1 | tee log
+
+all_log:
 	date
-	go version 2>&1 | tee log
-	uname -a | tee -a log
+	go version
+	uname -a
 	./unconvert.sh
 	gofmt -l -s -w *.go
-	go install -v
-	go test -i
-	go test -v 2>&1 -timeout 24h | tee -a log
+	GOOS=linux GOARCH=arm go build -o /dev/null
+	GOOS=linux GOARCH=386 go build -o /dev/null
+	GOOS=linux GOARCH=amd64 go build -o /dev/null
+	GOOS=windows GOARCH=386 go build -o /dev/null
+	GOOS=windows GOARCH=amd64 go build -o /dev/null
 	go vet 2>&1 | grep -v $(ngrep) || true
 	golint 2>&1 | grep -v $(ngrep) || true
 	make todo
@@ -27,20 +29,23 @@ all:
 	staticcheck | grep -v 'lexer\.go' || true
 	maligned || true
 	grep -n 'files.*, ok' log
-	grep -n --color=never 'FAIL\|PASS' log
-	grep -n --color=always 'FAIL' log
+	@grep -n --color=never 'FAIL\|PASS' log
+	@grep -n --color=always 'FAIL' log
 	grep -n --color=always 'nil pointer' log
 	grep -c 'exit status 1' log || true
 	grep -c 'exit status 2' log || true
 	LC_ALL=C date 2>&1 | tee -a log
 
 test:
-	go version | tee $(testlog)
-	uname -a | tee -a $(testlog)
-	go test -v -timeout 24h | tee -a $(testlog)
-	grep -ni fail $(testlog) | tee -a $(testlog) || true
-	LC_ALL=C date | tee -a $(testlog)
+	LC_ALL=C make test_log 2>&1 | tee $(testlog)
 	grep -ni --color=always fail $(testlog) || true
+
+test_log:
+	go version
+	uname -a
+	go test -v -timeout 24h
+	date | tee -a $(testlog)
+	grep -ni fail || true
 
 test_linux_amd64:
 	GOOS=linux GOARCH=amd64 make test
@@ -84,7 +89,7 @@ edit:
 
 editor:
 	gofmt -l -s -w *.go
-	go install -v
+	go build -o $(GOPATH)/bin/ccgo
 
 later:
 	@grep -n $(grep) LATER * || true

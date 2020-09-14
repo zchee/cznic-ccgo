@@ -2540,7 +2540,7 @@ func (p *project) flushTS() {
 		p.w("var %s = (*reflect.StringHeader)(unsafe.Pointer(&%s)).Data\n", p.tsNameP, p.tsName)
 	}
 	if len(p.ts4) != 0 {
-		p.w("var %s = [...]int32{", p.ts4Name)
+		p.w("var %s = [...]%s{", p.ts4Name, p.typ(nil, p.ast.WideCharType))
 		for _, v := range p.ts4 {
 			p.w("%d, ", v)
 		}
@@ -3708,6 +3708,10 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 
 func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	// DeclarationSpecifiers Declarator DeclarationList CompoundStatement
+	if p.task.header {
+		return
+	}
+
 	d := n.Declarator
 	name := d.Name().String()
 	if _, ok := p.task.hide[name]; ok && d.Linkage == cc.External {
@@ -3878,7 +3882,12 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 		//         Asm AttributeSpecifierList ';'
 		// Asm:
 		//         "__asm__" AsmQualifierList '(' STRINGLITERAL AsmArgList ')'
-		if p.task.mingw || n.AsmStatement.Asm.Token3.Value == 0 && n.AsmStatement.Asm.AsmArgList == nil {
+		if n.AsmStatement.Asm.Token3.Value == 0 && n.AsmStatement.Asm.AsmArgList == nil {
+			break
+		}
+
+		if p.task.mingw {
+			p.w("panic(`%v: assembler statements not supported`);", n.Position())
 			break
 		}
 

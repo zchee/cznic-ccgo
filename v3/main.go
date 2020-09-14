@@ -119,7 +119,6 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #endif;
 
 #define _FILE_OFFSET_BITS 64
-#define __attribute__(x)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 #define __builtin_va_copy(dst, src) dst = src
@@ -133,6 +132,10 @@ typedef long double __float128;
 
 #if defined(__MINGW32__) || defined(__MINGW64__)
 typedef __builtin_va_list va_list;
+int gnu_printf(const char *format, ...);
+int gnu_scanf(const char *format, ...);
+int ms_printf(const char *format, ...);
+int ms_scanf(const char *format, ...);
 #define _VA_LIST_DEFINED
 #define __extension__
 #endif
@@ -153,6 +156,7 @@ int __builtin_snprintf(char *str, size_t size, const char *format, ...);
 int __builtin_sprintf(char *str, const char *format, ...);
 int __builtin_strcmp(const char *s1, const char *s2);
 long __builtin_expect (long exp, long c);
+long long __builtin_llabs(long long j);
 size_t __builtin_strlen(const char *s);
 void *__builtin_malloc(size_t size);
 void *__builtin_memcpy(void *dest, const void *src, size_t n);
@@ -261,6 +265,7 @@ type task struct {
 	exportStructsValid  bool // -ccgo-export-structs present
 	exportTypedefsValid bool // -ccgo-export-typedefs present
 	fullPathComments    bool // -ccgo-full-path-comments
+	header              bool // -ccgo-header
 	libc                bool // -ccgo-libc
 	mingw               bool
 	nostdinc            bool // -nostdinc
@@ -277,7 +282,7 @@ func newTask(args []string, stdout, stderr io.Writer) *task {
 	}
 	return &task{
 		args:          args,
-		cfg:           &cc.Config{},
+		cfg:           &cc.Config{DoNotTypecheckAsm: true},
 		crt:           "libc.",
 		crtImportPath: defaultCrt,
 		goarch:        env("TARGET_GOARCH", env("GOARCH", runtime.GOARCH)),
@@ -411,6 +416,7 @@ func (t *task) main() (err error) {
 	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
 	opts.Opt("ccgo-cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
 	opts.Opt("ccgo-full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
+	opts.Opt("ccgo-header", func(opt string) error { t.header = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
