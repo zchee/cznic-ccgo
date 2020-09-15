@@ -2070,6 +2070,8 @@ func (p *project) layoutTLDs() error {
 						break
 					}
 
+					trc("%q", d.Name()) //TODO-
+					break               //TODO-
 					panic(todo("", ex.name, d.Position(), d.Name()))
 				}
 
@@ -3190,7 +3192,7 @@ func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declara
 		p.functionSignature(f, d.Type(), "")
 		p.w("}{%sX%s}))", x.qualifier, d.Name())
 	default:
-		panic(todo("%v: %v: %q", n.Position(), p.pos(d), d.Name()))
+		panic(todo("%v: %T %v: %q", n.Position(), x, p.pos(d), d.Name()))
 	}
 }
 
