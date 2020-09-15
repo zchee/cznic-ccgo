@@ -24,14 +24,19 @@ import (
 )
 
 var (
-	idAligned = cc.String("aligned") // int __attribute__ ((aligned (8))) foo;
-	idEnviron = cc.String("environ")
-	idMain    = cc.String("main")
-	idPacked  = cc.String("packed") // __attribute__((packed))
-	idVaArg   = cc.String("__ccgo_va_arg")
-	idVaEnd   = cc.String("__ccgo_va_end")
-	idVaList  = cc.String("va_list")
-	idVaStart = cc.String("__ccgo_va_start")
+	idAligned      = cc.String("aligned")          // int __attribute__ ((aligned (8))) foo;
+	idAtomicLoadN  = cc.String("__atomic_load_n")  // type __atomic_load_n (type *ptr, int memorder)
+	idAtomicStoreN = cc.String("__atomic_store_n") // void __atomic_store_n (type *ptr, type val, int memorder)
+	idEnviron      = cc.String("environ")
+	idMain         = cc.String("main")
+	idPacked       = cc.String("packed") // __attribute__((packed))
+	idVaArg        = cc.String("__ccgo_va_arg")
+	idVaEnd        = cc.String("__ccgo_va_end")
+	idVaList       = cc.String("va_list")
+	idVaStart      = cc.String("__ccgo_va_start")
+	idAddOverflow  = cc.String("__builtin_add_overflow") // bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
+	idSubOverflow  = cc.String("__builtin_sub_overflow") // bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
+	idMulOverflow  = cc.String("__builtin_mul_overflow") // bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
 
 	oTraceG bool
 	oTraceW bool
@@ -1237,7 +1242,7 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
-	if len(p.errors) >= 10 {
+	if !p.task.allErrors && len(p.errors) >= 10 {
 		return
 	}
 
@@ -1246,7 +1251,7 @@ func (p *project) err(n cc.Node, s string, args ...interface{}) {
 		p.errors.Add(token.Position{}, fmt.Sprintf(s, args...))
 	default:
 		p.errors.Add(token.Position(n.Position()), fmt.Sprintf(s, args...))
-		if len(p.errors) == 10 {
+		if !p.task.allErrors && len(p.errors) == 10 {
 			p.errors.Add(token.Position(n.Position()), tooManyErrors)
 		}
 	}
@@ -1316,7 +1321,10 @@ func (p *project) layoutSymtab() error {
 				if _, ok := p.symtab[name]; !ok {
 					tld := p.externs[nm]
 					if tld == nil {
-						panic(todo(""))
+						if d.Type().Kind() != cc.Function && !p.task.header {
+							p.err(d, "undefined: %s %v %v", d.Name(), d.Type(), d.Type().Kind())
+						}
+						continue
 					}
 
 					p.symtab[name] = tld
@@ -2050,6 +2058,24 @@ func (p *project) layoutTLDs() error {
 				continue
 			}
 
+			// https://gcc.gnu.org/onlinedocs/gcc/Inline.html
+			//
+			// If you specify both inline and extern in the function definition, then the
+			// definition is used only for inlining. In no case is the function compiled on
+			// its own, not even if you refer to its address explicitly. Such an address
+			// becomes an external reference, as if you had only declared the function, and
+			// had not defined it.
+			//
+			// This combination of inline and extern has almost the effect of a macro. The
+			// way to use it is to put a function definition in a header file with these
+			// keywords, and put another copy of the definition (lacking inline and extern)
+			// in a library file. The definition in the header file causes most calls to
+			// the function to be inlined. If any uses of the function remain, they refer
+			// to the single copy in the library.
+			if d.Linkage == cc.External && d.Type().Inline() {
+				continue
+			}
+
 			a = append(a, d)
 			p.wanted[d] = struct{}{}
 		}
@@ -2070,9 +2096,12 @@ func (p *project) layoutTLDs() error {
 						break
 					}
 
-					trc("%q", d.Name()) //TODO-
-					break               //TODO-
-					panic(todo("", ex.name, d.Position(), d.Name()))
+					if d.Type().Kind() != cc.Function {
+						break
+					}
+
+					p.err(d, "redeclared: %s", d.Name())
+					break
 				}
 
 				isMain := p.isMain && nm == idMain
@@ -2342,6 +2371,10 @@ func main() { %sStart(%s) }`, p.task.crt, p.mainName)
 	p.flushTS()
 	p.flushCAPI()
 	p.doVerifyStructs()
+	if err := p.Err(); err != nil {
+		return err
+	}
+
 	if _, err := p.buf.WriteTo(p.task.out); err != nil {
 		return err
 	}
@@ -3192,7 +3225,7 @@ func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declara
 		p.functionSignature(f, d.Type(), "")
 		p.w("}{%sX%s}))", x.qualifier, d.Name())
 	default:
-		panic(todo("%v: %T %v: %q", n.Position(), x, p.pos(d), d.Name()))
+		p.err(d, "undefined: %s", d.Name())
 	}
 }
 
@@ -9328,6 +9361,9 @@ func (p *project) postfixExpressionCallBool(f *function, n *cc.PostfixExpression
 			p.assignmentExpression(f, lhs, lhs.Operand.Type(), exprLValue, flags)
 			p.w(")")
 			return
+		case idAtomicLoadN:
+			p.atomicLoadN(f, n, t, mode, flags)
+			return
 		}
 	}
 
@@ -9360,10 +9396,182 @@ func (p *project) postfixExpressionCallValue(f *function, n *cc.PostfixExpressio
 			p.assignmentExpression(f, lhs, lhs.Operand.Type(), exprLValue, flags)
 			p.w(")")
 			return
+		case idAtomicLoadN:
+			p.atomicLoadN(f, n, t, mode, flags)
+			return
+		case idAddOverflow:
+			p.addOverflow(f, n, t, mode, flags)
+			return
+		case idSubOverflow:
+			p.subOverflow(f, n, t, mode, flags)
+			return
+		case idMulOverflow:
+			p.mulOverflow(f, n, t, mode, flags)
+			return
 		}
 	}
 	p.postfixExpression(f, n.PostfixExpression, n.PostfixExpression.Operand.Type(), exprFunc, flags&^fOutermost)
 	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, f.vaLists[n])
+}
+
+// bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
+func (p *project) mulOverflow(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	args := p.argList(n.ArgumentExpressionList)
+	if len(args) != 3 {
+		p.err(n, "expected 3 arguments in call to __builtin_mul_overflow")
+		return
+	}
+
+	pt := args[2].Operand.Type()
+	if pt.Kind() != cc.Ptr {
+		p.err(n, "invalid argument of __builtin_mul_overflow (expected pointer): %s", pt)
+		return
+	}
+
+	vt := pt.Elem()
+	switch {
+	case vt.IsIntegerType():
+		switch vt.Size() {
+		case 1, 2, 4, 8:
+			p.w("%sSubOverflow%s", p.task.crt, p.helperType(n, vt))
+		default:
+			p.err(n, "invalid argument of __builtin_mul_overflow: %v, elem kind %v", pt, vt.Kind())
+			return
+		}
+		p.w("(%s", f.tlsName)
+		types := []cc.Type{vt, vt, pt}
+		for i, v := range args[:2] {
+			p.w(", ")
+			p.assignmentExpression(f, v, types[i], mode, flags|fOutermost)
+		}
+		p.w(")")
+		return
+	}
+
+	p.err(n, "invalid arguments of __builtin_mul_overflow: (%v, %v, %v)", args[0].Operand.Type(), args[1].Operand.Type(), args[2].Operand.Type())
+	return
+}
+
+// bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
+func (p *project) subOverflow(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	args := p.argList(n.ArgumentExpressionList)
+	if len(args) != 3 {
+		p.err(n, "expected 3 arguments in call to __builtin_sub_overflow")
+		return
+	}
+
+	pt := args[2].Operand.Type()
+	if pt.Kind() != cc.Ptr {
+		p.err(n, "invalid argument of __builtin_sub_overflow (expected pointer): %s", pt)
+		return
+	}
+
+	vt := pt.Elem()
+	switch {
+	case vt.IsIntegerType():
+		switch vt.Size() {
+		case 1, 2, 4, 8:
+			p.w("%sSubOverflow%s", p.task.crt, p.helperType(n, vt))
+		default:
+			p.err(n, "invalid argument of __builtin_sub_overflow: %v, elem kind %v", pt, vt.Kind())
+			return
+		}
+		p.w("(%s", f.tlsName)
+		types := []cc.Type{vt, vt, pt}
+		for i, v := range args[:2] {
+			p.w(", ")
+			p.assignmentExpression(f, v, types[i], mode, flags|fOutermost)
+		}
+		p.w(")")
+		return
+	}
+
+	p.err(n, "invalid arguments of __builtin_sub_overflow: (%v, %v, %v)", args[0].Operand.Type(), args[1].Operand.Type(), args[2].Operand.Type())
+	return
+}
+
+// bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
+func (p *project) addOverflow(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	args := p.argList(n.ArgumentExpressionList)
+	if len(args) != 3 {
+		p.err(n, "expected 3 arguments in call to __builtin_add_overflow")
+		return
+	}
+
+	pt := args[2].Operand.Type()
+	if pt.Kind() != cc.Ptr {
+		p.err(n, "invalid argument of __builtin_add_overflow (expected pointer): %s", pt)
+		return
+	}
+
+	vt := pt.Elem()
+	switch {
+	case vt.IsIntegerType():
+		switch vt.Size() {
+		case 1, 2, 4, 8:
+			p.w("%sAddOverflow%s", p.task.crt, p.helperType(n, vt))
+		default:
+			p.err(n, "invalid argument of __builtin_add_overflow: %v, elem kind %v", pt, vt.Kind())
+			return
+		}
+		p.w("(%s", f.tlsName)
+		types := []cc.Type{vt, vt, pt}
+		for i, v := range args[:2] {
+			p.w(", ")
+			p.assignmentExpression(f, v, types[i], mode, flags|fOutermost)
+		}
+		p.w(")")
+		return
+	}
+
+	p.err(n, "invalid arguments of __builtin_add_overflow: (%v, %v, %v)", args[0].Operand.Type(), args[1].Operand.Type(), args[2].Operand.Type())
+	return
+}
+
+// type __atomic_load_n (type *ptr, int memorder)
+func (p *project) atomicLoadN(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	args := p.argList(n.ArgumentExpressionList)
+	if len(args) != 2 {
+		p.err(n, "expected 2 arguments in call to __atomic_load_n")
+		return
+	}
+
+	pt := args[0].Operand.Type()
+	if pt.Kind() != cc.Ptr {
+		p.err(n, "invalid argument of __atomic_load_n (expected pointer): %s", pt)
+		return
+	}
+
+	vt := pt.Elem()
+	switch {
+	case vt.IsIntegerType():
+		var s string
+		switch {
+		case vt.IsSignedType():
+			s = "Int"
+		default:
+			s = "Uint"
+		}
+		switch vt.Size() {
+		case 2, 4, 8:
+			p.w("%sAtomicLoadN%s%d", p.task.crt, s, 8*vt.Size())
+		default:
+			p.err(n, "invalid argument of __atomic_load_n: %v, elem kind %v", pt, vt.Kind())
+			return
+		}
+		p.w("(%s", f.tlsName)
+		for _, v := range args[:2] {
+			p.w(", ")
+			p.assignmentExpression(f, v, v.Operand.Type(), mode, flags|fOutermost)
+		}
+		p.w(")")
+		return
+	case vt.Kind() == cc.Ptr:
+		panic(todo("", pt, vt))
+	}
+
+	p.err(n, "invalid first argument of __atomic_load_n: %v, elem kind %v", pt, vt.Kind())
+	return
 }
 
 func (p *project) postfixExpressionCallVoid(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
@@ -9390,10 +9598,67 @@ func (p *project) postfixExpressionCallVoid(f *function, n *cc.PostfixExpression
 			p.assignmentExpression(f, lhs, lhs.Operand.Type(), exprLValue, flags)
 			p.w(")")
 			return
+		case idAtomicStoreN:
+			p.atomicStoreN(f, n, t, mode, flags)
+			return
 		}
 	}
 	p.postfixExpression(f, n.PostfixExpression, n.PostfixExpression.Operand.Type(), exprFunc, flags&^fOutermost)
 	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, f.vaLists[n])
+}
+
+// void __atomic_store_n (type *ptr, type val, int memorder)
+func (p *project) atomicStoreN(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	args := p.argList(n.ArgumentExpressionList)
+	if len(args) != 3 {
+		p.err(n, "expected 3 arguments in call to __atomic_store_n")
+		return
+	}
+
+	pt := args[0].Operand.Type()
+	if pt.Kind() != cc.Ptr {
+		p.err(n, "invalid first argument of __atomic_store_n (expected pointer): %s", pt)
+		return
+	}
+
+	vt := args[1].Operand.Type()
+	switch {
+	case vt.IsIntegerType():
+		var s string
+		switch {
+		case vt.IsSignedType():
+			s = "Int"
+		default:
+			s = "Uint"
+		}
+		switch vt.Size() {
+		case 2, 4, 8:
+			p.w("%sAtomicStoreN%s%d", p.task.crt, s, 8*vt.Size())
+		default:
+			p.err(n, "invalid arguments of __atomic_store_n: (%v, %v), element kind %v", pt, vt, vt.Kind())
+			return
+		}
+		p.w("(%s", f.tlsName)
+		types := []cc.Type{pt, pt.Elem()}
+		for i, v := range args[:2] {
+			p.w(", ")
+			p.assignmentExpression(f, v, types[i], exprValue, flags|fOutermost)
+		}
+		p.w(")")
+		return
+	case vt.Kind() == cc.Ptr:
+		panic(todo("", pt, vt))
+	}
+
+	p.err(n, "invalid arguments of __atomic_store_n: (%v, %v), element kind %v", pt, vt, vt.Kind())
+	return
+}
+
+func (p *project) argList(n *cc.ArgumentExpressionList) (r []*cc.AssignmentExpression) {
+	for ; n != nil; n = n.ArgumentExpressionList {
+		r = append(r, n.AssignmentExpression)
+	}
+	return r
 }
 
 func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, n *cc.ArgumentExpressionList, bpOff uintptr) {
@@ -9414,7 +9679,12 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 
 	va := true
 	if len(args) > len(params) && !isVariadic {
-		p.err(pe, "too many arguments")
+		switch d := pe.Declarator(); {
+		case d == nil:
+			p.err(pe, "too many arguments (%d) in call to %s", len(args), ft)
+		default:
+			p.err(pe, "too many arguments (%d) in call to %s of type %s", len(args), d.Name(), ft)
+		}
 		va = false
 	}
 

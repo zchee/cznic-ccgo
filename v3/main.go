@@ -140,6 +140,8 @@ int ms_scanf(const char *format, ...);
 #define __extension__
 #endif
 
+__UINT16_TYPE__ __builtin_bswap16 (__UINT16_TYPE__ x);
+__UINT32_TYPE__ __builtin_bswap32 (__UINT32_TYPE__ x);
 char *__builtin_strchr(const char *s, int c);
 char *__builtin_strcpy(char *dest, const char *src);
 double __builtin_copysign ( double x, double y );
@@ -150,11 +152,15 @@ float __builtin_copysignf ( float x, float y );
 float __builtin_huge_valf (void);
 float __builtin_inff (void);
 int __builtin_abs(int j);
+int __builtin_add_overflow();
+int __builtin_clzll (unsigned long long);
 int __builtin_memcmp(const void *s1, const void *s2, size_t n);
+int __builtin_mul_overflow();
 int __builtin_printf(const char *format, ...);
 int __builtin_snprintf(char *str, size_t size, const char *format, ...);
 int __builtin_sprintf(char *str, const char *format, ...);
 int __builtin_strcmp(const char *s1, const char *s2);
+int __builtin_sub_overflow();
 long __builtin_expect (long exp, long c);
 long long __builtin_llabs(long long j);
 size_t __builtin_strlen(const char *s);
@@ -256,6 +262,7 @@ type task struct {
 	symSearchOrder  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
 	E                   bool // -E
+	allErrors           bool // -ccgo-all-errors
 	cover               bool // -ccgo-cover-instrumentation
 	coverC              bool // -ccgo-cover-instrumentation-c
 	exportDefinesValid  bool // -ccgo-export-defines present
@@ -413,6 +420,7 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
+	opts.Opt("ccgo-all-errors", func(opt string) error { t.allErrors = true; return nil })
 	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
 	opts.Opt("ccgo-cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
 	opts.Opt("ccgo-full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
