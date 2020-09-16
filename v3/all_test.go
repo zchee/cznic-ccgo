@@ -959,7 +959,11 @@ func testSQLite(t *testing.T, dir string) {
 	}() {
 		return
 	}
-	if out, err := exec.Command("go", "build", "-o", "shell", main).CombinedOutput(); err != nil {
+	shell := "./shell"
+	if runtime.GOOS == "windows" {
+		shell = "shell.exe"
+	}
+	if out, err := exec.Command("go", "build", "-o", shell, main).CombinedOutput(); err != nil {
 		s := strings.TrimSpace(string(out))
 		if s != "" {
 			s += "\n"
@@ -968,7 +972,7 @@ func testSQLite(t *testing.T, dir string) {
 		return
 	}
 
-	out, err := exec.Command("./shell", "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	out, err := exec.Command(shell, "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
 	if err != nil {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)

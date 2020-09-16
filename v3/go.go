@@ -3939,11 +3939,6 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 			break
 		}
 
-		if p.task.mingw {
-			p.w("panic(`%v: assembler statements not supported`);", n.Position())
-			break
-		}
-
 		p.err(n, "assembler statements not supported")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -9166,14 +9161,33 @@ func (p *project) postfixExpressionLValueIndexArray(f *function, n *cc.PostfixEx
 
 func (p *project) postfixExpressionLValueSelect(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression '.' IDENTIFIER
-	switch k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type()); k {
+	pe := n.PostfixExpression
+	switch k := p.opKind(f, pe, pe.Operand.Type()); k {
 	case opStruct:
-		p.postfixExpressionLValueSelectStruct(f, n, t, mode, flags)
+		if !p.inUnion(pe, n.Token2.Value) {
+			p.postfixExpressionLValueSelectStruct(f, n, t, mode, flags)
+			break
+		}
+
+		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
+		p.postfixExpression(f, pe, pe.Operand.Type(), exprAddrOf, flags|fOutermost)
+		p.fldOff(pe.Operand.Type(), n.Token2)
+		p.w("))")
 	case opUnion:
 		p.postfixExpressionLValueSelectUnion(f, n, t, mode, flags)
 	default:
 		panic(todo("", n.Position(), k))
 	}
+}
+
+func (p *project) inUnion(n *cc.PostfixExpression, fname cc.StringID) bool {
+	f, ok := n.Operand.Type().FieldByName(fname)
+	if !ok {
+		p.err(n, "unknown field: %s", fname)
+		return false
+	}
+
+	return f.InUnion()
 }
 
 func (p *project) postfixExpressionLValueSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
@@ -9451,16 +9465,16 @@ func (p *project) mulOverflow(f *function, n *cc.PostfixExpression, t cc.Type, m
 	case vt.IsIntegerType():
 		switch vt.Size() {
 		case 1, 2, 4, 8:
-			p.w("%sSubOverflow%s", p.task.crt, p.helperType(n, vt))
+			p.w("%sX__builtin_mul_overflow%s", p.task.crt, p.helperType(n, vt))
 		default:
 			p.err(n, "invalid argument of __builtin_mul_overflow: %v, elem kind %v", pt, vt.Kind())
 			return
 		}
 		p.w("(%s", f.tlsName)
 		types := []cc.Type{vt, vt, pt}
-		for i, v := range args[:2] {
+		for i, v := range args[:3] {
 			p.w(", ")
-			p.assignmentExpression(f, v, types[i], mode, flags|fOutermost)
+			p.assignmentExpression(f, v, types[i], exprValue, flags|fOutermost)
 		}
 		p.w(")")
 		return
@@ -9489,16 +9503,16 @@ func (p *project) subOverflow(f *function, n *cc.PostfixExpression, t cc.Type, m
 	case vt.IsIntegerType():
 		switch vt.Size() {
 		case 1, 2, 4, 8:
-			p.w("%sSubOverflow%s", p.task.crt, p.helperType(n, vt))
+			p.w("%sX__builtin_sub_overflow%s", p.task.crt, p.helperType(n, vt))
 		default:
 			p.err(n, "invalid argument of __builtin_sub_overflow: %v, elem kind %v", pt, vt.Kind())
 			return
 		}
 		p.w("(%s", f.tlsName)
 		types := []cc.Type{vt, vt, pt}
-		for i, v := range args[:2] {
+		for i, v := range args[:3] {
 			p.w(", ")
-			p.assignmentExpression(f, v, types[i], mode, flags|fOutermost)
+			p.assignmentExpression(f, v, types[i], exprValue, flags|fOutermost)
 		}
 		p.w(")")
 		return
@@ -9527,16 +9541,16 @@ func (p *project) addOverflow(f *function, n *cc.PostfixExpression, t cc.Type, m
 	case vt.IsIntegerType():
 		switch vt.Size() {
 		case 1, 2, 4, 8:
-			p.w("%sAddOverflow%s", p.task.crt, p.helperType(n, vt))
+			p.w("%sX__builtin_add_overflow%s", p.task.crt, p.helperType(n, vt))
 		default:
 			p.err(n, "invalid argument of __builtin_add_overflow: %v, elem kind %v", pt, vt.Kind())
 			return
 		}
 		p.w("(%s", f.tlsName)
 		types := []cc.Type{vt, vt, pt}
-		for i, v := range args[:2] {
+		for i, v := range args[:3] {
 			p.w(", ")
-			p.assignmentExpression(f, v, types[i], mode, flags|fOutermost)
+			p.assignmentExpression(f, v, types[i], exprValue, flags|fOutermost)
 		}
 		p.w(")")
 		return
@@ -9577,10 +9591,13 @@ func (p *project) atomicLoadN(f *function, n *cc.PostfixExpression, t cc.Type, m
 			p.err(n, "invalid argument of __atomic_load_n: %v, elem kind %v", pt, vt.Kind())
 			return
 		}
-		p.w("(%s", f.tlsName)
-		for _, v := range args[:2] {
-			p.w(", ")
-			p.assignmentExpression(f, v, v.Operand.Type(), mode, flags|fOutermost)
+		types := []cc.Type{pt, p.intType}
+		p.w("(")
+		for i, v := range args[:2] {
+			if i != 0 {
+				p.w(", ")
+			}
+			p.assignmentExpression(f, v, types[i], exprValue, flags|fOutermost)
 		}
 		p.w(")")
 		return
@@ -9656,11 +9673,19 @@ func (p *project) atomicStoreN(f *function, n *cc.PostfixExpression, t cc.Type, 
 			p.err(n, "invalid arguments of __atomic_store_n: (%v, %v), element kind %v", pt, vt, vt.Kind())
 			return
 		}
-		p.w("(%s", f.tlsName)
-		types := []cc.Type{pt, pt.Elem()}
-		for i, v := range args[:2] {
-			p.w(", ")
+		p.w("(")
+		types := []cc.Type{pt, vt, p.intType}
+		for i, v := range args[:3] {
+			if i != 0 {
+				p.w(", ")
+			}
+			if i == 1 {
+				p.w("%s(", strings.ToLower(p.helperType(n, vt)))
+			}
 			p.assignmentExpression(f, v, types[i], exprValue, flags|fOutermost)
+			if i == 1 {
+				p.w(")")
+			}
 		}
 		p.w(")")
 		return
@@ -9697,11 +9722,16 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 
 	va := true
 	if len(args) > len(params) && !isVariadic {
+		var a []string
+		for _, v := range args {
+			a = append(a, v.Operand.Type().String())
+		}
+		sargs := strings.Join(a, ",")
 		switch d := pe.Declarator(); {
 		case d == nil:
-			p.err(pe, "too many arguments (%d) in call to %s", len(args), ft)
+			p.err(pe, "too many arguments (%s) in call to %s", sargs, ft)
 		default:
-			p.err(pe, "too many arguments (%d) in call to %s of type %s", len(args), d.Name(), ft)
+			p.err(pe, "too many arguments (%s) in call to %s of type %s", sargs, d.Name(), ft)
 		}
 		va = false
 	}
