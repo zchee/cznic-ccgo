@@ -918,9 +918,13 @@ func testSQLite(t *testing.T, dir string) {
 		"ccgo",
 		"-DHAVE_USLEEP",
 		"-DLONGDOUBLE_TYPE=double",
+		"-DSQLITE_DEBUG",
+		"-DSQLITE_DEBUG_OS_TRACE", //TODO-
 		"-DSQLITE_DEFAULT_MEMSTATUS=0",
 		"-DSQLITE_ENABLE_DBPAGE_VTAB",
+		"-DSQLITE_FORCE_OS_TRACE", //TODO-
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
+		"-DSQLITE_MEMDEBUG",
 		"-DSQLITE_THREADSAFE=0",
 		"-ccgo-all-errors",
 		"-ccgo-long-double-is-double", // stddef.h
@@ -972,7 +976,7 @@ func testSQLite(t *testing.T, dir string) {
 		return
 	}
 
-	out, err := exec.Command(shell, "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	out, err := exec.Command(shell, "tmp", ".log stdout", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
 	if err != nil {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)
@@ -988,7 +992,7 @@ func testSQLite(t *testing.T, dir string) {
 		fmt.Printf("%s\n", out)
 	}
 
-	if out, err = exec.Command("./shell", "tmp", "select 13*i from t;").CombinedOutput(); err != nil {
+	if out, err = exec.Command(shell, "tmp", "select 13*i from t;").CombinedOutput(); err != nil {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)
 		}

@@ -282,6 +282,7 @@ type task struct {
 	nostdinc            bool // -nostdinc
 	verifyStructs       bool // -ccgo-verify-structs
 	watch               bool // -ccgo-watch-instrumentation
+	windows             bool // -ccgo-windows
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -432,6 +433,7 @@ func (t *task) main() (err error) {
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
+	opts.Opt("ccgo-windows", func(opt string) error { t.windows = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("ccgo-libc", func(opt string) error {
 		t.libc = true
@@ -531,6 +533,9 @@ func (t *task) main() (err error) {
 	}
 
 	t.mingw = detectMingw(hostPredefined)
+	if t.mingw {
+		t.windows = true
+	}
 	if !t.mingw {
 		a := strings.Split(hostPredefined, "\n")
 		wi := 0
