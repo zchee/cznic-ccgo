@@ -85,6 +85,7 @@ var (
 	oTrace      = flag.Bool("trc", false, "Print tested paths.")
 	oTraceF     = flag.Bool("trcf", false, "Print test file content")
 	oTraceO     = flag.Bool("trco", false, "Print test output")
+	oXTags      = flag.String("xtags", "", "passed to go build of TestSQLite")
 
 	gccDir    = filepath.FromSlash("testdata/gcc-9.1.0")
 	gpsdDir   = filepath.FromSlash("testdata/gpsd-3.20/")
@@ -126,6 +127,7 @@ func TestMain(m *testing.M) {
 	}()
 
 	fmt.Printf("test binary compiled for %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Printf("temp dir: %s\n", os.TempDir()) //TODO-
 	if s := os.Getenv("CCGO_CPP"); s != "" {
 		fmt.Printf("CCGO_CPP=%s\n", os.Getenv("CCGO_CPP"))
 	}
@@ -919,10 +921,10 @@ func testSQLite(t *testing.T, dir string) {
 		"-DHAVE_USLEEP",
 		"-DLONGDOUBLE_TYPE=double",
 		"-DSQLITE_DEBUG",
-		"-DSQLITE_DEBUG_OS_TRACE", //TODO-
+		//"-DSQLITE_DEBUG_OS_TRACE", //TODO-
 		"-DSQLITE_DEFAULT_MEMSTATUS=0",
 		"-DSQLITE_ENABLE_DBPAGE_VTAB",
-		"-DSQLITE_FORCE_OS_TRACE", //TODO-
+		//"-DSQLITE_FORCE_OS_TRACE", //TODO-
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
 		"-DSQLITE_MEMDEBUG",
 		"-DSQLITE_THREADSAFE=0",
@@ -967,7 +969,12 @@ func testSQLite(t *testing.T, dir string) {
 	if runtime.GOOS == "windows" {
 		shell = "shell.exe"
 	}
-	if out, err := exec.Command("go", "build", "-o", shell, main).CombinedOutput(); err != nil {
+	args := []string{"build"}
+	if s := *oXTags; s != "" {
+		args = append(args, "-tags", s)
+	}
+	args = append(args, "-o", shell, main)
+	if out, err := exec.Command("go", args...).CombinedOutput(); err != nil {
 		s := strings.TrimSpace(string(out))
 		if s != "" {
 			s += "\n"
@@ -976,7 +983,8 @@ func testSQLite(t *testing.T, dir string) {
 		return
 	}
 
-	out, err := exec.Command(shell, "tmp", ".log stdout", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	// out, err := exec.Command(shell, "tmp", ".log stdout", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	out, err := exec.Command(shell, "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
 	if err != nil {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)
@@ -986,7 +994,7 @@ func testSQLite(t *testing.T, dir string) {
 	}
 
 	if g, e := strings.TrimSpace(string(out)), "462"; g != e {
-		t.Errorf("%q %q", g, e)
+		t.Errorf("got: %s\nexp: %s", g, e)
 	}
 	if *oTraceO {
 		fmt.Printf("%s\n", out)
@@ -1001,7 +1009,7 @@ func testSQLite(t *testing.T, dir string) {
 	}
 
 	if g, e := strings.TrimSpace(string(out)), "546"; g != e {
-		t.Errorf("%q %q", g, e)
+		t.Errorf("got: %s\nexp: %s", g, e)
 	}
 	if *oTraceO {
 		fmt.Printf("%s\n", out)
@@ -1238,9 +1246,9 @@ next:
 			}
 		}
 		d := time.Since(t0) / time.Duration(N)
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == "windows" { //TODO-
 			switch base {
-			case "bisect.c", "fftw.c", "perlin.c": // mingw on windows prints one zero too many for %.4e
+			case "bisect.c", "fftw.c", "perlin.c": // mingw on windows prints one zero too many in some cases
 				r = append(r, &compCertResult{nm, base, d, 0, true, true, true})
 				continue
 			}
@@ -1542,7 +1550,7 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3329111231",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2648215054",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3919255949",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563",
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
