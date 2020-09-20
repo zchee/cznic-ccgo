@@ -146,6 +146,16 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 	// type shall be a brace-enclosed list of initializers for the elements or
 	// named members.
 	if n.Case != cc.InitializerInitList { // '{' InitializerList ',' '}'
+		if n.AssignmentExpression.Operand.IsZero() {
+			switch t.Kind() {
+			case cc.Array, cc.Struct, cc.Union:
+				p.w("%s{}", p.typ(n, t))
+				return
+			default:
+				panic(todo("", n.Position(), k, t))
+			}
+		}
+
 		panic(todo("", p.pos(n)))
 	}
 
@@ -164,12 +174,14 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, tld *tl
 func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
 	p.w("%s%s{", tidyComment("", &n0.Token), p.typ(n, t))
-	switch seenBitfield, seenNonKeyableBitfield := p.checkInitializerBitFields(n0, t); {
+	switch seenBitfield, seenNonKeyableBitfield, zero := p.checkInitializerBitFields(n0, t); {
+	case zero:
+		// nop
 	case !seenBitfield:
 		first := true
 		for list := n; list != nil; list = list.InitializerList {
 			if !first {
-				panic(todo(""))
+				panic(todo("", pos(n)))
 			}
 
 			fld := list.Initializer.Field
@@ -220,7 +232,9 @@ func (p *project) initializerListUnion(f *function, n0 *cc.Initializer, t cc.Typ
 func (p *project) initializerListStruct(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {
 	n := n0.InitializerList
 	p.w("%s%s{", tidyComment("", &n0.Token), p.typ(n, t))
-	switch seenBitfield, seenNonKeyableBitfield := p.checkInitializerBitFields(n0, t); {
+	switch seenBitfield, seenNonKeyableBitfield, zero := p.checkInitializerBitFields(n0, t); {
+	case zero:
+		// nop
 	case !seenBitfield:
 		for list := n; list != nil; list = list.InitializerList {
 			fld := list.Initializer.Field
@@ -286,17 +300,21 @@ func (p *project) collectInitializerBitfields(n *cc.Initializer) (r map[uintptr]
 	return r
 }
 
-func (p *project) checkInitializerBitFields(n *cc.Initializer, t cc.Type) (seenBitfield, seenNonKeyableBitfield bool) {
+func (p *project) checkInitializerBitFields(n *cc.Initializer, t cc.Type) (seenBitfield, seenNonKeyableBitfield, zero bool) {
+	zero = true
 	for _, v := range p.initializerList(n.InitializerList) {
+		if v.Case == cc.InitializerExpr && (v.AssignmentExpression.Operand == nil || !v.AssignmentExpression.Operand.IsZero()) {
+			zero = false
+		}
 		if f := v.Field; f != nil && f.IsBitField() && f.BitFieldWidth() != 0 {
 			seenBitfield = true
 			if !f.BitFieldBlockFirst().IsBitField() {
 				seenNonKeyableBitfield = true
-				return true, true
+				return true, true, zero
 			}
 		}
 	}
-	return seenBitfield, false
+	return seenBitfield, false, zero
 }
 
 func (p *project) initializerListArray(f *function, n0 *cc.Initializer, t cc.Type, tld *tld) {

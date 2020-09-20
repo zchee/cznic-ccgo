@@ -603,6 +603,10 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			return true
 		}
 
+		if x.PostfixExpression == nil || x.PostfixExpression.Operand == nil || x.PostfixExpression.Operand.Type() == nil {
+			return true
+		}
+
 		ft := funcType(x.PostfixExpression.Operand.Type())
 		if ft.Kind() != cc.Function {
 			return true
@@ -1694,6 +1698,8 @@ func (p *project) typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
 		}
 
 		fmt.Fprintf(b, "[%d]%s", t.Len(), t.Elem())
+	case cc.Vector:
+		fmt.Fprintf(b, "[%d]%s", t.Len()/t.Elem().Size(), t.Elem())
 	case cc.Union:
 		structOrUnion = "union"
 		fallthrough
@@ -2001,6 +2007,10 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 		if t.IsVLA() {
 			p.err(nd, "unsupported C type: %v", t)
 		}
+		fmt.Fprintf(&b, "[%d]%s", n, p.typ(nd, t.Elem()))
+		return b.String()
+	case cc.Vector:
+		n := t.Len() / t.Elem().Size()
 		fmt.Fprintf(&b, "[%d]%s", n, p.typ(nd, t.Elem()))
 		return b.String()
 	case cc.Struct, cc.Union:
@@ -8726,7 +8736,60 @@ func (p *project) postfixExpressionValue(f *function, n *cc.PostfixExpression, t
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
-		panic(todo("", p.pos(n)))
+		// Built-in Function: int __builtin_types_compatible_p (type1, type2) You can
+		// use the built-in function __builtin_types_compatible_p to determine whether
+		// two types are the same.
+		//
+		// This built-in function returns 1 if the unqualified versions of the types
+		// type1 and type2 (which are types, not expressions) are compatible, 0
+		// otherwise. The result of this built-in function can be used in integer
+		// constant expressions.
+		//
+		// This built-in function ignores top level qualifiers (e.g., const, volatile).
+		// For example, int is equivalent to const int.
+		//
+		// The type int[] and int[5] are compatible. On the other hand, int and char *
+		// are not compatible, even if the size of their types, on the particular
+		// architecture are the same. Also, the amount of pointer indirection is taken
+		// into account when determining similarity. Consequently, short * is not
+		// similar to short **. Furthermore, two types that are typedefed are
+		// considered compatible if their underlying types are compatible.
+		//
+		// An enum type is not considered to be compatible with another enum type even
+		// if both are compatible with the same integer type; this is what the C
+		// standard specifies. For example, enum {foo, bar} is not similar to enum
+		// {hot, dog}.
+		//
+		// You typically use this function in code whose execution varies depending on
+		// the arguments’ types. For example:
+		//
+		//	#define foo(x)                                                  \
+		//	  ({                                                           \
+		//	    typeof (x) tmp = (x);                                       \
+		//	    if (__builtin_types_compatible_p (typeof (x), long double)) \
+		//	      tmp = foo_long_double (tmp);                              \
+		//	    else if (__builtin_types_compatible_p (typeof (x), double)) \
+		//	      tmp = foo_double (tmp);                                   \
+		//	    else if (__builtin_types_compatible_p (typeof (x), float))  \
+		//	      tmp = foo_float (tmp);                                    \
+		//	    else                                                        \
+		//	      abort ();                                                 \
+		//	    tmp;                                                        \
+		//	  })
+		//
+		// Note: This construct is only available for C.
+		t1 := n.TypeName.Type()
+		t2 := n.TypeName.Type()
+		v := 0
+		switch {
+		case t1.IsArithmeticType() && t2.IsArithmeticType():
+			if t1.Kind() == t2.Kind() {
+				v = 1
+			}
+		default:
+			panic(todo("", p.pos(n), n.TypeName.Type(), n.TypeName2.Type()))
+		}
+		p.w(" %d ", v)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -9839,7 +9902,7 @@ func (p *project) primaryExpressionDecay(f *function, n *cc.PrimaryExpression, t
 	case cc.PrimaryExpressionString: // STRINGLITERAL
 		p.w("%s", p.stringLiteral(n.Operand.Value()))
 	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
-		panic(todo("", p.pos(n)))
+		p.w("%s", p.wideStringLiteral(n.Operand.Value(), 0))
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		p.expression(f, n.Expression, t, mode, flags)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
@@ -10092,11 +10155,11 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 	case cc.PrimaryExpressionChar: // CHARCONST
 		p.charConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionLChar: // LONGCHARCONST
-		panic(todo("", p.pos(n)))
+		p.charConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionString: // STRINGLITERAL
 		p.w("%s", p.stringLiteral(n.Operand.Value()))
 	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
-		panic(todo("", p.pos(n)))
+		p.w("%s", p.wideStringLiteral(n.Operand.Value(), 0))
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		if flags&fOutermost == 0 {
 			p.w("(")
@@ -10235,6 +10298,8 @@ func (p *project) charConst(n cc.Node, src string, op cc.Operand, to cc.Type, fl
 			panic(todo("", p.pos(n)))
 		}
 
+		on = uint64(x)
+	case cc.Uint64Value:
 		on = uint64(x)
 	default:
 		panic(todo("%T(%v)", x, x))
