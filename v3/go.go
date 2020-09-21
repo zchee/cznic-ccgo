@@ -31,6 +31,7 @@ var (
 	idAtomicStoreN = cc.String("__atomic_store_n")       // void __atomic_store_n (type *ptr, type val, int memorder)
 	idBp           = cc.String("bp")
 	idCAPI         = cc.String("CAPI")
+	idChooseExpr   = cc.String("__builtin_choose_expr")
 	idEnviron      = cc.String("environ")
 	idMain         = cc.String("main")
 	idMulOverflow  = cc.String("__builtin_mul_overflow") // bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
@@ -1261,6 +1262,7 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
+	trc("%v: %s", origin(2), fmt.Sprintf(s, args...)) //TODO-
 	if !p.task.allErrors && len(p.errors) >= 10 {
 		return
 	}
@@ -8193,6 +8195,7 @@ func (p *project) postfixExpressionBool(f *function, n *cc.PostfixExpression, t 
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -8792,18 +8795,7 @@ func (p *project) postfixExpressionValue(f *function, n *cc.PostfixExpression, t
 		//	  })
 		//
 		// Note: This construct is only available for C.
-		t1 := n.TypeName.Type()
-		t2 := n.TypeName.Type()
-		v := 0
-		switch {
-		case t1.IsArithmeticType() && t2.IsArithmeticType():
-			if t1.Kind() == t2.Kind() {
-				v = 1
-			}
-		default:
-			panic(todo("", p.pos(n), n.TypeName.Type(), n.TypeName2.Type()))
-		}
-		p.w(" %d ", v)
+		p.w(" %d ", n.Operand.Value)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
