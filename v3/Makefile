@@ -96,8 +96,7 @@ later:
 	@grep -n $(grep) MAYBE * || true
 
 mem: clean
-	# go test -run @ -dev -bench . -memprofile mem.out -timeout 24h
-	go test -run TestSQLiteGo -memprofile mem.out -timeout 24h
+	go test -run Mem -mem -memprofile mem.out -timeout 24h
 	go tool pprof -lines -web -alloc_space *.test mem.out
 
 nuke: clean

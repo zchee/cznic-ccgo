@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"hash/maphash"
 	"io/ioutil"
-	//TODO- "runtime/debug"
 	"math"
 	"math/big"
 	"os/exec"
@@ -18,25 +18,34 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"modernc.org/cc/v3"
 	"modernc.org/mathutil"
 )
 
 var (
-	idAligned      = cc.String("aligned")          // int __attribute__ ((aligned (8))) foo;
-	idAtomicLoadN  = cc.String("__atomic_load_n")  // type __atomic_load_n (type *ptr, int memorder)
-	idAtomicStoreN = cc.String("__atomic_store_n") // void __atomic_store_n (type *ptr, type val, int memorder)
+	idAddOverflow  = cc.String("__builtin_add_overflow") // bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
+	idAligned      = cc.String("aligned")                // int __attribute__ ((aligned (8))) foo;
+	idAtomicLoadN  = cc.String("__atomic_load_n")        // type __atomic_load_n (type *ptr, int memorder)
+	idAtomicStoreN = cc.String("__atomic_store_n")       // void __atomic_store_n (type *ptr, type val, int memorder)
+	idBp           = cc.String("bp")
+	idCAPI         = cc.String("CAPI")
 	idEnviron      = cc.String("environ")
 	idMain         = cc.String("main")
-	idPacked       = cc.String("packed") // __attribute__((packed))
+	idMulOverflow  = cc.String("__builtin_mul_overflow") // bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
+	idPacked       = cc.String("packed")                 // __attribute__((packed))
+	idSubOverflow  = cc.String("__builtin_sub_overflow") // bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
+	idTls          = cc.String("tls")
+	idTs           = cc.String("ts")
+	idVa           = cc.String("va")
 	idVaArg        = cc.String("__ccgo_va_arg")
 	idVaEnd        = cc.String("__ccgo_va_end")
 	idVaList       = cc.String("va_list")
 	idVaStart      = cc.String("__ccgo_va_start")
-	idAddOverflow  = cc.String("__builtin_add_overflow") // bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
-	idSubOverflow  = cc.String("__builtin_sub_overflow") // bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
-	idMulOverflow  = cc.String("__builtin_mul_overflow") // bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
+	idWtext        = cc.String("wtext")
+
+	bytesBufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 
 	oTraceG bool
 	oTraceW bool
@@ -158,7 +167,8 @@ func tidyCommentString(s string) (r string) {
 	}()
 
 	s = strings.ReplaceAll(s, "\f", "")
-	var b strings.Builder
+	b := bytesBufferPool.Get().(*bytes.Buffer)
+	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
 	for len(s) != 0 {
 		c := s[0]
 		s = s[1:]
@@ -187,7 +197,8 @@ func tidyCommentString(s string) (r string) {
 				}
 			}
 		case '*': // block comment start
-			var b2 strings.Builder
+			b2 := bytesBufferPool.Get().(*bytes.Buffer)
+			defer func() { b2.Reset(); bytesBufferPool.Put(b2) }()
 			for {
 				c := s[0]
 				s = s[1:]
@@ -218,24 +229,24 @@ func tidyCommentString(s string) (r string) {
 			if len(a) == 1 { // /* foo */ form
 				if nl {
 					s = s[1:]
-					fmt.Fprintf(&b, "//%s\n", s2)
+					fmt.Fprintf(b, "//%s\n", s2)
 					break
 				}
 
-				fmt.Fprintf(&b, "/*%s*/", s2)
+				fmt.Fprintf(b, "/*%s*/", s2)
 				break
 			}
 
 			if !nl {
-				fmt.Fprintf(&b, "/*%s*/", s2)
+				fmt.Fprintf(b, "/*%s*/", s2)
 				break
 			}
 
 			// Block comment followed by a newline can be safely replaced by a sequence of
 			// line comments.  Try to enhance the comment.
-			if commentForm1(&b, a) ||
-				commentForm2(&b, a) ||
-				commentForm3(&b, a) {
+			if commentForm1(b, a) ||
+				commentForm2(b, a) ||
+				commentForm3(b, a) {
 				break
 			}
 
@@ -243,9 +254,9 @@ func tidyCommentString(s string) (r string) {
 			if a[len(a)-1] == "" {
 				a = a[:len(a)-1]
 			}
-			fmt.Fprintf(&b, "//%s", a[0])
+			fmt.Fprintf(b, "//%s", a[0])
 			for _, v := range a[1:] {
-				fmt.Fprintf(&b, "\n//%s", v)
+				fmt.Fprintf(b, "\n//%s", v)
 			}
 		default:
 			b.WriteByte(c)
@@ -255,7 +266,7 @@ func tidyCommentString(s string) (r string) {
 	return b.String()
 }
 
-func commentForm1(b *strings.Builder, a []string) bool {
+func commentForm1(b *bytes.Buffer, a []string) bool {
 	// Example
 	//
 	//	/*
@@ -298,7 +309,7 @@ func commentForm1(b *strings.Builder, a []string) bool {
 	return true
 }
 
-func commentForm2(b *strings.Builder, a []string) bool {
+func commentForm2(b *bytes.Buffer, a []string) bool {
 	// Example
 	//
 	//	/**************************** sqlite3_column_  *******************************
@@ -333,7 +344,7 @@ func commentForm2(b *strings.Builder, a []string) bool {
 	return true
 }
 
-func commentForm3(b *strings.Builder, a []string) bool {
+func commentForm3(b *bytes.Buffer, a []string) bool {
 	// Example
 	//
 	//	/* Call sqlite3_shutdown() once before doing anything else. This is to
@@ -501,9 +512,9 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 		unusedLabels:        map[cc.StringID]struct{}{},
 		vaLists:             map[*cc.PostfixExpression]uintptr{},
 	}
-	f.tlsName = f.scope.take("tls")
+	f.tlsName = f.scope.take(idTls)
 	if t.IsVariadic() {
-		f.vaName = f.scope.take("va")
+		f.vaName = f.scope.take(idVa)
 	}
 	f.layoutLocals(nil, n.CompoundStatement, params)
 	var extern []cc.StringID
@@ -520,7 +531,7 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 		block := f.blocks[v]
 		for _, v := range extern {
 			if tld := f.project.externs[v]; tld != nil {
-				block.scope.take(tld.name)
+				block.scope.take(cc.String(tld.name))
 			}
 		}
 	}
@@ -561,7 +572,7 @@ func (f *function) renameLabels() {
 	f.labels = newScope()
 	f.labelNames = map[cc.StringID]string{}
 	for _, id := range a {
-		f.labelNames[id] = f.labels.take(id.String())
+		f.labelNames[id] = f.labels.take(id)
 	}
 }
 
@@ -1030,9 +1041,9 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 			work = append(work, item{ds, list.InitDeclarator.Declarator})
 		}
 	}
-	block.scope.take(f.tlsName)
+	block.scope.take(cc.String(f.tlsName))
 	if f.vaName != "" {
-		block.scope.take(f.vaName)
+		block.scope.take(cc.String(f.vaName))
 	}
 	for _, item := range work {
 		d := item.d
@@ -1053,7 +1064,7 @@ func (f *function) layoutBlocks(n *cc.CompoundStatement) {
 			local.forceRead = true
 		}
 		f.locals[d] = local
-		local.name = block.scope.take(d.Name().String())
+		local.name = block.scope.take(d.Name())
 	}
 }
 
@@ -1128,7 +1139,7 @@ func (n *enumSpec) emit(p *project) {
 }
 
 type typedef struct {
-	sig string
+	sig uint64
 	tld *tld
 }
 
@@ -1161,6 +1172,7 @@ type project struct {
 	tsName             string
 	tsNameP            string
 	tsOffs             map[cc.StringID]uintptr
+	typeSigHash        maphash.Hash
 	typedefTypes       map[cc.StringID]*typedef
 	typedefsEmited     map[string]struct{}
 	verifyStructs      map[string]cc.Type
@@ -1210,24 +1222,24 @@ func newProject(t *task) (*project, error) {
 		verifyStructs:  map[string]cc.Type{},
 		wanted:         map[*cc.Declarator]struct{}{},
 	}
-	p.scope.take("CAPI")
+	p.scope.take(idCAPI)
 	for _, v := range t.imported {
 		var err error
 		if v.name, v.exports, err = t.capi(v.path); err != nil {
 			return nil, err
 		}
 
-		v.qualifier = p.scope.take(v.name) + "."
+		v.qualifier = p.scope.take(cc.String(v.name)) + "."
 		for k := range v.exports {
 			if p.imports[k] == nil {
 				p.imports[k] = v
 			}
 		}
 	}
-	p.tsNameP = p.scope.take("ts")
-	p.tsName = p.scope.take("ts")
-	p.ts4NameP = p.scope.take("wtext")
-	p.ts4Name = p.scope.take("wtext")
+	p.tsNameP = p.scope.take(idTs)
+	p.tsName = p.scope.take(idTs)
+	p.ts4NameP = p.scope.take(idWtext)
+	p.ts4Name = p.scope.take(idWtext)
 	if err := p.layout(); err != nil {
 		return nil, err
 	}
@@ -1243,7 +1255,7 @@ func (p *project) newScope() scope {
 	}
 	sort.Slice(a, func(i, j int) bool { return a[i].String() < a[j].String() })
 	for _, k := range a {
-		s.take(p.structs[k].name)
+		s.take(cc.String(p.structs[k].name))
 	}
 	return s
 }
@@ -1382,7 +1394,7 @@ func (p *project) layoutDefines() error {
 			default:
 				name = prefix + name
 			}
-			name = p.scope.take(name)
+			name = p.scope.take(cc.String(name))
 			p.defines = append(p.defines, fmt.Sprintf("%s = %s", name, src))
 		}
 	}
@@ -1532,7 +1544,7 @@ func (p *project) layoutEnums() error {
 		case exportPrefix:
 			name = p.task.exportEnums + name
 		}
-		name = p.scope.take(name)
+		name = p.scope.take(cc.String(name))
 		p.enumConsts[nm] = name
 	}
 	return nil
@@ -1556,7 +1568,7 @@ func (p *project) layoutStaticLocals() error {
 						break
 					}
 
-					p.tlds[x] = &tld{name: p.scope.take(x.Name().String())}
+					p.tlds[x] = &tld{name: p.scope.take(x.Name())}
 				}
 				return true
 			})
@@ -1618,7 +1630,7 @@ func (p *project) layoutStructs() error {
 		case exportPrefix:
 			name = p.task.exportExterns + name
 		}
-		v.name = p.scope.take(name)
+		v.name = p.scope.take(cc.String(name))
 	}
 	for _, k := range tags {
 		v := m[k]
@@ -1667,13 +1679,13 @@ func (p *project) captureStructTags(n cc.Node, t cc.Type, m map[cc.StringID]*tag
 	}
 }
 
-func (p *project) typeSignature(n cc.Node, t cc.Type) (r string) {
-	var b strings.Builder
-	p.typeSignature2(n, &b, t)
-	return b.String()
+func (p *project) typeSignature(n cc.Node, t cc.Type) (r uint64) {
+	p.typeSigHash.Reset()
+	p.typeSignature2(n, &p.typeSigHash, t)
+	return p.typeSigHash.Sum64()
 }
 
-func (p *project) typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
+func (p *project) typeSignature2(n cc.Node, b *maphash.Hash, t cc.Type) {
 	t = t.Alias()
 	if t.IsIntegerType() {
 		if !t.IsSignedType() {
@@ -1699,7 +1711,7 @@ func (p *project) typeSignature2(n cc.Node, b *strings.Builder, t cc.Type) {
 
 		fmt.Fprintf(b, "[%d]%s", t.Len(), t.Elem())
 	case cc.Vector:
-		fmt.Fprintf(b, "[%d]%s", t.Len()/t.Elem().Size(), t.Elem())
+		fmt.Fprintf(b, "[%d]%s", t.Len(), t.Elem())
 	case cc.Union:
 		structOrUnion = "union"
 		fallthrough
@@ -1749,14 +1761,15 @@ func (p *project) structType(n cc.Node, t cc.Type) string {
 }
 
 func (p *project) structLiteral(n cc.Node, t cc.Type) string {
-	var b strings.Builder
+	b := bytesBufferPool.Get().(*bytes.Buffer)
+	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
 	switch t.Kind() {
 	case cc.Struct:
 		info := p.structLayout(n, t)
 		// trc("%v:\n%s", p.pos(n), dumpLayout(t, info))
 		b.WriteString("struct {")
 		if info.forceAlign {
-			fmt.Fprintf(&b, "_[0]uint%d;", 8*t.Align())
+			fmt.Fprintf(b, "_[0]uint%d;", 8*t.Align())
 		}
 		var max uintptr
 		for _, off := range info.offs {
@@ -1773,7 +1786,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 					}
 					a = append(a, fmt.Sprintf("%s %s: %d", f.Type(), f.Name(), f.BitFieldWidth()))
 				}
-				fmt.Fprintf(&b, "/* %s */", strings.Join(a, ", "))
+				fmt.Fprintf(b, "/* %s */", strings.Join(a, ", "))
 				continue
 			}
 
@@ -1782,7 +1795,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			case pad < 0:
 				continue
 			case pad > 0:
-				fmt.Fprintf(&b, "_ [%d]byte;", pad)
+				fmt.Fprintf(b, "_ [%d]byte;", pad)
 			}
 			switch {
 			case f.IsBitField():
@@ -1801,18 +1814,18 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 				if nmf == nil {
 					nmf = f
 				}
-				fmt.Fprintf(&b, "%s uint%d /* %s */;", p.bitFieldName(n, nmf), f.BitFieldBlockWidth(), strings.Join(a, ", "))
+				fmt.Fprintf(b, "%s uint%d /* %s */;", p.bitFieldName(n, nmf), f.BitFieldBlockWidth(), strings.Join(a, ", "))
 			default:
 				if t := f.Type(); t.Kind() == cc.Array && t.IsIncomplete() || t.Size() == 0 {
 					break
 				}
 
 				max += f.Type().Size()
-				fmt.Fprintf(&b, "%s %s;", p.fieldName2(n, f), p.typ(nil, f.Type()))
+				fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, f.Type()))
 			}
 		}
 		if info.padAfter != 0 {
-			fmt.Fprintf(&b, "_ [%d]byte;", info.padAfter)
+			fmt.Fprintf(b, "_ [%d]byte;", info.padAfter)
 		}
 		b.WriteByte('}')
 	case cc.Union:
@@ -1830,19 +1843,19 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			al0 = f.BitFieldBlockWidth() >> 3
 		}
 		if al != uintptr(al0) {
-			fmt.Fprintf(&b, "_ [0]uint%d;", 8*al)
+			fmt.Fprintf(b, "_ [0]uint%d;", 8*al)
 		}
 		fsz := ft.Size()
 		switch {
 		case f.IsBitField():
-			fmt.Fprintf(&b, "%s ", p.fieldName2(n, f))
-			fmt.Fprintf(&b, "uint%d;", f.BitFieldBlockWidth())
+			fmt.Fprintf(b, "%s ", p.fieldName2(n, f))
+			fmt.Fprintf(b, "uint%d;", f.BitFieldBlockWidth())
 			fsz = uintptr(f.BitFieldBlockWidth()) >> 3
 		default:
-			fmt.Fprintf(&b, "%s %s;", p.fieldName2(n, f), p.typ(nil, ft))
+			fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, ft))
 		}
 		if pad := sz - fsz; pad != 0 {
-			fmt.Fprintf(&b, "_ [%d]byte;", pad)
+			fmt.Fprintf(b, "_ [%d]byte;", pad)
 		}
 		b.WriteByte('}')
 	default:
@@ -1983,7 +1996,8 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 		}
 	}
 
-	var b strings.Builder
+	b := bytesBufferPool.Get().(*bytes.Buffer)
+	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
 	if t.IsIntegerType() {
 		if !t.IsSignedType() {
 			b.WriteByte('u')
@@ -1991,7 +2005,7 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 		if t.Size() > 8 {
 			p.err(nd, "unsupported C type: %v", t)
 		}
-		fmt.Fprintf(&b, "int%d", 8*t.Size())
+		fmt.Fprintf(b, "int%d", 8*t.Size())
 		return b.String()
 	}
 
@@ -2007,11 +2021,11 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 		if t.IsVLA() {
 			p.err(nd, "unsupported C type: %v", t)
 		}
-		fmt.Fprintf(&b, "[%d]%s", n, p.typ(nd, t.Elem()))
+		fmt.Fprintf(b, "[%d]%s", n, p.typ(nd, t.Elem()))
 		return b.String()
 	case cc.Vector:
-		n := t.Len() / t.Elem().Size()
-		fmt.Fprintf(&b, "[%d]%s", n, p.typ(nd, t.Elem()))
+		n := t.Len()
+		fmt.Fprintf(b, "[%d]%s", n, p.typ(nd, t.Elem()))
 		return b.String()
 	case cc.Struct, cc.Union:
 		if tag := t.Tag(); tag != 0 {
@@ -2057,7 +2071,7 @@ func (p *project) layoutTLDs() error {
 				case *cc.Declarator:
 					if x.Linkage == cc.External {
 						p.isMain = true
-						p.scope.take("main")
+						p.scope.take(idMain)
 						break out
 					}
 				}
@@ -2126,7 +2140,7 @@ func (p *project) layoutTLDs() error {
 				case exportPrefix:
 					name = p.task.exportExterns + name
 				}
-				name = p.scope.take(name)
+				name = p.scope.take(cc.String(name))
 				if isMain {
 					p.mainName = name
 				}
@@ -2144,7 +2158,7 @@ func (p *project) layoutTLDs() error {
 				if token.IsExported(name) && !p.isMain && p.task.exportExternsValid {
 					name = "s" + name
 				}
-				tld := &tld{name: p.scope.take(name)}
+				tld := &tld{name: p.scope.take(cc.String(name))}
 				for _, v := range ast.Scope[nm] {
 					if d, ok := v.(*cc.Declarator); ok {
 						p.tlds[d] = tld
@@ -2183,7 +2197,7 @@ func (p *project) layoutTLDs() error {
 					case exportPrefix:
 						name = p.task.exportTypedefs + name
 					}
-					tld := &tld{name: p.scope.take(name)}
+					tld := &tld{name: p.scope.take(cc.String(name))}
 					p.typedefTypes[d.Name()] = &typedef{p.typeSignature(d, d.Type()), tld}
 					for _, v := range ast.Scope[nm] {
 						if d, ok := v.(*cc.Declarator); ok {
@@ -3806,7 +3820,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	comment := fmt.Sprintf("/* %v: */", p.pos(d))
 	if need := f.off; need != 0 {
 		scope := f.blocks[n.CompoundStatement].scope
-		f.bpName = scope.take("bp")
+		f.bpName = scope.take(idBp)
 		p.w("{%s\n%s := %s.Alloc(%d)\n", comment, f.bpName, f.tlsName, need)
 		p.w("defer %s.Free(%d)\n", f.tlsName, need)
 		for _, v := range d.Type().Parameters() {
@@ -10931,7 +10945,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 
 		v := "ok"
 		if !p.pass1 {
-			v = f.scope.take(v)
+			v = f.scope.take(cc.String(v))
 		}
 		p.w("for %v := true; %[1]v; %[1]v = ", v)
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)

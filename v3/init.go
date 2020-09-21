@@ -303,7 +303,7 @@ func (p *project) collectInitializerBitfields(n *cc.Initializer) (r map[uintptr]
 func (p *project) checkInitializerBitFields(n *cc.Initializer, t cc.Type) (seenBitfield, seenNonKeyableBitfield, zero bool) {
 	zero = true
 	for _, v := range p.initializerList(n.InitializerList) {
-		if v.Case == cc.InitializerExpr && (v.AssignmentExpression.Operand == nil || !v.AssignmentExpression.Operand.IsZero()) {
+		if v.Case != cc.InitializerExpr || v.AssignmentExpression.Operand == nil || !v.AssignmentExpression.Operand.IsZero() {
 			zero = false
 		}
 		if f := v.Field; f != nil && f.IsBitField() && f.BitFieldWidth() != 0 {

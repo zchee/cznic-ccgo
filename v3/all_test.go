@@ -80,6 +80,7 @@ var (
 	oCSmith     = flag.Duration("csmith", 2*time.Minute, "")
 	oDev        = flag.Bool("dev", false, "Enable developer tests/downloads.")
 	oDownload   = flag.Bool("download", false, "Download missing testdata. Add -dev to download also 100+ MB of developer resources.")
+	oMem        = flag.Bool("mem", false, "")
 	oRE         = flag.String("re", "", "")
 	oStackTrace = flag.Bool("trcstack", false, "")
 	oTrace      = flag.Bool("trc", false, "Print tested paths.")
@@ -1665,4 +1666,336 @@ out:
 	}
 	d := time.Since(t0)
 	t.Logf("files %v, bytes %v, ok %v in %v", h(files), h(size), h(ok), d)
+}
+
+func TestMem(t *testing.T) {
+	if !*oMem {
+		t.Skip("not enabled")
+		return
+	}
+
+	const args0 = `ccgo
+-D__printf__=printf
+-ccgo-export-defines
+
+-ccgo-export-enums
+
+-ccgo-export-externs
+X
+-ccgo-export-fields
+F
+-ccgo-export-structs
+
+-ccgo-export-typedefs
+
+-ccgo-hide
+TclpCreateProcess
+-ccgo-long-double-is-double
+-ccgo-pkgname
+tcl
+-o
+{{0}}
+../compat/zlib/adler32.c
+../compat/zlib/compress.c
+../compat/zlib/crc32.c
+../compat/zlib/deflate.c
+../compat/zlib/infback.c
+../compat/zlib/inffast.c
+../compat/zlib/inflate.c
+../compat/zlib/inftrees.c
+../compat/zlib/trees.c
+../compat/zlib/uncompr.c
+../compat/zlib/zutil.c
+-DBUILD_tcl
+-I.
+-I{{1}}/testdata/tcl8.6.10/unix
+-I{{1}}/testdata/tcl8.6.10/generic
+-I{{1}}/testdata/tcl8.6.10/libtommath
+-DPACKAGE_NAME="tcl"
+-DPACKAGE_TARNAME="tcl"
+-DPACKAGE_VERSION="8.6"
+-DPACKAGE_STRING="tcl 8.6"
+-DPACKAGE_BUGREPORT=""
+-DSTDC_HEADERS=1
+-DHAVE_SYS_TYPES_H=1
+-DHAVE_SYS_STAT_H=1
+-DHAVE_STDLIB_H=1
+-DHAVE_STRING_H=1
+-DHAVE_MEMORY_H=1
+-DHAVE_STRINGS_H=1
+-DHAVE_INTTYPES_H=1
+-DHAVE_STDINT_H=1
+-DHAVE_UNISTD_H=1
+-DHAVE_SYS_PARAM_H=1
+-DTCL_CFGVAL_ENCODING="iso8859-1"
+-DHAVE_ZLIB=1
+-DMODULE_SCOPE=extern __attribute__((__visibility__("hidden")))
+-DHAVE_HIDDEN=1
+-DHAVE_CAST_TO_UNION=1
+-DTCL_SHLIB_EXT=""
+-DNDEBUG=1
+-DTCL_CFG_OPTIMIZED=1
+-DTCL_TOMMATH=1
+-DMP_PREC=4
+-D_LARGEFILE64_SOURCE=1
+-DTCL_WIDE_INT_IS_LONG=1
+-DHAVE_GETCWD=1
+-DHAVE_MKSTEMP=1
+-DHAVE_OPENDIR=1
+-DHAVE_STRTOL=1
+-DHAVE_WAITPID=1
+-DHAVE_GETNAMEINFO=1
+-DHAVE_GETADDRINFO=1
+-DHAVE_FREEADDRINFO=1
+-DHAVE_GAI_STRERROR=1
+-DHAVE_STRUCT_ADDRINFO=1
+-DHAVE_STRUCT_IN6_ADDR=1
+-DHAVE_STRUCT_SOCKADDR_IN6=1
+-DHAVE_STRUCT_SOCKADDR_STORAGE=1
+-DHAVE_TERMIOS_H=1
+-DHAVE_SYS_IOCTL_H=1
+-DHAVE_SYS_TIME_H=1
+-DTIME_WITH_SYS_TIME=1
+-DHAVE_GMTIME_R=1
+-DHAVE_LOCALTIME_R=1
+-DHAVE_MKTIME=1
+-DHAVE_TM_GMTOFF=1
+-DHAVE_TIMEZONE_VAR=1
+-DHAVE_STRUCT_STAT_ST_BLOCKS=1
+-DHAVE_STRUCT_STAT_ST_BLKSIZE=1
+-DHAVE_BLKCNT_T=1
+-DHAVE_INTPTR_T=1
+-DHAVE_UINTPTR_T=1
+-DNO_UNION_WAIT=1
+-DHAVE_SIGNED_CHAR=1
+-DHAVE_LANGINFO=1
+-DHAVE_MKSTEMPS=1
+-DHAVE_FTS=1
+-DTCL_UNLOAD_DLLS=1
+-DSTATIC_BUILD
+-DMP_FIXED_CUTOFFS
+-DMP_NO_STDINT
+-DCFG_INSTALL_LIBDIR="/usr/local/lib"
+-DCFG_INSTALL_BINDIR="/usr/local/bin"
+-DCFG_INSTALL_SCRDIR="/usr/local/lib/tcl8.6"
+-DCFG_INSTALL_INCDIR="/usr/local/include"
+-DCFG_INSTALL_DOCDIR="/usr/local/man"
+-DCFG_RUNTIME_LIBDIR="/usr/local/lib"
+-DCFG_RUNTIME_BINDIR="/usr/local/bin"
+-DCFG_RUNTIME_SCRDIR="/usr/local/lib/tcl8.6"
+-DCFG_RUNTIME_INCDIR="/usr/local/include"
+-DCFG_RUNTIME_DOCDIR="/usr/local/man"
+-DTCL_LIBRARY="/usr/local/lib/tcl8.6"
+-DTCL_PACKAGE_PATH="/usr/local/lib "
+-UHAVE_CAST_TO_UNION
+{{1}}/testdata/tcl8.6.10/generic/regcomp.c
+{{1}}/testdata/tcl8.6.10/generic/regexec.c
+{{1}}/testdata/tcl8.6.10/generic/regfree.c
+{{1}}/testdata/tcl8.6.10/generic/regerror.c
+{{1}}/testdata/tcl8.6.10/generic/tclAlloc.c
+{{1}}/testdata/tcl8.6.10/generic/tclAssembly.c
+{{1}}/testdata/tcl8.6.10/generic/tclAsync.c
+{{1}}/testdata/tcl8.6.10/generic/tclBasic.c
+{{1}}/testdata/tcl8.6.10/generic/tclBinary.c
+{{1}}/testdata/tcl8.6.10/generic/tclCkalloc.c
+{{1}}/testdata/tcl8.6.10/generic/tclClock.c
+{{1}}/testdata/tcl8.6.10/generic/tclCmdAH.c
+{{1}}/testdata/tcl8.6.10/generic/tclCmdIL.c
+{{1}}/testdata/tcl8.6.10/generic/tclCmdMZ.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompCmds.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompCmdsGR.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompCmdsSZ.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompExpr.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompile.c
+{{1}}/testdata/tcl8.6.10/generic/tclConfig.c
+{{1}}/testdata/tcl8.6.10/generic/tclDate.c
+{{1}}/testdata/tcl8.6.10/generic/tclDictObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclDisassemble.c
+{{1}}/testdata/tcl8.6.10/generic/tclEncoding.c
+{{1}}/testdata/tcl8.6.10/generic/tclEnsemble.c
+{{1}}/testdata/tcl8.6.10/generic/tclEnv.c
+{{1}}/testdata/tcl8.6.10/generic/tclEvent.c
+{{1}}/testdata/tcl8.6.10/generic/tclExecute.c
+{{1}}/testdata/tcl8.6.10/generic/tclFCmd.c
+{{1}}/testdata/tcl8.6.10/generic/tclFileName.c
+{{1}}/testdata/tcl8.6.10/generic/tclGet.c
+{{1}}/testdata/tcl8.6.10/generic/tclHash.c
+{{1}}/testdata/tcl8.6.10/generic/tclHistory.c
+{{1}}/testdata/tcl8.6.10/generic/tclIndexObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclInterp.c
+{{1}}/testdata/tcl8.6.10/generic/tclIO.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOCmd.c
+{{1}}/testdata/tcl8.6.10/generic/tclIORChan.c
+{{1}}/testdata/tcl8.6.10/generic/tclIORTrans.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOGT.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOSock.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOUtil.c
+{{1}}/testdata/tcl8.6.10/generic/tclLink.c
+{{1}}/testdata/tcl8.6.10/generic/tclListObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclLiteral.c
+{{1}}/testdata/tcl8.6.10/generic/tclLoad.c
+{{1}}/testdata/tcl8.6.10/generic/tclMain.c
+{{1}}/testdata/tcl8.6.10/generic/tclNamesp.c
+{{1}}/testdata/tcl8.6.10/generic/tclNotify.c
+{{1}}/testdata/tcl8.6.10/generic/tclObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclOptimize.c
+{{1}}/testdata/tcl8.6.10/generic/tclPanic.c
+{{1}}/testdata/tcl8.6.10/generic/tclParse.c
+{{1}}/testdata/tcl8.6.10/generic/tclPathObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclPipe.c
+{{1}}/testdata/tcl8.6.10/generic/tclPkg.c
+{{1}}/testdata/tcl8.6.10/generic/tclPkgConfig.c
+{{1}}/testdata/tcl8.6.10/generic/tclPosixStr.c
+{{1}}/testdata/tcl8.6.10/generic/tclPreserve.c
+{{1}}/testdata/tcl8.6.10/generic/tclProc.c
+{{1}}/testdata/tcl8.6.10/generic/tclRegexp.c
+{{1}}/testdata/tcl8.6.10/generic/tclResolve.c
+{{1}}/testdata/tcl8.6.10/generic/tclResult.c
+{{1}}/testdata/tcl8.6.10/generic/tclScan.c
+{{1}}/testdata/tcl8.6.10/generic/tclStringObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclStrToD.c
+{{1}}/testdata/tcl8.6.10/generic/tclThread.c
+{{1}}/testdata/tcl8.6.10/generic/tclThreadAlloc.c
+{{1}}/testdata/tcl8.6.10/generic/tclThreadJoin.c
+{{1}}/testdata/tcl8.6.10/generic/tclThreadStorage.c
+{{1}}/testdata/tcl8.6.10/generic/tclStubInit.c
+{{1}}/testdata/tcl8.6.10/generic/tclTimer.c
+{{1}}/testdata/tcl8.6.10/generic/tclTrace.c
+{{1}}/testdata/tcl8.6.10/generic/tclUtf.c
+{{1}}/testdata/tcl8.6.10/generic/tclUtil.c
+{{1}}/testdata/tcl8.6.10/generic/tclVar.c
+{{1}}/testdata/tcl8.6.10/generic/tclZlib.c
+{{1}}/testdata/tcl8.6.10/generic/tclTomMathInterface.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixChan.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixEvent.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixFCmd.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixFile.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixPipe.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixSock.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixTime.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixInit.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixThrd.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixCompat.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixNotfy.c
+{{1}}/testdata/tcl8.6.10/generic/tclOO.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOBasic.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOCall.c
+{{1}}/testdata/tcl8.6.10/generic/tclOODefineCmds.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOInfo.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOMethod.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOStubInit.c
+{{1}}/testdata/tcl8.6.10/generic/tclLoadNone.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_reverse.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_mul_digs_fast.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_sqr_fast.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_add.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_and.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_add_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_clamp.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_clear.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_clear_multi.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cmp.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cmp_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cmp_mag.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cnt_lsb.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_copy.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_count_bits.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_2.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_2d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_3.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_exch.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_expt_u32.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_grow.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_copy.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_multi.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_set.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_size.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_karatsuba_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_karatsuba_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_balance_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_lshd.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mod.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mod_2d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul_2.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul_2d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_neg.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_or.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_radix_size.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_radix_smap.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_read_radix.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_rshd.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_set.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_shrink.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sqrt.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sub.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sub_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_signed_rsh.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_to_ubin.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_toom_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_toom_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_to_radix.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_ubin_size.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_xor.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_zero.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_add.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_mul_digs.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_sub.c`
+
+	dir, err := ioutil.TempDir("", "tcl-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(dir)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Chdir(cwd)
+
+	out := filepath.Join(dir, "x.go")
+	s := strings.Replace(args0, "{{0}}", out, 1)
+	s = strings.ReplaceAll(s, "{{1}}", cwd)
+	args := strings.Split(s, "\n")
+
+	if err := os.Chdir(filepath.FromSlash("testdata/tcl8.6.10/unix")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := newTask(args, nil, nil).main(); err != nil {
+		t.Fatalf("%s\n", err)
+	}
+}
+
+func newCmd(stdout, stderr io.Writer, bin string, args ...string) *exec.Cmd {
+	r := exec.Command(bin, args...)
+	r.Stdout = multiWriter(os.Stdout, stdout)
+	r.Stderr = multiWriter(os.Stderr, stderr)
+	return r
+}
+
+func multiWriter(w ...io.Writer) io.Writer {
+	var a []io.Writer
+	for _, v := range w {
+		if v != nil {
+			a = append(a, v)
+		}
+	}
+	switch len(a) {
+	case 0:
+		panic("internal error")
+	case 1:
+		return a[0]
+	default:
+		return io.MultiWriter(a...)
+	}
 }

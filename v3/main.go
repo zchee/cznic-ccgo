@@ -140,8 +140,6 @@ int ms_printf(const char *format, ...);
 int ms_scanf(const char *format, ...);
 #define _VA_LIST_DEFINED
 #define __extension__
-#else
-#define __attribute__(x)
 #endif
 
 __UINT16_TYPE__ __builtin_bswap16 (__UINT16_TYPE__ x);
