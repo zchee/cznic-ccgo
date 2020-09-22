@@ -89,7 +89,7 @@ edit:
 
 editor:
 	gofmt -l -s -w *.go
-	go build -o $(GOPATH)/bin/ccgo
+	go build -v -o $(GOPATH)/bin/ccgo
 
 later:
 	@grep -n $(grep) LATER * || true

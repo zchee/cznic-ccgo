@@ -15,6 +15,7 @@ import (
 	"math/big"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -1262,7 +1263,7 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
-	trc("%v: %s", origin(2), fmt.Sprintf(s, args...)) //TODO-
+	// trc("%v: %s", origin(2), fmt.Sprintf(s, args...)) //TODO-
 	if !p.task.allErrors && len(p.errors) >= 10 {
 		return
 	}
@@ -1293,6 +1294,7 @@ func (p *project) w(s string, args ...interface{}) {
 	if oTraceW {
 		fmt.Printf(s, args...)
 	}
+	fmt.Printf(s, args...) //TODO-
 	fmt.Fprintf(&p.buf, s, args...)
 }
 
@@ -2101,7 +2103,7 @@ func (p *project) layoutTLDs() error {
 			// in a library file. The definition in the header file causes most calls to
 			// the function to be inlined. If any uses of the function remain, they refer
 			// to the single copy in the library.
-			if d.Linkage == cc.External && d.Type().Inline() {
+			if d.IsExtern() && d.Type().Inline() {
 				continue
 			}
 
@@ -2365,6 +2367,9 @@ package %s
 	for i, v := range p.task.asts {
 		p.oneAST(v)
 		p.task.asts[i] = nil
+		if p.task.mingw && i%4 == 3 {
+			debug.FreeOSMemory()
+		}
 	}
 	sort.Slice(p.task.imported, func(i, j int) bool { return p.task.imported[i].path < p.task.imported[j].path })
 	p.o(`import (
@@ -8145,6 +8150,8 @@ func (p *project) postfixExpressionDecay(f *function, n *cc.PostfixExpression, t
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
+		panic(todo("", p.pos(n)))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -8196,6 +8203,12 @@ func (p *project) postfixExpressionBool(f *function, n *cc.PostfixExpression, t 
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionChooseExpr:
+		if flags&fOutermost == 0 {
+			p.w("(")
+			defer p.w(")")
+		}
+		defer p.w(" != 0")
+		p.postfixExpression(f, n, t, exprValue, flags)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -8220,6 +8233,8 @@ func (p *project) postfixExpressionPSelect(f *function, n *cc.PostfixExpression,
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
 		panic(todo("", p.pos(n)))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -8345,6 +8360,8 @@ func (p *project) postfixExpressionSelect(f *function, n *cc.PostfixExpression, 
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
 		panic(todo("", p.pos(n)))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -8559,6 +8576,8 @@ func (p *project) postfixExpressionAddrOf(f *function, n *cc.PostfixExpression, 
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
+		panic(todo("", p.pos(n)))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -8698,6 +8717,8 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
+		panic(todo("", p.pos(n)))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -8725,6 +8746,8 @@ func (p *project) postfixExpressionVoid(f *function, n *cc.PostfixExpression, t 
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
 		panic(todo("", p.pos(n)))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -8795,7 +8818,16 @@ func (p *project) postfixExpressionValue(f *function, n *cc.PostfixExpression, t
 		//	  })
 		//
 		// Note: This construct is only available for C.
-		p.w(" %d ", n.Operand.Value)
+		p.w(" %d ", n.Operand.Value())
+	case cc.PostfixExpressionChooseExpr: // "__builtin_choose_expr" '(' AssignmentExpression ',' AssignmentExpression ',' AssignmentExpression ')'
+		switch op := n.AssignmentExpression.Operand; {
+		case op.IsNonZero():
+			p.assignmentExpression(f, n.AssignmentExpression2, t, mode, flags)
+		case op.IsZero():
+			p.assignmentExpression(f, n.AssignmentExpression3, t, mode, flags)
+		default:
+			panic(todo(""))
+		}
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -9109,6 +9141,8 @@ func (p *project) postfixExpressionLValue(f *function, n *cc.PostfixExpression, 
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
+		panic(todo("", p.pos(n)))
+	case cc.PostfixExpressionChooseExpr:
 		panic(todo("", p.pos(n)))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))

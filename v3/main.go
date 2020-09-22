@@ -4,6 +4,29 @@
 
 //go:generate stringer -output stringer.go -type=exprMode,opKind
 
+package main // import "modernc.org/ccgo/v3"
+
+import (
+	"bufio"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"runtime/debug"
+	"strconv"
+	"strings"
+
+	"golang.org/x/tools/go/packages"
+	"modernc.org/cc/v3"
+	"modernc.org/opt"
+)
+
 //TODO gmp
 //TODO gsl
 //TODO minigmp
@@ -16,6 +39,8 @@
 //TODO zlib
 //TODO CPython
 //TODO Cython
+//TODO redis
+//TODO gofrontend
 
 //TODO 2020-07-17
 //
@@ -30,8 +55,6 @@
 // Un-array
 //
 // Pass more CSmith tests.
-
-package main // import "modernc.org/ccgo/v3"
 
 //TODO merge VaList slots of distinct top level statements.
 
@@ -74,26 +97,6 @@ package main // import "modernc.org/ccgo/v3"
 //	var sqlite3_data_directory = uintptr(0) /* sqlite3.c:156345:17 */
 
 //TODO drop all non-referenced declarators unless forced by a command line flag.
-
-import (
-	"bufio"
-	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"runtime"
-	"strconv"
-	"strings"
-
-	"golang.org/x/tools/go/packages"
-	"modernc.org/cc/v3"
-	"modernc.org/opt"
-)
 
 const (
 	builtin = `
@@ -516,10 +519,11 @@ func (t *task) main() (err error) {
 
 	t.cfg.ABI = abi
 	t.cfg.Config3 = cc.Config3{
-		IgnoreInclude:             re,
-		NoFieldAndBitfieldOverlap: true,
-		PreserveWhiteSpace:        true,
-		UnsignedEnums:             true,
+		IgnoreExternInlineFunctions: true,
+		IgnoreInclude:               re,
+		NoFieldAndBitfieldOverlap:   true,
+		PreserveWhiteSpace:          true,
+		UnsignedEnums:               true,
 	}
 	hostConfigOpts := strings.Split(t.hostConfigOpts, ",")
 	if t.hostConfigOpts == "" {
@@ -533,6 +537,7 @@ func (t *task) main() (err error) {
 	t.mingw = detectMingw(hostPredefined)
 	if t.mingw {
 		t.windows = true
+		t.cfg.Config3.IgnoreHeaderFunctionDefinitions = true
 	}
 	if !t.mingw {
 		a := strings.Split(hostPredefined, "\n")
@@ -592,7 +597,8 @@ func (t *task) main() (err error) {
 	// header shall be searched for only in directories named in -I options
 	// and then in the usual places.
 	sysIncludePaths := append(t.I, hostSysIncludes...)
-	for _, v := range t.sources {
+	for i, v := range t.sources {
+		//TODO- trc("", i, v.Name) //TODO-
 		tuSources := append(sources, v)
 		if t.E {
 			t.cfg.PreprocessOnly = true
@@ -608,6 +614,9 @@ func (t *task) main() (err error) {
 		}
 
 		t.asts = append(t.asts, ast)
+		if t.mingw && i%4 == 3 {
+			debug.FreeOSMemory()
+		}
 	}
 	if t.E {
 		return nil
