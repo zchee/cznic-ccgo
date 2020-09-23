@@ -1307,7 +1307,7 @@ func (p *project) w(s string, args ...interface{}) {
 func (p *project) layout() error {
 	var t0 time.Time
 	if p.task.traceTranslationUnits {
-		fmt.Printf("processing the ASTs ... ")
+		fmt.Printf("processing %d ASTs ... ", len(p.task.asts))
 		t0 = time.Now()
 		defer func() { fmt.Println(time.Since(t0)) }()
 	}
