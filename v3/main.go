@@ -21,6 +21,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/tools/go/packages"
 	"modernc.org/cc/v3"
@@ -266,24 +267,25 @@ type task struct {
 	stdout          io.Writer
 	symSearchOrder  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
-	E                   bool // -E
-	allErrors           bool // -ccgo-all-errors
-	cover               bool // -ccgo-cover-instrumentation
-	coverC              bool // -ccgo-cover-instrumentation-c
-	exportDefinesValid  bool // -ccgo-export-defines present
-	exportEnumsValid    bool // -ccgo-export-enums present
-	exportExternsValid  bool // -ccgo-export-externs present
-	exportFieldsValid   bool // -ccgo-export-fields present
-	exportStructsValid  bool // -ccgo-export-structs present
-	exportTypedefsValid bool // -ccgo-export-typedefs present
-	fullPathComments    bool // -ccgo-full-path-comments
-	header              bool // -ccgo-header
-	libc                bool // -ccgo-libc
-	mingw               bool
-	nostdinc            bool // -nostdinc
-	verifyStructs       bool // -ccgo-verify-structs
-	watch               bool // -ccgo-watch-instrumentation
-	windows             bool // -ccgo-windows
+	E                     bool // -E
+	allErrors             bool // -ccgo-all-errors
+	cover                 bool // -ccgo-cover-instrumentation
+	coverC                bool // -ccgo-cover-instrumentation-c
+	exportDefinesValid    bool // -ccgo-export-defines present
+	exportEnumsValid      bool // -ccgo-export-enums present
+	exportExternsValid    bool // -ccgo-export-externs present
+	exportFieldsValid     bool // -ccgo-export-fields present
+	exportStructsValid    bool // -ccgo-export-structs present
+	exportTypedefsValid   bool // -ccgo-export-typedefs present
+	fullPathComments      bool // -ccgo-full-path-comments
+	header                bool // -ccgo-header
+	libc                  bool // -ccgo-libc
+	mingw                 bool
+	nostdinc              bool // -nostdinc
+	traceTranslationUnits bool // -ccgo-trace-translation-units
+	verifyStructs         bool // -ccgo-verify-structs
+	watch                 bool // -ccgo-watch-instrumentation
+	windows               bool // -ccgo-windows
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -294,8 +296,11 @@ func newTask(args []string, stdout, stderr io.Writer) *task {
 		stderr = os.Stderr
 	}
 	return &task{
-		args:          args,
-		cfg:           &cc.Config{DoNotTypecheckAsm: true},
+		args: args,
+		cfg: &cc.Config{
+			DoNotTypecheckAsm:         true,
+			SharedFunctionDefinitions: &cc.SharedFunctionDefinitions{},
+		},
 		crt:           "libc.",
 		crtImportPath: defaultCrt,
 		goarch:        env("TARGET_GOARCH", env("GOARCH", runtime.GOARCH)),
@@ -432,6 +437,7 @@ func (t *task) main() (err error) {
 	opts.Opt("ccgo-full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
 	opts.Opt("ccgo-header", func(opt string) error { t.header = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
+	opts.Opt("ccgo-trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Opt("ccgo-windows", func(opt string) error { t.windows = true; return nil })
@@ -519,11 +525,10 @@ func (t *task) main() (err error) {
 
 	t.cfg.ABI = abi
 	t.cfg.Config3 = cc.Config3{
-		IgnoreExternInlineFunctions: true,
-		IgnoreInclude:               re,
-		NoFieldAndBitfieldOverlap:   true,
-		PreserveWhiteSpace:          true,
-		UnsignedEnums:               true,
+		IgnoreInclude:             re,
+		NoFieldAndBitfieldOverlap: true,
+		PreserveWhiteSpace:        true,
+		UnsignedEnums:             true,
 	}
 	hostConfigOpts := strings.Split(t.hostConfigOpts, ",")
 	if t.hostConfigOpts == "" {
@@ -537,7 +542,6 @@ func (t *task) main() (err error) {
 	t.mingw = detectMingw(hostPredefined)
 	if t.mingw {
 		t.windows = true
-		t.cfg.Config3.IgnoreHeaderFunctionDefinitions = true
 	}
 	if !t.mingw {
 		a := strings.Split(hostPredefined, "\n")
@@ -598,7 +602,6 @@ func (t *task) main() (err error) {
 	// and then in the usual places.
 	sysIncludePaths := append(t.I, hostSysIncludes...)
 	for i, v := range t.sources {
-		//TODO- trc("", i, v.Name) //TODO-
 		tuSources := append(sources, v)
 		if t.E {
 			t.cfg.PreprocessOnly = true
@@ -608,14 +611,26 @@ func (t *task) main() (err error) {
 			continue
 		}
 
+		var t0 time.Time
+		if t.traceTranslationUnits {
+			fmt.Printf("C front end %d/%d: %s ... ", i+1, len(t.sources), v.Name)
+			t0 = time.Now()
+		}
 		ast, err := cc.Translate(t.cfg, includePaths, sysIncludePaths, tuSources)
 		if err != nil {
 			return err
 		}
 
+		if t.traceTranslationUnits {
+			fmt.Println(time.Since(t0))
+		}
 		t.asts = append(t.asts, ast)
-		if t.mingw && i%4 == 3 {
-			debug.FreeOSMemory()
+		if i%4 == 3 {
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			if ms.Alloc >= 1e9 {
+				debug.FreeOSMemory()
+			}
 		}
 	}
 	if t.E {

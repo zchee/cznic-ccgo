@@ -15,11 +15,13 @@ import (
 	"math/big"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"modernc.org/cc/v3"
 	"modernc.org/mathutil"
@@ -1161,6 +1163,8 @@ type project struct {
 	localTaggedStructs []func()
 	mainName           string
 	scope              scope
+	sharedFns          map[*cc.FunctionDefinition]struct{}
+	sharedFnsEmitted   map[*cc.FunctionDefinition]struct{}
 	staticQueue        []*cc.InitDeclarator
 	structs            map[cc.StringID]*taggedStruct // key: C tag
 	symtab             map[string]interface{}        // *tld or *imported
@@ -1207,22 +1211,24 @@ func newProject(t *task) (*project, error) {
 	}
 
 	p := &project{
-		emitedEnums:    map[cc.StringID]struct{}{},
-		enumConsts:     map[cc.StringID]string{},
-		enumSpecs:      map[*cc.EnumSpecifier]*enumSpec{},
-		externs:        map[cc.StringID]*tld{},
-		imports:        map[string]*imported{},
-		intType:        intType,
-		scope:          newScope(),
-		symtab:         map[string]interface{}{},
-		task:           t,
-		tlds:           map[*cc.Declarator]*tld{},
-		ts4Offs:        map[cc.StringID]uintptr{},
-		tsOffs:         map[cc.StringID]uintptr{},
-		typedefTypes:   map[cc.StringID]*typedef{},
-		typedefsEmited: map[string]struct{}{},
-		verifyStructs:  map[string]cc.Type{},
-		wanted:         map[*cc.Declarator]struct{}{},
+		emitedEnums:      map[cc.StringID]struct{}{},
+		enumConsts:       map[cc.StringID]string{},
+		enumSpecs:        map[*cc.EnumSpecifier]*enumSpec{},
+		externs:          map[cc.StringID]*tld{},
+		imports:          map[string]*imported{},
+		intType:          intType,
+		scope:            newScope(),
+		sharedFns:        t.cfg.SharedFunctionDefinitions.M,
+		sharedFnsEmitted: map[*cc.FunctionDefinition]struct{}{},
+		symtab:           map[string]interface{}{},
+		task:             t,
+		tlds:             map[*cc.Declarator]*tld{},
+		ts4Offs:          map[cc.StringID]uintptr{},
+		tsOffs:           map[cc.StringID]uintptr{},
+		typedefTypes:     map[cc.StringID]*typedef{},
+		typedefsEmited:   map[string]struct{}{},
+		verifyStructs:    map[string]cc.Type{},
+		wanted:           map[*cc.Declarator]struct{}{},
 	}
 	p.scope.take(idCAPI)
 	for _, v := range t.imported {
@@ -1294,11 +1300,17 @@ func (p *project) w(s string, args ...interface{}) {
 	if oTraceW {
 		fmt.Printf(s, args...)
 	}
-	fmt.Printf(s, args...) //TODO-
+	//fmt.Printf(s, args...) //TODO-
 	fmt.Fprintf(&p.buf, s, args...)
 }
 
 func (p *project) layout() error {
+	var t0 time.Time
+	if p.task.traceTranslationUnits {
+		fmt.Printf("processing the ASTs ... ")
+		t0 = time.Now()
+		defer func() { fmt.Println(time.Since(t0)) }()
+	}
 	if err := p.layoutTLDs(); err != nil {
 		return err
 	}
@@ -2082,6 +2094,7 @@ func (p *project) layoutTLDs() error {
 			}
 		}
 	}
+	sharedFns := map[*cc.FunctionDefinition]struct{}{}
 	for _, ast := range p.task.asts {
 		a = a[:0]
 		for d := range ast.TLD {
@@ -2105,6 +2118,16 @@ func (p *project) layoutTLDs() error {
 			// to the single copy in the library.
 			if d.IsExtern() && d.Type().Inline() {
 				continue
+			}
+
+			if fn := d.FunctionDefinition(); fn != nil {
+				if _, ok := p.sharedFns[fn]; ok {
+					if _, ok := sharedFns[fn]; ok {
+						continue
+					}
+
+					sharedFns[fn] = struct{}{}
+				}
 			}
 
 			a = append(a, d)
@@ -2365,10 +2388,22 @@ package %s
 		es.emit(p)
 	}
 	for i, v := range p.task.asts {
+		var t0 time.Time
+		if p.task.traceTranslationUnits {
+			fmt.Printf("Go backend %v/%v: %s ... ", i+1, len(p.task.asts), p.task.sources[i].Name)
+			t0 = time.Now()
+		}
 		p.oneAST(v)
+		if p.task.traceTranslationUnits {
+			fmt.Println(time.Since(t0))
+		}
 		p.task.asts[i] = nil
-		if p.task.mingw && i%4 == 3 {
-			debug.FreeOSMemory()
+		if i%4 == 3 {
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			if ms.Alloc >= 1e9 {
+				debug.FreeOSMemory()
+			}
 		}
 	}
 	sort.Slice(p.task.imported, func(i, j int) bool { return p.task.imported[i].path < p.task.imported[j].path })
@@ -3779,6 +3814,14 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	// DeclarationSpecifiers Declarator DeclarationList CompoundStatement
 	if p.task.header {
 		return
+	}
+
+	if _, ok := p.sharedFns[n]; ok {
+		if _, ok := p.sharedFnsEmitted[n]; ok {
+			return
+		}
+
+		p.sharedFnsEmitted[n] = struct{}{}
 	}
 
 	d := n.Declarator
