@@ -28,6 +28,8 @@ import (
 	"modernc.org/opt"
 )
 
+//TODO parallel
+
 //TODO gmp
 //TODO gsl
 //TODO minigmp
@@ -625,13 +627,7 @@ func (t *task) main() (err error) {
 			fmt.Println(time.Since(t0))
 		}
 		t.asts = append(t.asts, ast)
-		if i%4 == 3 {
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			if ms.Alloc >= 1e9 {
-				debug.FreeOSMemory()
-			}
-		}
+		memGuard(i)
 	}
 	if t.E {
 		return nil
@@ -677,4 +673,32 @@ func (t *task) main() (err error) {
 
 func detectMingw(s string) bool {
 	return strings.Contains(s, "#define __MINGW")
+}
+
+func memGuard(i int) {
+	if totalRam == 0 || totalRam > 64e9 {
+		return
+	}
+
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	switch {
+	case ms.Alloc < totalRam/2:
+		return
+	case ms.Alloc < (8*totalRam)/10:
+		switch {
+		case totalRam < 1e9:
+			// ok
+		case totalRam < 16e9:
+			if i&1 == 1 {
+				return
+			}
+		default:
+			if i&3 != 3 {
+				return
+			}
+		}
+	}
+
+	debug.FreeOSMemory()
 }

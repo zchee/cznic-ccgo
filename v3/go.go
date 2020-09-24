@@ -15,8 +15,6 @@ import (
 	"math/big"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -1269,7 +1267,6 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
-	// trc("%v: %s", origin(2), fmt.Sprintf(s, args...)) //TODO-
 	if !p.task.allErrors && len(p.errors) >= 10 {
 		return
 	}
@@ -1300,7 +1297,7 @@ func (p *project) w(s string, args ...interface{}) {
 	if oTraceW {
 		fmt.Printf(s, args...)
 	}
-	//fmt.Printf(s, args...) //TODO-
+	// fmt.Printf(s, args...) //TODO-
 	fmt.Fprintf(&p.buf, s, args...)
 }
 
@@ -2398,13 +2395,7 @@ package %s
 			fmt.Println(time.Since(t0))
 		}
 		p.task.asts[i] = nil
-		if i%4 == 3 {
-			var ms runtime.MemStats
-			runtime.ReadMemStats(&ms)
-			if ms.Alloc >= 1e9 {
-				debug.FreeOSMemory()
-			}
-		}
+		memGuard(i)
 	}
 	sort.Slice(p.task.imported, func(i, j int) bool { return p.task.imported[i].path < p.task.imported[j].path })
 	p.o(`import (
@@ -3825,7 +3816,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	}
 
 	d := n.Declarator
-	if d.Linkage == cc.External && d.Type().Inline() {
+	if d.IsExtern() && d.Type().Inline() {
 		// https://gcc.gnu.org/onlinedocs/gcc/Inline.html
 		//
 		// If you specify both inline and extern in the function definition, then the
@@ -9116,7 +9107,7 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 		if fld.Type().IsSignedType() {
 			p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
 		}
-	case isUnionField(pe, fld):
+	case fld.InUnion():
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, fld.Type()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
@@ -9126,42 +9117,6 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprSelect, flags&^fOutermost)
 		p.w(".%s", p.fieldName(n, n.Token2.Value))
-	}
-}
-
-func isUnionField(t cc.Type, fld cc.Field) (r bool) {
-	if t.Kind() == cc.Union {
-		return true
-	}
-
-	isUnionField2(t, fld, 0, false, &r)
-	return r
-}
-
-func isUnionField2(t cc.Type, fld cc.Field, off uintptr, inUnion bool, r *bool) {
-	if t.Kind() == cc.Union {
-		inUnion = true
-	}
-	for idx := []int{0}; idx[0] < t.NumField(); idx[0]++ {
-		f := t.FieldByIndex(idx)
-		if f.IsBitField() {
-			continue
-		}
-
-		if f.Offset()+off > fld.Offset() {
-			return
-		}
-
-		if f.Name() != 0 && f.Offset()+off == fld.Offset() {
-			if inUnion {
-				*r = true
-			}
-			return
-		}
-		switch ft := f.Type(); ft.Kind() {
-		case cc.Struct, cc.Union:
-			isUnionField2(f.Type(), fld, f.Offset(), inUnion, r)
-		}
 	}
 }
 
@@ -9194,9 +9149,18 @@ func (p *project) postfixExpressionLValue(f *function, n *cc.PostfixExpression, 
 
 func (p *project) postfixExpressionLValuePSelect(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
+	pe := n.PostfixExpression
 	switch k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type().Elem()); k {
 	case opStruct:
-		p.postfixExpressionLValuePSelectStruct(f, n, t, mode, flags)
+		if !p.inUnion(n, pe.Operand.Type().Elem(), n.Token2.Value) {
+			p.postfixExpressionLValuePSelectStruct(f, n, t, mode, flags)
+			break
+		}
+
+		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
+		p.postfixExpression(f, pe, pe.Operand.Type(), exprValue, flags|fOutermost)
+		p.fldOff(pe.Operand.Type().Elem(), n.Token2)
+		p.w("))")
 	case opUnion:
 		p.postfixExpressionLValuePSelectUnion(f, n, t, mode, flags)
 	default:
@@ -9313,7 +9277,7 @@ func (p *project) postfixExpressionLValueSelect(f *function, n *cc.PostfixExpres
 	pe := n.PostfixExpression
 	switch k := p.opKind(f, pe, pe.Operand.Type()); k {
 	case opStruct:
-		if !p.inUnion(pe, n.Token2.Value) {
+		if !p.inUnion(n, pe.Operand.Type(), n.Token2.Value) {
 			p.postfixExpressionLValueSelectStruct(f, n, t, mode, flags)
 			break
 		}
@@ -9329,8 +9293,8 @@ func (p *project) postfixExpressionLValueSelect(f *function, n *cc.PostfixExpres
 	}
 }
 
-func (p *project) inUnion(n *cc.PostfixExpression, fname cc.StringID) bool {
-	f, ok := n.Operand.Type().FieldByName(fname)
+func (p *project) inUnion(n cc.Node, t cc.Type, fname cc.StringID) bool {
+	f, ok := t.FieldByName(fname)
 	if !ok {
 		p.err(n, "unknown field: %s", fname)
 		return false
@@ -9492,7 +9456,7 @@ func (p *project) incDelta(n cc.Node, t cc.Type) uintptr {
 	panic(todo("", n.Position(), t.Kind()))
 }
 
-func (p *project) fldOff(t cc.Type, tok cc.Token) {
+func (p *project) fldOff(t cc.Type, tok cc.Token) { //TODO reject bit fields
 	var off uintptr
 	fld, ok := t.FieldByName(tok.Value)
 	if ok && fld.IsBitField() {
