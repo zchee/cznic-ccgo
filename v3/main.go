@@ -598,7 +598,6 @@ func (t *task) main() (err error) {
 	includePaths := append([]string{"@"}, t.I...)
 	includePaths = append(includePaths, hostIncludes...)
 	includePaths = append(includePaths, hostSysIncludes...)
-	includePaths = append(includePaths, filepath.FromSlash("/usr/include")) //TODO nix only
 	// For headers whose names are enclosed in angle brackets ( "<>" ), the
 	// header shall be searched for only in directories named in -I options
 	// and then in the usual places.

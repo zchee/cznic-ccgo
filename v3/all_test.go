@@ -1552,6 +1552,7 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2648215054",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3919255949",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4101947480",
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
@@ -1693,6 +1694,7 @@ TclpCreateProcess
 -ccgo-long-double-is-double
 -ccgo-pkgname
 tcl
+-ccgo-trace-translation-units
 -o
 {{0}}
 ../compat/zlib/adler32.c

@@ -95,6 +95,7 @@ type flags byte
 const (
 	fOutermost flags = 1 << iota
 	fForceConv
+	fForceNoConv
 	fForceRuntimeConv
 	fNoCondAssignment
 	fAddrOfFuncPtrOk
@@ -1133,8 +1134,7 @@ func (n *enumSpec) emit(p *project) {
 
 		p.emitedEnums[nm] = struct{}{}
 		p.w("%s%s = ", tidyComment("\n", en), p.enumConsts[nm])
-		//TODO src when applicable
-		p.intConst(en, "", en.Operand, en.Operand.Type(), fOutermost)
+		p.intConst(en, "", en.Operand, en.Operand.Type(), fOutermost|fForceNoConv)
 		p.w(";")
 	}
 	p.w(");")
@@ -7710,9 +7710,10 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags)
 			p.w(")")
 		case isNonNegativeInt(n.CastExpression.Operand) && isUnsigned(n.Operand.Type()):
-			p.w(" -")
-			defer p.w("%s", p.convert(n, n.CastExpression.Operand, t, flags|fForceRuntimeConv))
+			defer p.w("%s", p.convert(n, n.CastExpression.Operand, t, flags))
+			p.w("%sNeg%s(", p.task.crt, p.helperType(n, n.CastExpression.Operand.Type()))
 			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags)
+			p.w(")")
 		default:
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w(" -")
@@ -8625,6 +8626,9 @@ func (p *project) postfixExpressionAddrOfPSelect(f *function, n *cc.PostfixExpre
 	}
 	pe := n.PostfixExpression.Operand.Type()
 	switch {
+	case n.Operand.Type().IsBitFieldType():
+		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
+		p.bitFldOff(pe.Elem(), n.Token2)
 	case pe.Kind() == cc.Array:
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
 		p.fldOff(pe.Elem(), n.Token2)
@@ -8670,6 +8674,10 @@ func (p *project) postfixExpressionAddrOfSelect(f *function, n *cc.PostfixExpres
 		defer p.w(")")
 	}
 	switch {
+	case n.Operand.Type().IsBitFieldType():
+		pe := n.PostfixExpression.Operand.Type()
+		p.postfixExpression(f, n.PostfixExpression, nil, mode, flags|fOutermost)
+		p.bitFldOff(pe, n.Token2)
 	case n.Operand.Type().Kind() == cc.Array:
 		fallthrough
 	default:
@@ -8909,7 +8917,7 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			x := p.convertType(n, nil, fld.Promote(), flags)
 			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags)
-			p.fldOff(pe.Elem(), n.Token2)
+			p.bitFldOff(pe.Elem(), n.Token2)
 			p.w("))")
 			p.w("&%#x>>%d%s", fld.Mask(), fld.BitFieldOffset(), x)
 			if fld.Type().IsSignedType() {
@@ -8920,7 +8928,7 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			x := p.convertType(n, nil, fld.Promote(), flags)
 			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
-			p.fldOff(pe.Elem(), n.Token2)
+			p.bitFldOff(pe.Elem(), n.Token2)
 			p.w("))&%#x>>%d%s", fld.Mask(), fld.BitFieldOffset(), x)
 			if fld.Type().IsSignedType() {
 				p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
@@ -9070,18 +9078,18 @@ func (p *project) postfixExpressionValueSelectUnion(f *function, n *cc.PostfixEx
 	pe := n.PostfixExpression.Operand.Type()
 	fld := n.Field
 	switch {
-	case n.Operand.Type().Kind() == cc.Array:
-		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
 	case n.Operand.Type().IsBitFieldType():
 		defer p.w("%s", p.convertType(n, fld.Promote(), t, flags))
 		x := p.convertType(n, nil, fld.Promote(), flags)
 		p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
-		p.fldOff(pe, n.Token2)
+		p.bitFldOff(pe, n.Token2)
 		p.w("))&%#x>>%d%s", fld.Mask(), fld.BitFieldOffset(), x)
 		if fld.Type().IsSignedType() {
 			p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
 		}
+	case n.Operand.Type().Kind() == cc.Array:
+		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
 	default:
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
@@ -9095,18 +9103,18 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 	pe := n.PostfixExpression.Operand.Type()
 	fld := n.Field
 	switch {
-	case n.Operand.Type().Kind() == cc.Array:
-		p.postfixExpression(f, n, t, exprDecay, flags)
 	case n.Operand.Type().IsBitFieldType():
 		defer p.w("%s", p.convertType(n, fld.Promote(), t, flags))
 		x := p.convertType(n, nil, fld.Promote(), flags)
 		p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
-		p.fldOff(pe, n.Token2)
+		p.bitFldOff(pe, n.Token2)
 		p.w("))&%#x>>%d%s", fld.Mask(), fld.BitFieldOffset(), x)
 		if fld.Type().IsSignedType() {
 			p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
 		}
+	case n.Operand.Type().Kind() == cc.Array:
+		p.postfixExpression(f, n, t, exprDecay, flags)
 	case fld.InUnion():
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, fld.Type()))
@@ -9456,15 +9464,32 @@ func (p *project) incDelta(n cc.Node, t cc.Type) uintptr {
 	panic(todo("", n.Position(), t.Kind()))
 }
 
-func (p *project) fldOff(t cc.Type, tok cc.Token) { //TODO reject bit fields
+func (p *project) bitFldOff(t cc.Type, tok cc.Token) {
 	var off uintptr
 	fld, ok := t.FieldByName(tok.Value)
-	if ok && fld.IsBitField() {
-		fld = fld.BitFieldBlockFirst()
-	}
-	if !ok {
+	switch {
+	case ok && !fld.IsBitField():
+		panic(todo("%v: ICE: bitFdlOff must not be used with non bit fields", origin(2)))
+	case !ok:
 		p.err(&tok, "uknown field: %s", tok.Value)
-	} else {
+	default:
+		off = fld.BitFieldBlockFirst().Offset()
+	}
+	if off != 0 {
+		p.w("+%d", off)
+	}
+	p.w("/* &.%s */", tok.Value)
+}
+
+func (p *project) fldOff(t cc.Type, tok cc.Token) {
+	var off uintptr
+	fld, ok := t.FieldByName(tok.Value)
+	switch {
+	case ok && fld.IsBitField():
+		panic(todo("%v: ICE: fdlOff must not be used with bit fields", origin(2)))
+	case !ok:
+		p.err(&tok, "uknown field: %s", tok.Value)
+	default:
 		off = fld.Offset()
 	}
 	if off != 0 {
@@ -10540,7 +10565,14 @@ func (p *project) intConst(n cc.Node, src string, op cc.Operand, to cc.Type, fla
 	ptr := to.Kind() == cc.Ptr
 	switch {
 	case to.IsArithmeticType():
-		// p.w("/*8159 %T(%#[1]x) %v -> %v */", op.Value(), op.Type(), to) //TODO-
+		// p.w("/*10568 %T(%#[1]x) %v -> %v */", op.Value(), op.Type(), to) //TODO-
+		if flags&fForceNoConv != 0 {
+			break
+		}
+
+		if !op.Type().IsSignedType() && op.Type().Size() == 8 && op.Value().(cc.Uint64Value) > math.MaxInt64 {
+			flags |= fForceRuntimeConv
+		}
 		defer p.w("%s", p.convert(n, op, to, flags))
 	case ptr:
 		p.w(" uintptr(")
