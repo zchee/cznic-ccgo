@@ -8,7 +8,7 @@ test binary compiled for linux/amd64
 temp dir: /tmp
 === RUN   TestTCC
     all_test.go:427: files 61, ok 61
---- PASS: TestTCC (13.08s)
+--- PASS: TestTCC (14.70s)
 === RUN   TestCAPI
     all_test.go:666: libc map[_IO_putc:{} ___errno_location:{} __assert_fail:{} __builtin_abort:{} __builtin_abs:{} __builtin_add_overflowInt64:{} __builtin_add_overflowUint32:{} __builtin_add_overflowUint64:{} __builtin_bswap16:{} __builtin_bswap32:{} __builtin_clzll:{} __builtin_copysign:{} __builtin_copysignf:{} __builtin_exit:{} __builtin_expect:{} __builtin_fabs:{} __builtin_free:{} __builtin_inff:{} __builtin_llabs:{} __builtin_malloc:{} __builtin_memcmp:{} __builtin_memcpy:{} __builtin_memset:{} __builtin_mul_overflowInt64:{} __builtin_prefetch:{} __builtin_printf:{} __builtin_snprintf:{} __builtin_sprintf:{} __builtin_strchr:{} __builtin_strcmp:{} __builtin_strcpy:{} __builtin_strlen:{} __builtin_sub_overflowInt64:{} __builtin_trap:{} __builtin_unreachable:{} __ccgo_debug_print:{} __ccgo_in6addr_anyp:{} __ccgo_print_debug_stack:{} __ccgo_sqlite3_log:{} __ctype_b_loc:{} __errno_location:{} __h_errno_location:{} __inet_aton:{} __intscan:{} __isalnum_l:{} __isalpha_l:{} __isdigit_l:{} __isnan:{} __isnanf:{} __isnanl:{} __isoc99_sscanf:{} __isxdigit_l:{} __lookup_ipliteral:{} __lookup_name:{} __lookup_serv:{} __shgetc:{} __shlim:{} __syscall1:{} __syscall3:{} __toread:{} __toread_needs_stdio_exit:{} __uflow:{} _exit:{} abort:{} abs:{} accept:{} access:{} acos:{} alarm:{} asin:{} atan:{} atan2:{} atof:{} atoi:{} atol:{} backtrace:{} backtrace_symbols_fd:{} bind:{} calloc:{} ceil:{} cfgetospeed:{} cfsetispeed:{} cfsetospeed:{} chdir:{} chmod:{} chown:{} close:{} closedir:{} connect:{} copysign:{} copysignf:{} cos:{} cosf:{} cosh:{} dlclose:{} dlerror:{} dlopen:{} dlsym:{} dup2:{} environ:{} execvp:{} exit:{} exp:{} fabs:{} fabsf:{} fchmod:{} fchown:{} fclose:{} fcntl:{} fcntl64:{} fdopen:{} ferror:{} fflush:{} fgetc:{} fgets:{} fileno:{} floor:{} fmod:{} fopen:{} fopen64:{} fork:{} fprintf:{} fputc:{} fputs:{} fread:{} free:{} freeaddrinfo:{} frexp:{} fseek:{} fstat:{} fstat64:{} fsync:{} ftell:{} ftruncate:{} ftruncate64:{} fts64_close:{} fts64_open:{} fts64_read:{} fts_close:{} fts_open:{} fts_read:{} fwrite:{} gai_strerror:{} getaddrinfo:{} getcwd:{} getenv:{} geteuid:{} getgrgid:{} getgrnam:{} gethostbyaddr:{} gethostbyaddr_r:{} gethostbyname:{} gethostbyname2:{} gethostbyname2_r:{} getnameinfo:{} getpeername:{} getpid:{} getpwnam:{} getpwuid:{} getrlimit:{} getrlimit64:{} getrusage:{} getservbyname:{} getsockname:{} getsockopt:{} gettimeofday:{} getuid:{} gmtime_r:{} h_errno:{} htonl:{} htons:{} hypot:{} inet_ntoa:{} inet_ntop:{} inet_pton:{} ioctl:{} isalnum:{} isalpha:{} isatty:{} isdigit:{} isnan:{} isnanf:{} isnanl:{} isxdigit:{} ldexp:{} link:{} listen:{} llabs:{} localtime:{} localtime_r:{} log:{} log10:{} lseek:{} lseek64:{} lstat:{} lstat64:{} malloc:{} memchr:{} memcmp:{} memcpy:{} memmove:{} memset:{} mkdir:{} mkfifo:{} mknod:{} mkstemp64:{} mkstemps64:{} mktime:{} mmap64:{} modf:{} munmap:{} nl_langinfo:{} ntohs:{} open:{} open64:{} opendir:{} pclose:{} perror:{} pipe:{} popen:{} pow:{} printf:{} putc:{} putchar:{} qsort:{} raise:{} rand:{} read:{} readdir:{} readdir64:{} readlink:{} realloc:{} realpath:{} recv:{} rename:{} rewind:{} rmdir:{} round:{} select:{} send:{} setlocale:{} setrlimit:{} setrlimit64:{} setsockopt:{} setvbuf:{} shutdown:{} sigaction:{} signal:{} sin:{} sinf:{} sinh:{} sleep:{} snprintf:{} socket:{} sprintf:{} sqrt:{} stat:{} stat64:{} stderr:{} stdin:{} stdout:{} strcasecmp:{} strcat:{} strchr:{} strcmp:{} strcpy:{} strcspn:{} strdup:{} strerror:{} strlen:{} strncmp:{} strncpy:{} strnlen:{} strpbrk:{} strrchr:{} strspn:{} strstr:{} strtoimax:{} strtol:{} strtoll:{} strtoul:{} strtoull:{} strtoumax:{} symlink:{} sysconf:{} system:{} tan:{} tanh:{} tcgetattr:{} tcsetattr:{} time:{} tolower:{} toupper:{} tzset:{} umask:{} uname:{} unlink:{} usleep:{} utime:{} utimes:{} vfprintf:{} vprintf:{} waitpid:{} wcsnlen:{} write:{} zero_struct_address:{}]
 --- PASS: TestCAPI (0.01s)
@@ -23,8 +23,8 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010209-1.c:6:16: variable length arrays not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010209-1.c:13:10: undefined: bar
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010209-1.c:13:10: undefined: bar
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20010518-2.c:31:9 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010518-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20010518-2.c:31:9 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20010518-2.c:31:9 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010518-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20010518-2.c:31:9 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010605-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010605-1.c:5:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010605-1.c:5:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010605-1.c:10:11: undefined: fff
@@ -36,12 +36,12 @@ temp dir: /tmp
 /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO 20010924-1.c:27:3 array of char 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20010924-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO 20010924-1.c:27:3 array of char 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020107-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020107-1.c:20:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20020206-1.c:10:11 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020206-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20020206-1.c:10:11 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8396:postfixExpressionSelect: TODOTODO 20020206-2.c:22:12 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020206-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8396:postfixExpressionSelect: TODOTODO 20020206-2.c:22:12 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20020215-1.c:29:22 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020215-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20020215-1.c:29:22 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20020206-1.c:10:11 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020206-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20020206-1.c:10:11 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8395:postfixExpressionSelect: TODOTODO 20020206-2.c:22:12 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020206-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8395:postfixExpressionSelect: TODOTODO 20020206-2.c:22:12 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20020215-1.c:29:22 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020215-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20020215-1.c:29:22 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020227-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020227-1.c:5:27: declarator has unsupported, invalid or incomplete type
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020314-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020314-1.c:14:7: undefined: alloca
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020320-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020320-1.c:13:11: statement expressions not supported
@@ -53,16 +53,16 @@ temp dir: /tmp
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020411-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020411-1.c:11:12: `f`: expected ;
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020411-1.c:12:12: `f`: expected ;
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020411-1.c:21:16: `d`: expected )
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020412-1.c:31:7 struct {x array of char; } struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020412-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020412-1.c:31:7 struct {x array of char; } struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020412-1.c:31:7 struct {x array of char; } struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020412-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020412-1.c:31:7 struct {x array of char; } struct 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020810-1.c: TODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20020810-1.c:17:16: struct A <- int
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20021113-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20021113-1.c:13:14: undefined: alloca
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20021118-1.c: TODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20021118-1.c:10:18: array of 4 int
 /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO - array of int 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030109-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO - array of int 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030222-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030222-1.c:14:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20030224-2.c:19:15 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030224-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20030224-2.c:19:15 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20030224-2.c:19:15 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030224-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20030224-2.c:19:15 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030330-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030330-1.c:9:21: undefined: __builtin_constant_p
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030330-1.c:9:21: undefined: __builtin_constant_p
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030330-1.c:10:25: undefined: link_error
@@ -78,8 +78,8 @@ temp dir: /tmp
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030910-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030910-1.c:8:25: `dc`: expected )
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030910-1.c:10:15: `dc`: expected )
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20030910-1.c:11:3: `exit`: expected ;
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7262:castExpressionValueNormal: TODOTODO 20031003-1.c:14:15 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7262:castExpressionValueNormal: TODOTODO 20031003-1.c:14:15 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7261:castExpressionValueNormal: TODOTODO 20031003-1.c:14:15 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20031003-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7261:castExpressionValueNormal: TODOTODO 20031003-1.c:14:15 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040223-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040223-1.c:15:12: undefined: alloca
 /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 20040302-1.c:13:3 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040302-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 20040302-1.c:13:3 
@@ -91,12 +91,12 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040520-1.c:6:9: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040520-1.c:14:14: undefined: bar
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040520-1.c:14:14: undefined: bar
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040705-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040705-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040705-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040705-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040629-1.c:123:1 opBitfield 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:3178:declaratorLValueDefault: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040707-1.c:5:3: 20040707-1.c:4:19: "s1"
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040707-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:3178:declaratorLValueDefault: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040707-1.c:5:3: 20040707-1.c:4:19: "s1"
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040709-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20040709-1.c:92:58: undefined: __builtin_classify_type
@@ -140,21 +140,21 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050119-2.c:8:27: undefined: __byte__
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050121-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050121-1.c:30:1: `r`: expected ;
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050121-1.c:31:1: `r`: expected ;
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-1.c:15:22 long long long long 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-1.c:15:22 long long long long 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-2.c:17:22 long long long long 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-2.c:17:22 long long long long 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-3.c:12:10 V2USI vector 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-3.c:12:10 V2USI vector 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:10954:assignOpVoidNormal: TODOTODO v4hi 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050604-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:10954:assignOpVoidNormal: TODOTODO v4hi 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20050607-1.c:12:25 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050607-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20050607-1.c:12:25 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO 20050929-1.c:8:18 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050929-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO 20050929-1.c:8:18 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-1.c:15:22 long long long long 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-1.c:15:22 long long long long 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-2.c:17:22 long long long long 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-2.c:17:22 long long long long 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-3.c:12:10 V2USI vector 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050316-3.c:12:10 V2USI vector 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:10957:assignOpVoidNormal: TODOTODO v4hi 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050604-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:10957:assignOpVoidNormal: TODOTODO v4hi 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20050607-1.c:12:25 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050607-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20050607-1.c:12:25 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO 20050929-1.c:8:18 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20050929-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO 20050929-1.c:8:18 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20051012-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20051012-1.c:22:7: too many arguments (struct type {a pointer to int; b:16 int; p:9 unsigned; }) in call to foo of type function() returning unsigned
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7809:unaryExpressionValue: TODOTODO vector 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20060420-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7809:unaryExpressionValue: TODOTODO vector 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7808:unaryExpressionValue: TODOTODO vector 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20060420-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7808:unaryExpressionValue: TODOTODO vector 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20061220-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20061220-1.c:10:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20061220-1.c:10:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20061220-1.c:15:3: undefined: nested
@@ -173,18 +173,18 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070614-1.c:24:15: operand has unsupported, invalid or incomplete type
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070824-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070824-1.c:17:20: undefined: __builtin_alloca
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20070919-1.c: TODO653
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20071029-1.c:36:8 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071029-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20071029-1.c:36:8 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20071202-1.c:8:9 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071202-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO 20071202-1.c:8:9 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20071029-1.c:36:8 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071029-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20071029-1.c:36:8 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20071202-1.c:8:9 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071202-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO 20071202-1.c:8:9 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 20071210-1.c:33:3 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071210-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 20071210-1.c:33:3 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071211-1.c:18:3 opBitfield 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071211-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7980:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071211-1.c:18:3 opBitfield 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071211-1.c:18:3 opBitfield 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071211-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7979:unaryExpressionPreIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071211-1.c:18:3 opBitfield 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 20071220-1.c:19:3 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071220-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 20071220-1.c:19:3 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071220-2.c:16:24 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071220-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071220-2.c:16:24 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071220-2.c:16:24 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071220-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20071220-2.c:16:24 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20080502-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20080502-1.c:7:10: undefined: __builtin_signbit
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20090219-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20090219-1.c:12:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20090219-1.c:12:3: nested functions not supported
@@ -192,8 +192,8 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20090219-1.c:21:3: undefined: bar
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20100430-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20100430-1.c:9:30: unsupported attribute: packed
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20180921-1.c: TODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/20180921-1.c:129:27: struct a <- long
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920302-1.c:8:25 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920302-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920302-1.c:8:25 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920302-1.c:8:25 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920302-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920302-1.c:8:25 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920415-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920415-1.c:2:18: `l`: expected ;
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920428-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920428-2.c:4:24: `l1`: expected ;
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-1.c:4:23: too many arguments (int) in call to x of type function() returning int
@@ -201,19 +201,19 @@ temp dir: /tmp
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 920501-3.c:17:3 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 920501-4.c:8:3 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-4.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:4039:jumpStatement: TODOTODO 920501-4.c:8:3 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-5.c:5:16 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-5.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-5.c:5:16 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-5.c:5:16 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-5.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-5.c:5:16 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-7.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920501-7.c:13:13: `xlab`: expected ;
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920612-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920612-2.c:6:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920612-2.c:6:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920612-2.c:13:7: undefined: a
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920612-2.c:13:7: undefined: a
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920625-1.c:12:8 point struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920625-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920625-1.c:12:8 point struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920625-1.c:12:8 point struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920625-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920625-1.c:12:8 point struct 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920721-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920721-2.c:3:23: variable length arrays not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920721-4.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920721-4.c:4:13: `lab1`: expected ;
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920908-1.c:12:3 T struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920908-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920908-1.c:12:3 T struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920908-1.c:12:3 T struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920908-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920908-1.c:12:3 T struct 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920929-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920929-1.c:6:8: variable length arrays not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920929-1.c:6:8: unsupported C type: array of double
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/920929-1.c:8:1: variable length arrays not supported
@@ -256,37 +256,37 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931002-1.c:25:3: undefined: t1
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931002-1.c:26:3: undefined: t2
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931002-1.c:24:3: too many errors
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-10.c:18:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-10.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-10.c:18:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-12.c:19:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-12.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-12.c:19:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-14.c:20:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-14.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-14.c:20:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-2.c:17:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-2.c:17:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-4.c:17:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-4.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-4.c:17:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-6.c:18:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-6.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-6.c:18:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-8.c:17:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-8.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-8.c:17:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7232:castExpressionValueFunction: TODOTODO 941014-1.c:8:11 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941014-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7232:castExpressionValueFunction: TODOTODO 941014-1.c:8:11 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-10.c:18:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-10.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-10.c:18:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-12.c:19:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-12.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-12.c:19:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-14.c:20:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-14.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-14.c:20:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-2.c:17:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-2.c:17:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-4.c:17:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-4.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-4.c:17:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-6.c:18:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-6.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-6.c:18:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-8.c:17:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-8.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/931004-8.c:17:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7231:castExpressionValueFunction: TODOTODO 941014-1.c:8:11 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941014-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7231:castExpressionValueFunction: TODOTODO 941014-1.c:8:11 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941202-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/941202-1.c:13:17: undefined: alloca
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8386:postfixExpressionSelect: TODOTODO 950628-1.c:28:7 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950628-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8386:postfixExpressionSelect: TODOTODO 950628-1.c:28:7 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8385:postfixExpressionSelect: TODOTODO 950628-1.c:28:7 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950628-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8385:postfixExpressionSelect: TODOTODO 950628-1.c:28:7 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950906-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/950906-1.c:8:11: statement expressions not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960312-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960312-1.c:14:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960416-1.c:57:16 union {d dt; s struct {h st; l st; }; } union 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960416-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960416-1.c:57:16 union {d dt; s struct {h st; l st; }; } union 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960416-1.c:57:16 union {d dt; s struct {h st; l st; }; } union 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960416-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960416-1.c:57:16 union {d dt; s struct {h st; l st; }; } union 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960512-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960512-1.c:5:22: declarator has unsupported, invalid or incomplete type
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/960512-1.c:14:22: declarator has unsupported, invalid or incomplete type
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/970217-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/970217-1.c:1:1: variable length arrays not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/980526-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/980526-1.c:6:13: `lbl1`: expected ;
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/980526-1.c:7:13: `lbl2`: expected ;
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990130-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990130-1.c:14:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990208-1.c:14:13 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990208-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990208-1.c:14:13 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990208-1.c:14:13 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990208-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990208-1.c:14:13 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990413-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990413-2.c:19:3: assembler statements not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/990413-2.c:30:3: assembler statements not supported
 /home/jnml/src/modernc.org/ccgo/v3/go.go:6643:binaryAdditiveExpressionValue: TODOTODO 990524-1.c:18:7 
@@ -319,8 +319,8 @@ temp dir: /tmp
 /home/jnml/src/modernc.org/ccgo/v3/go.go:6663:bitFieldPatch2: TODOTODO bitfld-3.c:21:29 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bitfld-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:6663:bitFieldPatch2: TODOTODO bitfld-3.c:21:29 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bswap-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bswap-1.c:6:10: undefined: __builtin_bswap64
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO bswap-2.c:106:17 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bswap-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO bswap-2.c:106:17 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO bswap-2.c:106:17 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/bswap-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO bswap-2.c:106:17 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c:14:3: undefined: __builtin_longjmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c:20:22: undefined: __builtin_alloca
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/built-in-setjmp.c:24:7: undefined: __builtin_setjmp
@@ -340,8 +340,8 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/builtin-types-compatible-p.c:18:39: `int`: expected primary-expression
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/call-trap-1.c: /home/jnml/src/modernc.org/cc/v3/type.go:793:Elem: [function]: Elem of invalid type
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/cbrt.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/cbrt.c:31:51: undefined: SI
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c:67:30 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c:67:30 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c:67:30 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-1.c:67:30 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/comp-goto-2.c:15:13: `xlab`: expected ;
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/complex-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/complex-1.c:24:20: `x`: expected , or )
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/complex-1.c:25:12: `x`: expected ;
@@ -366,8 +366,8 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/complex-7.c:6:25: declarator has unsupported, invalid or incomplete type
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/complex-7.c:7:25: declarator has unsupported, invalid or incomplete type
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/complex-7.c:8:25: declarator has unsupported, invalid or incomplete type
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO compndlit-1.c:20:8 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/compndlit-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO compndlit-1.c:20:8 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO compndlit-1.c:20:8 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/compndlit-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO compndlit-1.c:20:8 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ffs-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ffs-1.c:9:7: undefined: __builtin_ffs
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ffs-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ffs-2.c:39:11: undefined: __builtin_ffs
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/fprintf-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/fprintf-2.c:12:20: undefined: tmpnam
@@ -513,8 +513,8 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr17377.c:23:14: undefined: __builtin_return_address
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr19449.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr19449.c:6:9: undefined: __builtin_choose_expr
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr19449.c:11:10: undefined: __builtin_choose_expr
-/home/jnml/src/modernc.org/ccgo/v3/go.go:9034:postfixExpressionValueIndexNormal: TODOTODO pr22061-1.c:14:7 int 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:9034:postfixExpressionValueIndexNormal: TODOTODO pr22061-1.c:14:7 int 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:9035:postfixExpressionValueIndexNormal: TODOTODO pr22061-1.c:14:7 int 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:9035:postfixExpressionValueIndexNormal: TODOTODO pr22061-1.c:14:7 int 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-2.c:2:1: variable length arrays not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-3.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-3.c:4:3: nested functions not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-3.c:4:17: variable length arrays not supported
@@ -531,16 +531,16 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c:8:7: unsupported C type: array of 2 array of int
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c:9:3: undefined: foo
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22061-4.c:9:3: too many errors
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO pr22098-1.c:10:25 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22098-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO pr22098-1.c:10:25 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO pr22098-2.c:10:25 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22098-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO pr22098-2.c:10:25 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO pr22098-3.c:12:25 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22098-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8611:postfixExpressionAddrOf: TODOTODO pr22098-3.c:12:25 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr22141-1.c:44:8 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22141-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr22141-1.c:44:8 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr22141-2.c:44:8 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22141-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr22141-2.c:44:8 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO pr22098-1.c:10:25 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22098-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO pr22098-1.c:10:25 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO pr22098-2.c:10:25 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22098-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO pr22098-2.c:10:25 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO pr22098-3.c:12:25 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22098-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8610:postfixExpressionAddrOf: TODOTODO pr22098-3.c:12:25 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr22141-1.c:44:8 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22141-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr22141-1.c:44:8 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr22141-2.c:44:8 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr22141-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr22141-2.c:44:8 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23135.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23135.c:16:33: undefined: SI
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr23135.c:17:33: undefined: SI
 /home/jnml/src/modernc.org/ccgo/v3/go.go:1849:structLiteral: TODOTODO - 
@@ -552,12 +552,12 @@ temp dir: /tmp
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr28289.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:4855:conditionalExpressionFunc: TODOTODO pr28289.c:16:12 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO pr28865.c:3:20 array of char 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr28865.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO pr28865.c:3:20 array of char 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8386:postfixExpressionSelect: TODOTODO pr30185.c:21:7 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr30185.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8386:postfixExpressionSelect: TODOTODO pr30185.c:21:7 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8385:postfixExpressionSelect: TODOTODO pr30185.c:21:7 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr30185.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8385:postfixExpressionSelect: TODOTODO pr30185.c:21:7 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO pr33382.c:6:23 array of int 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr33382.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:2003:typ: TODOTODO pr33382.c:6:23 array of int 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11249:labeledStatement: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c:5:9 LabeledStatementRange 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11249:labeledStatement: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c:5:9 LabeledStatementRange 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11252:labeledStatement: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c:5:9 LabeledStatementRange 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11252:labeledStatement: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34154.c:5:9 LabeledStatementRange 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:4855:conditionalExpressionFunc: TODOTODO pr34768-1.c:15:4 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr34768-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:4855:conditionalExpressionFunc: TODOTODO pr34768-1.c:15:4 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:4855:conditionalExpressionFunc: TODOTODO pr34768-2.c:17:14 
@@ -605,10 +605,10 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43220.c:12:11: too many errors
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43385.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43385.c:27:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43560.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr43560.c:25:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr44164.c:14:10 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44164.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr44164.c:14:10 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44575.c:27:10 struct S struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44575.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44575.c:27:10 struct S struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr44164.c:14:10 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44164.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr44164.c:14:10 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44575.c:27:10 struct S struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44575.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr44575.c:27:10 struct S struct 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr45695.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr45695.c:8:3: assembler statements not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr45695.c:26:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr46309.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr46309.c:18:3: assembler statements not supported
@@ -622,15 +622,15 @@ temp dir: /tmp
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr51877.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr51877.c:22:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr51933.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr51933.c:16:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr52286.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr52286.c:10:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7896:unaryExpressionLValue: TODOTODO pr53645-2.c:41:1 UV vector 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr53645-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7896:unaryExpressionLValue: TODOTODO pr53645-2.c:41:1 UV vector 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7896:unaryExpressionLValue: TODOTODO pr53645.c:41:1 UV vector 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr53645.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7896:unaryExpressionLValue: TODOTODO pr53645.c:41:1 UV vector 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7895:unaryExpressionLValue: TODOTODO pr53645-2.c:41:1 UV vector 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr53645-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7895:unaryExpressionLValue: TODOTODO pr53645-2.c:41:1 UV vector 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7895:unaryExpressionLValue: TODOTODO pr53645.c:41:1 UV vector 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr53645.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7895:unaryExpressionLValue: TODOTODO pr53645.c:41:1 UV vector 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr54471.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr54471.c:13:1: `foo`: expected declaration: IDENTIFIER
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr54471.c:15:14: `irslt`: expected ;
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr54471.c:16:5: `ix`: expected ;
-/home/jnml/src/modernc.org/ccgo/v3/go.go:9434:postfixExpressionIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr55750.c:14:3 opBitfield 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr55750.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:9434:postfixExpressionIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr55750.c:14:3 opBitfield 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:9437:postfixExpressionIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr55750.c:14:3 opBitfield 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr55750.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:9437:postfixExpressionIncDecVoid: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr55750.c:14:3 opBitfield 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr56205.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr56205.c:12:3: assembler statements not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr56205.c:26:3: assembler statements not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr56205.c:56:3: assembler statements not supported
@@ -644,8 +644,8 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr56982.c:33:13: undefined: _setjmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr56982.c:39:5: undefined: longjmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr56982.c:39:5: undefined: longjmp
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr57130.c:18:8 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57130.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr57130.c:18:8 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr57130.c:18:8 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57130.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr57130.c:18:8 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57344-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57344-1.c:21:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57344-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57344-2.c:22:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57344-3.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr57344-3.c:17:3: assembler statements not supported
@@ -683,14 +683,14 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr65648.c:19:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr65956.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr65956.c:17:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr67037.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr67037.c:30:5: too many arguments (array of 5348 char) in call to extfunc of type function() returning long
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr67714.c:8:3 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr67714.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr67714.c:8:3 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr67714.c:8:3 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr67714.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr67714.c:8:3 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68249.c: runtime error: invalid memory address or nil pointer dereference
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68328.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68328.c:6:3: assembler statements not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68328.c:13:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68381.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68381.c:8:7: undefined: __builtin_mul_overflow
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr68532.c:10:3 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68532.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr68532.c:10:3 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr68532.c:10:3 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr68532.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr68532.c:10:3 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr69320-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr69320-2.c:12:6: assembler statements not supported
 /home/jnml/src/modernc.org/ccgo/v3/go.go:3487:convert: TODOTODO "" -> "pointer to void"
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr70460.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:3487:convert: TODOTODO "" -> "pointer to void"
@@ -699,8 +699,8 @@ temp dir: /tmp
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71083.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71083.c:11:1: `{`: expected ;
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71083.c:13:3: `for`: expected {
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71083.c:14:5: `{`: expected direct-declarator
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71494.c:7:17 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71494.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7814:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71494.c:7:17 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71494.c:7:17 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71494.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7813:unaryExpressionValue: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71494.c:7:17 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71554.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71554.c:17:7: undefined: __builtin_mul_overflow
 /home/jnml/src/modernc.org/ccgo/v3/init.go:142:initializer: TODOTODO pr71626-1.c:8:9 V 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71626-1.c: /home/jnml/src/modernc.org/ccgo/v3/init.go:142:initializer: TODOTODO pr71626-1.c:8:9 V 
@@ -708,11 +708,11 @@ temp dir: /tmp
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr71626-2.c: /home/jnml/src/modernc.org/ccgo/v3/init.go:142:initializer: TODOTODO pr71626-1.c:8:9 V 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr77767.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr77767.c:3:1: variable length arrays not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr78438.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr78438.c:15:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr78559.c:19:7 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr78559.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr78559.c:19:7 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr78559.c:19:7 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr78559.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr78559.c:19:7 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr78726.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr78726.c:18:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr79286.c:7:3 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr79286.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr79286.c:7:3 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr79286.c:7:3 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr79286.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr79286.c:7:3 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr79354.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr79354.c:24:3: assembler statements not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr79354.c:24:3: assembler statements not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr79354.c:26:3: assembler statements not supported
@@ -733,15 +733,15 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr82210.c:10:9: unsupported C type: array of int
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr82210.c:10:9: unsupported C type: array of int
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr82210.c:10:9: unsupported C type: array of int
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr82524.c:31:10 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr82524.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO pr82524.c:31:10 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr82524.c:31:10 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr82524.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO pr82524.c:31:10 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr82954.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr82954.c:17:3: assembler statements not supported
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84169.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84169.c:4:27: `T`: expected declaration: IDENTIFIER
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84169.c:9:3: `b`: expected declaration: IDENTIFIER
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84169.c:12:1: `foo`: expected declaration: IDENTIFIER
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84478.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84478.c:45:3: assembler statements not supported
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr84524.c:26:3 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84524.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO pr84524.c:26:3 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr84524.c:26:3 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84524.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO pr84524.c:26:3 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84748.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84748.c:3:27: `u128`: expected declaration: IDENTIFIER
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84748.c:6:6: `b`: expected declaration: IDENTIFIER
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/pr84748.c:23:8: `x`: expected ;
@@ -779,8 +779,8 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/printf-2.c:50:7: undefined: remove
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/printf-2.c:55:3: undefined: remove
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/printf-2.c:46:12: too many errors
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO restrict-1.c:16:11 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/restrict-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO restrict-1.c:16:11 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO restrict-1.c:16:11 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/restrict-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO restrict-1.c:16:11 
 /home/jnml/src/modernc.org/ccgo/v3/init.go:142:initializer: TODOTODO scal-to-vec1.c:34:27 vector of 8 short 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/scal-to-vec1.c: /home/jnml/src/modernc.org/ccgo/v3/init.go:142:initializer: TODOTODO scal-to-vec1.c:34:27 vector of 8 short 
 /home/jnml/src/modernc.org/ccgo/v3/init.go:142:initializer: TODOTODO scal-to-vec2.c:35:27 vector of 16 char 
@@ -796,21 +796,21 @@ temp dir: /tmp
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/simd-5.c: /home/jnml/src/modernc.org/ccgo/v3/init.go:142:initializer: TODOTODO simd-5.c:5:8 Q 
 /home/jnml/src/modernc.org/ccgo/v3/go.go:3487:convert: TODOTODO "v8qi" -> "v8qi"
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/simd-6.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:3487:convert: TODOTODO "v8qi" -> "v8qi"
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO ssad-run.c:8:3 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ssad-run.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO ssad-run.c:8:3 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/stdarg-3.c:73:10 struct S1 {i int; d double; j int; e double; } struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/stdarg-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/stdarg-3.c:73:10 struct S1 {i int; d double; j int; e double; } struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO ssad-run.c:8:3 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/ssad-run.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO ssad-run.c:8:3 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/stdarg-3.c:73:10 struct S1 {i int; d double; j int; e double; } struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/stdarg-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/stdarg-3.c:73:10 struct S1 {i int; d double; j int; e double; } struct 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/stkalign.c: runtime error: invalid memory address or nil pointer dereference
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c:21:11 struct tiny struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c:21:11 struct tiny struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-varg-1.c:16:15 struct s struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-varg-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-varg-1.c:16:15 struct s struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c:21:11 struct tiny struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-stdarg-1.c:21:11 struct tiny struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-varg-1.c:16:15 struct s struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-varg-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/strct-varg-1.c:16:15 struct s struct 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/string-opt-18.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/string-opt-18.c:27:7: undefined: mempcpy
 /home/jnml/src/modernc.org/ccgo/v3/go.go:6628:binaryAdditiveExpressionValue: TODOTODO string-opt-5.c:76:33 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/string-opt-5.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:6628:binaryAdditiveExpressionValue: TODOTODO string-opt-5.c:76:33 
     all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/struct-ini-1.c: TODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/struct-ini-1.c:7:25: array of 2 int
-/home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO usad-run.c:8:3 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/usad-run.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11075:iterationStatement: TODOTODO usad-run.c:8:3 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO usad-run.c:8:3 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/usad-run.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:11078:iterationStatement: TODOTODO usad-run.c:8:3 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/user-printf.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/user-printf.c:23:20: undefined: tmpnam
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/user-printf.c:23:20: undefined: tmpnam
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/user-printf.c:24:13: undefined: freopen64
@@ -828,10 +828,10 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-2.c:68:7: too many arguments (pointer to char) in call to strlen of type function() returning unsigned long
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-2.c:82:7: too many arguments (pointer to char) in call to strlen of type function() returning unsigned long
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-2.c:82:7: too many errors
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-22.c:46:1 A0 struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-22.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-22.c:46:1 A0 struct 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c:40:11 struct A struct 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7285:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c:40:11 struct A struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-22.c:46:1 A0 struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-22.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-22.c:46:1 A0 struct 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c:40:11 struct A struct 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:7284:castExpressionValueNormal: TODOTODO /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/va-arg-pack-1.c:40:11 struct A struct 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/vla-dealloc-1.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/vla-dealloc-1.c:21:7: variable length arrays not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/vla-dealloc-1.c:21:7: variable length arrays not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/vla-dealloc-1.c:22:3: variable length arrays not supported
@@ -839,19 +839,19 @@ temp dir: /tmp
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/vla-dealloc-1.c:23:3: variable length arrays not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/vla-dealloc-1.c:24:7: variable length arrays not supported
         /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/vla-dealloc-1.c:22:3: too many errors
-/home/jnml/src/modernc.org/ccgo/v3/go.go:10037:primaryExpressionBool: TODOTODO widechar-1.c:11:7 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/widechar-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:10037:primaryExpressionBool: TODOTODO widechar-1.c:11:7 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:10145:primaryExpressionAddrOf: TODOTODO widechar-3.c:11:21 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/widechar-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:10145:primaryExpressionAddrOf: TODOTODO widechar-3.c:11:21 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO zero-struct-1.c:9:26 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/zero-struct-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO zero-struct-1.c:9:26 
-/home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO zero-struct-2.c:15:22 
-    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/zero-struct-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8819:postfixExpressionValue: TODOTODO zero-struct-2.c:15:22 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:10040:primaryExpressionBool: TODOTODO widechar-1.c:11:7 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/widechar-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:10040:primaryExpressionBool: TODOTODO widechar-1.c:11:7 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:10148:primaryExpressionAddrOf: TODOTODO widechar-3.c:11:21 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/widechar-3.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:10148:primaryExpressionAddrOf: TODOTODO widechar-3.c:11:21 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO zero-struct-1.c:9:26 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/zero-struct-1.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO zero-struct-1.c:9:26 
+/home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO zero-struct-2.c:15:22 
+    all_test.go:824: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/zero-struct-2.c: /home/jnml/src/modernc.org/ccgo/v3/go.go:8818:postfixExpressionValue: TODOTODO zero-struct-2.c:15:22 
     all_test.go:834: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/zerolen-2.c: /home/jnml/src/modernc.org/ccgo/v3/testdata/gcc-9.1.0/gcc/testsuite/gcc.c-torture/execute/zerolen-2.c:4:38: undefined: word
     all_test.go:703: files 1,531, ok 1,213
---- FAIL: TestGCCExec (241.47s)
+--- FAIL: TestGCCExec (271.64s)
 === RUN   TestSQLite
---- PASS: TestSQLite (9.61s)
+--- PASS: TestSQLite (10.98s)
 === RUN   TestMjson
     all_test.go:1074: /home/jnml/src/modernc.org/ccgo/v3/testdata/microjson-1.5/mjson.c:742:37: undefined: strtod
         /home/jnml/src/modernc.org/ccgo/v3/testdata/microjson-1.5/test_microjson.c:814:22: undefined: getopt
@@ -864,96 +864,97 @@ temp dir: /tmp
 === RUN   TestCompCert/ccgo
 === CONT  TestCompCert
     all_test.go:1196:   compiler           test    T         comp  exec match    coef
-    all_test.go:1198:        gcc          aes.c    46.174ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc    almabench.c   162.030ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc  binarytrees.c    26.483ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc       bisect.c    50.205ms  true  true  true   1.031
-    all_test.go:1198:        gcc        chomp.c   107.241ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc     fannkuch.c   138.641ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc          fft.c   103.056ms  true  true  true   1.025
-    all_test.go:1198:        gcc        fftsp.c    28.826ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc         fftw.c    41.212ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc          fib.c    43.202ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc       integr.c    33.393ms  true  true  true   1.038
-    all_test.go:1198:        gcc  knucleotide.c    88.253ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc        lists.c    41.140ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc   mandelbrot.c    66.999ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc        nbody.c    97.611ms  true  true  true   1.087
-    all_test.go:1198:        gcc       nsieve.c    63.003ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc   nsievebits.c    58.070ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc       perlin.c    35.027ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc        qsort.c    77.612ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc         sha1.c    39.911ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc         sha3.c    23.299ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc    siphash24.c    64.640ms  true  true  true   1.000 *
-    all_test.go:1198:        gcc     spectral.c   111.204ms  true  true  true   1.009
-    all_test.go:1198:        gcc        vmach.c    50.133ms  true  true  true   1.000 *
-    all_test.go:1198:       ccgo          aes.c    54.436ms  true  true  true   1.179
-    all_test.go:1198:       ccgo    almabench.c   227.584ms  true  true  true   1.405
-    all_test.go:1198:       ccgo  binarytrees.c    50.573ms  true  true  true   1.910
-    all_test.go:1198:       ccgo       bisect.c    48.685ms  true  true  true   1.000 *
-    all_test.go:1198:       ccgo        chomp.c   132.343ms  true  true  true   1.234
-    all_test.go:1198:       ccgo     fannkuch.c   172.174ms  true  true  true   1.242
-    all_test.go:1198:       ccgo          fft.c   100.591ms  true  true  true   1.000 *
-    all_test.go:1198:       ccgo        fftsp.c    59.433ms  true  true  true   2.062
-    all_test.go:1198:       ccgo         fftw.c    63.350ms  true  true  true   1.537
-    all_test.go:1198:       ccgo          fib.c    57.877ms  true  true  true   1.340
-    all_test.go:1198:       ccgo       integr.c    32.168ms  true  true  true   1.000 *
-    all_test.go:1198:       ccgo  knucleotide.c   120.100ms  true  true  true   1.361
-    all_test.go:1198:       ccgo        lists.c    44.660ms  true  true  true   1.086
-    all_test.go:1198:       ccgo   mandelbrot.c   200.734ms  true  true  true   2.996
-    all_test.go:1198:       ccgo        nbody.c    89.780ms  true  true  true   1.000 *
-    all_test.go:1198:       ccgo       nsieve.c    70.214ms  true  true  true   1.114
-    all_test.go:1198:       ccgo   nsievebits.c    71.189ms  true  true  true   1.226
-    all_test.go:1198:       ccgo       perlin.c    49.077ms  true  true  true   1.401
-    all_test.go:1198:       ccgo        qsort.c    89.204ms  true  true  true   1.149
-    all_test.go:1198:       ccgo         sha1.c    60.796ms  true  true  true   1.523
-    all_test.go:1198:       ccgo         sha3.c    49.621ms  true  true  true   2.130
-    all_test.go:1198:       ccgo    siphash24.c    75.569ms  true  true  true   1.169
-    all_test.go:1198:       ccgo     spectral.c   110.158ms  true  true  true   1.000 *
-    all_test.go:1198:       ccgo        vmach.c    50.637ms  true  true  true   1.010
+    all_test.go:1198:        gcc          aes.c    47.967ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc    almabench.c   164.407ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc  binarytrees.c    25.808ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc       bisect.c    47.641ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc        chomp.c   108.308ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc     fannkuch.c   134.653ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc          fft.c   104.244ms  true  true  true   1.019
+    all_test.go:1198:        gcc        fftsp.c    28.850ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc         fftw.c    39.235ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc          fib.c    41.037ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc       integr.c    33.292ms  true  true  true   1.024
+    all_test.go:1198:        gcc  knucleotide.c    85.293ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc        lists.c    44.208ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc   mandelbrot.c    64.838ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc        nbody.c    98.073ms  true  true  true   1.011
+    all_test.go:1198:        gcc       nsieve.c    59.706ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc   nsievebits.c    60.255ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc       perlin.c    34.441ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc        qsort.c    76.976ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc         sha1.c    36.902ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc         sha3.c    21.106ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc    siphash24.c    63.910ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc     spectral.c   109.344ms  true  true  true   1.000 *
+    all_test.go:1198:        gcc        vmach.c    45.237ms  true  true  true   1.000 *
+    all_test.go:1198:       ccgo          aes.c    54.652ms  true  true  true   1.139
+    all_test.go:1198:       ccgo    almabench.c   238.310ms  true  true  true   1.450
+    all_test.go:1198:       ccgo  binarytrees.c    52.099ms  true  true  true   2.019
+    all_test.go:1198:       ccgo       bisect.c    49.622ms  true  true  true   1.042
+    all_test.go:1198:       ccgo        chomp.c   138.627ms  true  true  true   1.280
+    all_test.go:1198:       ccgo     fannkuch.c   175.620ms  true  true  true   1.304
+    all_test.go:1198:       ccgo          fft.c   102.294ms  true  true  true   1.000 *
+    all_test.go:1198:       ccgo        fftsp.c    60.844ms  true  true  true   2.109
+    all_test.go:1198:       ccgo         fftw.c    66.782ms  true  true  true   1.702
+    all_test.go:1198:       ccgo          fib.c    55.961ms  true  true  true   1.364
+    all_test.go:1198:       ccgo       integr.c    32.512ms  true  true  true   1.000 *
+    all_test.go:1198:       ccgo  knucleotide.c   120.955ms  true  true  true   1.418
+    all_test.go:1198:       ccgo        lists.c    45.173ms  true  true  true   1.022
+    all_test.go:1198:       ccgo   mandelbrot.c   183.923ms  true  true  true   2.837
+    all_test.go:1198:       ccgo        nbody.c    97.026ms  true  true  true   1.000 *
+    all_test.go:1198:       ccgo       nsieve.c    76.065ms  true  true  true   1.274
+    all_test.go:1198:       ccgo   nsievebits.c    73.855ms  true  true  true   1.226
+    all_test.go:1198:       ccgo       perlin.c    46.713ms  true  true  true   1.356
+    all_test.go:1198:       ccgo        qsort.c    97.619ms  true  true  true   1.268
+    all_test.go:1198:       ccgo         sha1.c    66.092ms  true  true  true   1.791
+    all_test.go:1198:       ccgo         sha3.c    47.354ms  true  true  true   2.244
+    all_test.go:1198:       ccgo    siphash24.c    75.479ms  true  true  true   1.181
+    all_test.go:1198:       ccgo     spectral.c   111.697ms  true  true  true   1.022
+    all_test.go:1198:       ccgo        vmach.c    50.707ms  true  true  true   1.121
     all_test.go:1205: Considered tests: 24/24
-    all_test.go:1213:       ccgo   2.080952488s  1.303
-    all_test.go:1213:        gcc   1.597367179s  1.000
---- PASS: TestCompCert (26.19s)
-    --- PASS: TestCompCert/gcc (9.19s)
-    --- PASS: TestCompCert/ccgo (16.99s)
+    all_test.go:1213:       ccgo   2.119982008s  1.345
+    all_test.go:1213:        gcc   1.575729304s  1.000
+--- PASS: TestCompCert (26.51s)
+    --- PASS: TestCompCert/gcc (9.12s)
+    --- PASS: TestCompCert/ccgo (17.38s)
 === RUN   TestBug
     all_test.go:1356: files 10, ok 10
---- PASS: TestBug (1.93s)
+--- PASS: TestBug (1.96s)
 === RUN   TestCSmith
-    all_test.go:1569: --bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 1906742816
-    all_test.go:1569: --bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 612971101
-    all_test.go:1569: --bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 3629008936
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4130344133
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3130410542
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1833258637
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3126091077
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2205128324
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3043990076
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2517344771
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 56498550
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3645367888
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 169375684
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3578720023
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1885311141
-    all_test.go:1569: --no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3720922579
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 241244373
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 517639208
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2205128324
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2876930815
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3365074920
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3329111231
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2648215054
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3919255949
-    all_test.go:1569: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563
-    all_test.go:1668: files 75, bytes 8,582,298, ok 75 in 2m2.128143879s
---- PASS: TestCSmith (122.13s)
+    all_test.go:1570: --bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 1906742816
+    all_test.go:1570: --bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 612971101
+    all_test.go:1570: --bitfields --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid --max-nested-struct-level 10 -s 3629008936
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4130344133
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3130410542
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1833258637
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3126091077
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2205128324
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3043990076
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2517344771
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 56498550
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3645367888
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 169375684
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3578720023
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 1885311141
+    all_test.go:1570: --no-bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3720922579
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 241244373
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 517639208
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2205128324
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2876930815
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3365074920
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3329111231
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2648215054
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3919255949
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563
+    all_test.go:1570: --bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4101947480
+    all_test.go:1669: files 76, bytes 9,219,751, ok 76 in 2m0.311440032s
+--- PASS: TestCSmith (120.31s)
 === RUN   TestMem
-    all_test.go:1673: not enabled
+    all_test.go:1674: not enabled
 --- SKIP: TestMem (0.00s)
 FAIL
 exit status 1
-FAIL	modernc.org/ccgo/v3	414.589s
+FAIL	modernc.org/ccgo/v3	446.305s
 make[2]: *** [Makefile:46: test_log] Error 1
 make[2]: Leaving directory '/home/jnml/src/modernc.org/ccgo/v3'

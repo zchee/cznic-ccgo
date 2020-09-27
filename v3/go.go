@@ -6671,10 +6671,10 @@ func (p *project) bitFieldPatch2(n cc.Node, a, b cc.Operand, promote cc.Type) st
 		return ""
 	}
 
+	p.w("((")
 	switch {
 	case promote.IsSignedType():
 		n := int(promote.Size())*8 - w
-		p.w("(")
 		var s string
 		switch promote.Size() {
 		case 4:
@@ -6683,12 +6683,11 @@ func (p *project) bitFieldPatch2(n cc.Node, a, b cc.Operand, promote cc.Type) st
 			s = fmt.Sprintf(")&%#x", m)
 		}
 		if n != 0 {
-			s += fmt.Sprintf("<<%d>>%[1]d", n)
+			s += fmt.Sprintf("<<%d>>%[1]d)", n)
 		}
 		return s
 	default:
-		p.w("(")
-		return fmt.Sprintf(")&%#x", m)
+		return fmt.Sprintf(")&%#x)", m)
 	}
 }
 
@@ -8910,6 +8909,8 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 	k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type())
 	switch {
 	case n.Operand.Type().IsBitFieldType():
+		p.w("(")
+		defer p.w(")")
 		fld := n.Field
 		defer p.w("%s", p.convertType(n, fld.Promote(), t, flags))
 		switch pe.Kind() {
@@ -9079,7 +9080,8 @@ func (p *project) postfixExpressionValueSelectUnion(f *function, n *cc.PostfixEx
 	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
-		defer p.w("%s", p.convertType(n, fld.Promote(), t, flags))
+		p.w("(")
+		defer p.w("%s)", p.convertType(n, fld.Promote(), t, flags))
 		x := p.convertType(n, nil, fld.Promote(), flags)
 		p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
@@ -9104,7 +9106,8 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
-		defer p.w("%s", p.convertType(n, fld.Promote(), t, flags))
+		p.w("(")
+		defer p.w("%s)", p.convertType(n, fld.Promote(), t, flags))
 		x := p.convertType(n, nil, fld.Promote(), flags)
 		p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
@@ -10725,13 +10728,13 @@ func (p *project) readBitfield(n cc.Node, ptr string, bf cc.Field, promote cc.Ty
 	m := bf.Mask()
 	o := bf.BitFieldOffset()
 	w := bf.BitFieldWidth()
-	p.w("%s(*(*uint%d)(unsafe.Pointer(%s))&%#x)", p.typ(n, promote), bw, ptr, m)
+	p.w("(%s(*(*uint%d)(unsafe.Pointer(%s))&%#x)", p.typ(n, promote), bw, ptr, m)
 	switch {
 	case bf.Type().IsSignedType():
 		bits := int(promote.Size()) * 8
-		p.w("<<%d>>%d", bits-w-o, bits-w)
+		p.w("<<%d>>%d)", bits-w-o, bits-w)
 	default:
-		p.w(">>%d", o)
+		p.w(">>%d)", o)
 	}
 }
 
