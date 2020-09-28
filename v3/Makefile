@@ -60,7 +60,11 @@ test_linux_arm64:
 	GOOS=linux GOARCH=arm64 make test
 
 test_windows_amd64:
-	GOOS=windows GOARCH=amd64 make test
+	go version | tee %TEMP%\testlog-windows-amd64
+	go test -v -timeout 24h | tee -a %TEMP%\testlog-windows-amd64
+	date /T | tee -a %TEMP%\testlog-windows-amd64
+	time /T | tee -a %TEMP%\testlog-windows-amd64
+
 
 devbench:
 	date 2>&1 | tee log-devbench

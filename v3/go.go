@@ -1169,10 +1169,10 @@ type project struct {
 	task               *task
 	tlds               map[*cc.Declarator]*tld
 	ts                 bytes.Buffer // Text segment
-	ts4                []rune       // Text segment, alignment 4
-	ts4Name            string
-	ts4NameP           string
-	ts4Offs            map[cc.StringID]uintptr
+	tsW                []rune       // Text segment, wcha_t
+	tsWName            string
+	tsWNameP           string
+	tsWOffs            map[cc.StringID]uintptr
 	tsName             string
 	tsNameP            string
 	tsOffs             map[cc.StringID]uintptr
@@ -1181,6 +1181,7 @@ type project struct {
 	typedefsEmited     map[string]struct{}
 	verifyStructs      map[string]cc.Type
 	wanted             map[*cc.Declarator]struct{}
+	wcharSize          uintptr
 
 	isMain bool
 	pass1  bool
@@ -1221,12 +1222,13 @@ func newProject(t *task) (*project, error) {
 		symtab:           map[string]interface{}{},
 		task:             t,
 		tlds:             map[*cc.Declarator]*tld{},
-		ts4Offs:          map[cc.StringID]uintptr{},
+		tsWOffs:          map[cc.StringID]uintptr{},
 		tsOffs:           map[cc.StringID]uintptr{},
 		typedefTypes:     map[cc.StringID]*typedef{},
 		typedefsEmited:   map[string]struct{}{},
 		verifyStructs:    map[string]cc.Type{},
 		wanted:           map[*cc.Declarator]struct{}{},
+		wcharSize:        t.asts[0].WideCharType.Size(),
 	}
 	p.scope.take(idCAPI)
 	for _, v := range t.imported {
@@ -1244,8 +1246,8 @@ func newProject(t *task) (*project, error) {
 	}
 	p.tsNameP = p.scope.take(idTs)
 	p.tsName = p.scope.take(idTs)
-	p.ts4NameP = p.scope.take(idWtext)
-	p.ts4Name = p.scope.take(idWtext)
+	p.tsWNameP = p.scope.take(idWtext)
+	p.tsWName = p.scope.take(idWtext)
 	if err := p.layout(); err != nil {
 		return nil, err
 	}
@@ -2634,13 +2636,13 @@ func (p *project) flushTS() {
 		p.w("var %s = %q\n", p.tsName, b)
 		p.w("var %s = (*reflect.StringHeader)(unsafe.Pointer(&%s)).Data\n", p.tsNameP, p.tsName)
 	}
-	if len(p.ts4) != 0 {
-		p.w("var %s = [...]%s{", p.ts4Name, p.typ(nil, p.ast.WideCharType))
-		for _, v := range p.ts4 {
+	if len(p.tsW) != 0 {
+		p.w("var %s = [...]%s{", p.tsWName, p.typ(nil, p.ast.WideCharType))
+		for _, v := range p.tsW {
 			p.w("%d, ", v)
 		}
 		p.w("}\n")
-		p.w("var %s = uintptr(unsafe.Pointer(&%s[0]))\n", p.ts4NameP, p.ts4Name)
+		p.w("var %s = uintptr(unsafe.Pointer(&%s[0]))\n", p.tsWNameP, p.tsWName)
 	}
 }
 
@@ -10339,18 +10341,18 @@ func (p *project) wideStringLiteral(v cc.Value, pad int) string {
 	switch x := v.(type) {
 	case cc.WideStringValue:
 		id := cc.StringID(x)
-		off, ok := p.ts4Offs[id]
+		off, ok := p.tsWOffs[id]
 		if !ok {
-			off = 4 * uintptr(len(p.ts4))
+			off = p.wcharSize * uintptr(len(p.tsW))
 			s := []rune(id.String())
 			if pad != 0 {
 				s = append(s, make([]rune, pad)...)
 			}
-			p.ts4 = append(p.ts4, s...)
-			p.ts4 = append(p.ts4, 0)
+			p.tsW = append(p.tsW, s...)
+			p.tsW = append(p.tsW, 0)
 			p.tsOffs[id] = off
 		}
-		return fmt.Sprintf("%s%s", p.ts4NameP, nonZeroUintptr(off))
+		return fmt.Sprintf("%s%s", p.tsWNameP, nonZeroUintptr(off))
 	default:
 		panic(todo("%T", x))
 	}
