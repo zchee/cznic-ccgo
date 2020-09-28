@@ -603,7 +603,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			if *oTrace {
 				fmt.Println(err)
 			}
-			t.Errorf("%v: out\n%s\nexp\n%s", path, out, exp)
+			t.Errorf("%v: out\n%s\nexp\n%s\nout\n%s\nexp\n%s", path, out, exp, hex.Dump(out), hex.Dump(exp))
 			return nil
 		}
 
@@ -617,6 +617,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func trim(b []byte) (r []byte) {
+	b = bytes.TrimSpace(b)
 	b = bytes.TrimLeft(b, "\n")
 	b = bytes.TrimRight(b, "\n")
 	a := bytes.Split(b, []byte("\n"))
@@ -1223,6 +1224,10 @@ func testCompCertGcc(t *testing.T, files []string, N int, rdir string) (r []*com
 next:
 	for _, fn := range files {
 		base := filepath.Base(fn)
+		if runtime.GOOS == "windows" && base == "mandelbrot.c" {
+			continue
+		}
+
 		if *oTrace {
 			fmt.Println(base)
 		}
@@ -1247,15 +1252,7 @@ next:
 			}
 		}
 		d := time.Since(t0) / time.Duration(N)
-		if runtime.GOOS == "windows" { //TODO-
-			switch base {
-			case "bisect.c", "fftw.c", "perlin.c": // mingw on windows prints one zero too many in some cases
-				r = append(r, &compCertResult{nm, base, d, 0, true, true, true})
-				continue
-			}
-
-			out = bytes.ReplaceAll(out, []byte{'\r', '\n'}, []byte{'\n'})
-		}
+		out = bytes.ReplaceAll(out, []byte{'\r'}, nil)
 		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
 	}
 	return r
@@ -1263,20 +1260,36 @@ next:
 
 func checkResult(t *testing.T, out []byte, base, rdir string) bool {
 	base = base[:len(base)-len(filepath.Ext(base))]
-	b, err := ioutil.ReadFile(filepath.Join(rdir, base))
+	fn := filepath.Join(rdir, base)
+	b, err := ioutil.ReadFile(fn)
 	if err != nil {
 		t.Errorf("%v: %v", base, err)
 		return false
 	}
 
-	if !bytes.Equal(out, b) {
-		t.Logf("got\n%s", hex.Dump(out))
-		t.Logf("exp\n%s", hex.Dump(b))
-		t.Errorf("%v: result differs", base)
-		return false
+	if bytes.Equal(out, b) {
+		return true
 	}
 
-	return true
+	fn2 := fn + "." + runtime.GOOS
+	b2, err := ioutil.ReadFile(fn2)
+	if err == nil {
+		switch {
+		case bytes.Equal(out, b2):
+			return true
+		default:
+			t.Logf("got\n%s", hex.Dump(out))
+			t.Logf("exp\n%s", hex.Dump(b2))
+			t.Errorf("%v: result differs", base)
+			return false
+		}
+	}
+
+	trc("====\n%s\n====", out)
+	t.Logf("got\n%s", hex.Dump(out))
+	t.Logf("exp\n%s", hex.Dump(b))
+	t.Errorf("%v: result differs", base)
+	return false
 }
 
 func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
@@ -1288,6 +1301,10 @@ func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*co
 next:
 	for _, fn := range files {
 		base := filepath.Base(fn)
+		if runtime.GOOS == "windows" && base == "mandelbrot.c" {
+			continue
+		}
+
 		if *oTrace {
 			fmt.Println(base)
 		}
@@ -1338,6 +1355,7 @@ next:
 			}
 		}
 		d := time.Since(t0) / time.Duration(N)
+		out = bytes.ReplaceAll(out, []byte{'\r'}, nil)
 		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
 	}
 	return r
