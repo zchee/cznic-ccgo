@@ -77,7 +77,7 @@ func init() {
 
 var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
-	oCSmith     = flag.Duration("csmith", 2*time.Minute, "")
+	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
 	oDebug      = flag.Bool("debug", false, "")
 	oDev        = flag.Bool("dev", false, "Enable developer tests/downloads.")
 	oDownload   = flag.Bool("download", false, "Download missing testdata. Add -dev to download also 100+ MB of developer resources.")
@@ -1575,8 +1575,8 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3919255949",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4101947480",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4058772172",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2273393378",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4058772172",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2273393378",
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
@@ -1648,6 +1648,7 @@ out:
 			"-ccgo-verify-structs",
 			"main.c",
 		}, &stdout, &stderr)
+		j.cfg.MaxSourceLine = 1 << 20
 
 		func() {
 

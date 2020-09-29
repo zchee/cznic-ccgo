@@ -10698,10 +10698,11 @@ func (p *project) assignOpValueBitfield(f *function, n *cc.AssignmentExpression,
 		panic(todo(""))
 	}
 
+	ot := n.Operand.Type()
 	lhs := n.UnaryExpression
 	bf := lhs.Operand.Type().BitField()
-	defer p.w("%s", p.convertType(n, n.Promote(), t, flags))
-	p.w(" func() %v {", p.typ(n, n.Promote()))
+	defer p.w("%s", p.convertType(n, ot, t, flags))
+	p.w(" func() %v {", p.typ(n, ot))
 	switch lhs.Case {
 	case cc.UnaryExpressionPostfix: // PostfixExpression
 		pe := n.UnaryExpression.PostfixExpression
@@ -10710,10 +10711,10 @@ func (p *project) assignOpValueBitfield(f *function, n *cc.AssignmentExpression,
 			p.w("__p := ")
 			p.postfixExpression(f, pe, pe.Operand.Type(), exprAddrOf, flags|fOutermost)
 			p.w("; __v := ")
-			p.readBitfield(lhs, "__p", bf, n.Promote())
+			p.readBitfield(lhs, "__p", bf, ot)
 			p.w(" %s (", oper)
-			p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
-			p.w("); return %sAssignBitFieldPtr%d%s(__p, __v, %d, %d, %#x)", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(n.Promote()), bf.BitFieldWidth(), bf.BitFieldOffset(), bf.Mask())
+			p.assignmentExpression(f, n.AssignmentExpression, ot, exprValue, flags|fOutermost)
+			p.w("); return %sAssignBitFieldPtr%d%s(__p, __v, %d, %d, %#x)", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(ot), bf.BitFieldWidth(), bf.BitFieldOffset(), bf.Mask())
 		case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
 			panic(todo("", p.pos(n)))
 		default:

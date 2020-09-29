@@ -526,12 +526,10 @@ func (t *task) main() (err error) {
 	}
 
 	t.cfg.ABI = abi
-	t.cfg.Config3 = cc.Config3{
-		IgnoreInclude:             re,
-		NoFieldAndBitfieldOverlap: true,
-		PreserveWhiteSpace:        true,
-		UnsignedEnums:             true,
-	}
+	t.cfg.Config3.IgnoreInclude = re
+	t.cfg.Config3.NoFieldAndBitfieldOverlap = true
+	t.cfg.Config3.PreserveWhiteSpace = true
+	t.cfg.Config3.UnsignedEnums = true
 	hostConfigOpts := strings.Split(t.hostConfigOpts, ",")
 	if t.hostConfigOpts == "" {
 		hostConfigOpts = nil
