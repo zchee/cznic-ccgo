@@ -78,6 +78,7 @@ func init() {
 var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
 	oCSmith     = flag.Duration("csmith", 2*time.Minute, "")
+	oDebug      = flag.Bool("debug", false, "")
 	oDev        = flag.Bool("dev", false, "Enable developer tests/downloads.")
 	oDownload   = flag.Bool("download", false, "Download missing testdata. Add -dev to download also 100+ MB of developer resources.")
 	oMem        = flag.Bool("mem", false, "")
@@ -590,8 +591,10 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return err
 		}
 
+		// trc("out\n%s\nexp\n%s", hex.Dump(out), hex.Dump(exp))
 		out = trim(out)
 		exp = trim(exp)
+		// trc("out\n%s\nexp\n%s", hex.Dump(out), hex.Dump(exp))
 
 		switch base := filepath.Base(path); base {
 		case "70_floating_point_literals.c": //TODO TCC binary extension
@@ -617,11 +620,12 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func trim(b []byte) (r []byte) {
+	b = bytes.ReplaceAll(b, []byte{'\r'}, nil)
 	b = bytes.TrimLeft(b, "\n")
 	b = bytes.TrimRight(b, "\n")
 	a := bytes.Split(b, []byte("\n"))
 	for i, v := range a {
-		a[i] = bytes.TrimSpace(v)
+		a[i] = bytes.TrimRight(v, " ")
 	}
 	return bytes.Join(a, []byte("\n"))
 }
@@ -922,10 +926,8 @@ func testSQLite(t *testing.T, dir string) {
 		"-DHAVE_USLEEP",
 		"-DLONGDOUBLE_TYPE=double",
 		"-DSQLITE_DEBUG",
-		//"-DSQLITE_DEBUG_OS_TRACE", //TODO-
 		"-DSQLITE_DEFAULT_MEMSTATUS=0",
 		"-DSQLITE_ENABLE_DBPAGE_VTAB",
-		//"-DSQLITE_FORCE_OS_TRACE", //TODO-
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
 		"-DSQLITE_MEMDEBUG",
 		"-DSQLITE_THREADSAFE=0",
@@ -935,6 +937,9 @@ func testSQLite(t *testing.T, dir string) {
 		"-o", main,
 		filepath.Join(dir, "shell.c"),
 		filepath.Join(dir, "sqlite3.c"),
+	}
+	if *oDebug {
+		ccgoArgs = append(ccgoArgs, "-DSQLITE_DEBUG_OS_TRACE", "-DSQLITE_FORCE_OS_TRACE")
 	}
 	if !func() (r bool) {
 		defer func() {
@@ -984,8 +989,13 @@ func testSQLite(t *testing.T, dir string) {
 		return
 	}
 
-	// out, err := exec.Command(shell, "tmp", ".log stdout", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
-	out, err := exec.Command(shell, "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	var out []byte
+	switch {
+	case *oDebug:
+		out, err = exec.Command(shell, "tmp", ".log stdout", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	default:
+		out, err = exec.Command(shell, "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	}
 	if err != nil {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)
@@ -1565,6 +1575,8 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3919255949",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4101947480",
+		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4058772172",
+		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2273393378",
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
