@@ -1537,7 +1537,7 @@ func TestCSmith(t *testing.T) {
 
 	defer os.Chdir(wd)
 
-	temp, err := ioutil.TempDir("", "gocc-test-")
+	temp, err := ioutil.TempDir("", "ccgo-test-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1578,12 +1578,19 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4058772172",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2273393378",
 
-		//TODO report
+		//TODO reported
 		// # command-line-arguments
 		// ./main.go:7946:5: invalid instruction: 00179 (/tmp/gocc-test-007563623/main.go:7861)	MOVL	$11553462026240, AX
 		//
 		// ccgo: exit status 2
-		// "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3100949894"
+		// "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3100949894",
+
+		//TODO reported
+		// "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 963985971",
+		// # command-line-arguments
+		// ./main.go:3135:5: invalid instruction: 00023 (/tmp/gocc-test-818897172/main.go:2833)	ORL	$-2147483649, DX
+		//
+		// ccgo: exit status 2
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
