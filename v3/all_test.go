@@ -1577,6 +1577,13 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4101947480",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4058772172",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2273393378",
+
+		//TODO report
+		// # command-line-arguments
+		// ./main.go:7946:5: invalid instruction: 00179 (/tmp/gocc-test-007563623/main.go:7861)	MOVL	$11553462026240, AX
+		//
+		// ccgo: exit status 2
+		// "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3100949894"
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
