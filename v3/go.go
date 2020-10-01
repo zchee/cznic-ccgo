@@ -2389,7 +2389,7 @@ package %s
 	for i, v := range p.task.asts {
 		var t0 time.Time
 		if p.task.traceTranslationUnits {
-			fmt.Printf("Go backend %v/%v: %s ... ", i+1, len(p.task.asts), p.task.sources[i].Name)
+			fmt.Printf("Go back end %v/%v: %s ... ", i+1, len(p.task.asts), p.task.sources[i].Name)
 			t0 = time.Now()
 		}
 		p.oneAST(v)
