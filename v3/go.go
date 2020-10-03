@@ -1304,12 +1304,6 @@ func (p *project) w(s string, args ...interface{}) {
 }
 
 func (p *project) layout() error {
-	var t0 time.Time
-	if p.task.traceTranslationUnits {
-		fmt.Printf("processing %d ASTs ... ", len(p.task.asts))
-		t0 = time.Now()
-		defer func() { fmt.Println(time.Since(t0)) }()
-	}
 	if err := p.layoutTLDs(); err != nil {
 		return err
 	}
@@ -1334,6 +1328,13 @@ func (p *project) layout() error {
 }
 
 func (p *project) layoutSymtab() error {
+	var t0 time.Time
+	if p.task.traceTranslationUnits {
+		fmt.Printf("processing symbol table ... ")
+		t0 = time.Now()
+		defer func() { fmt.Println(time.Since(t0)) }()
+	}
+
 	for _, i := range p.task.symSearchOrder {
 		switch {
 		case i < 0:
@@ -1372,6 +1373,13 @@ func (p *project) layoutSymtab() error {
 func (p *project) layoutDefines() error {
 	if !p.task.exportDefinesValid {
 		return nil
+	}
+
+	var t0 time.Time
+	if p.task.traceTranslationUnits {
+		fmt.Printf("processing #defines ... ")
+		t0 = time.Now()
+		defer func() { fmt.Println(time.Since(t0)) }()
 	}
 
 	var prefix = p.task.exportDefines
@@ -1469,6 +1477,13 @@ func evalMacro2(m *cc.Macro, ast *cc.AST) string {
 }
 
 func (p *project) layoutEnums() error {
+	var t0 time.Time
+	if p.task.traceTranslationUnits {
+		fmt.Printf("processing enum values ... ")
+		t0 = time.Now()
+		defer func() { fmt.Println(time.Since(t0)) }()
+	}
+
 	var export int
 	if p.task.exportEnumsValid {
 		switch {
@@ -1566,6 +1581,12 @@ func (p *project) layoutEnums() error {
 }
 
 func (p *project) layoutStaticLocals() error {
+	var t0 time.Time
+	if p.task.traceTranslationUnits {
+		fmt.Printf("processing static local declarations ... ")
+		t0 = time.Now()
+		defer func() { fmt.Println(time.Since(t0)) }()
+	}
 	for _, v := range p.task.asts {
 		for list := v.TranslationUnit; list != nil; list = list.TranslationUnit {
 			decl := list.ExternalDeclaration
@@ -1593,6 +1614,13 @@ func (p *project) layoutStaticLocals() error {
 }
 
 func (p *project) layoutStructs() error {
+	var t0 time.Time
+	if p.task.traceTranslationUnits {
+		fmt.Printf("processing struct/union types ... ")
+		t0 = time.Now()
+		defer func() { fmt.Println(time.Since(t0)) }()
+	}
+
 	var export int
 	if p.task.exportStructsValid {
 		switch {
@@ -2060,6 +2088,13 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 }
 
 func (p *project) layoutTLDs() error {
+	var t0 time.Time
+	if p.task.traceTranslationUnits {
+		fmt.Printf("processing file scope declarations ... ")
+		t0 = time.Now()
+		defer func() { fmt.Println(time.Since(t0)) }()
+	}
+
 	var exportExtern, exportTypedef int
 	if p.task.exportExternsValid {
 		switch {
