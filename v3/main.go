@@ -150,6 +150,7 @@ int ms_scanf(const char *format, ...);
 
 __UINT16_TYPE__ __builtin_bswap16 (__UINT16_TYPE__ x);
 __UINT32_TYPE__ __builtin_bswap32 (__UINT32_TYPE__ x);
+__UINT64_TYPE__ __builtin_bswap64 (__UINT64_TYPE__ x);
 char *__builtin_strchr(const char *s, int c);
 char *__builtin_strcpy(char *dest, const char *src);
 double __builtin_copysign ( double x, double y );
@@ -600,6 +601,12 @@ func (t *task) main() (err error) {
 	// header shall be searched for only in directories named in -I options
 	// and then in the usual places.
 	sysIncludePaths := append(t.I, hostSysIncludes...)
+	if t.traceTranslationUnits {
+		fmt.Printf("target: %s/%s\n", t.goos, t.goarch)
+		if t.hostConfigCmd != "" {
+			fmt.Printf("host config cmd: %s\n", t.hostConfigCmd)
+		}
+	}
 	for i, v := range t.sources {
 		tuSources := append(sources, v)
 		if t.E {
