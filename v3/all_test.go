@@ -1591,6 +1591,8 @@ func TestCSmith(t *testing.T) {
 		// ./main.go:3135:5: invalid instruction: 00023 (/tmp/gocc-test-818897172/main.go:2833)	ORL	$-2147483649, DX
 		//
 		// ccgo: exit status 2
+
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3363122597",
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
