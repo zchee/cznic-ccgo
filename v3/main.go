@@ -4,6 +4,32 @@
 
 //go:generate stringer -output stringer.go -type=exprMode,opKind
 
+package main // import "modernc.org/ccgo/v3"
+
+import (
+	"bufio"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"runtime"
+	"runtime/debug"
+	"strconv"
+	"strings"
+	"time"
+
+	"golang.org/x/tools/go/packages"
+	"modernc.org/cc/v3"
+	"modernc.org/opt"
+)
+
+//TODO parallel
+
 //TODO gmp
 //TODO gsl
 //TODO minigmp
@@ -14,6 +40,11 @@
 //TODO quickjs
 //TODO zdat
 //TODO zlib
+//TODO CPython
+//TODO Cython
+//TODO redis
+//TODO gofrontend
+//TODO wolfssl
 
 //TODO 2020-07-17
 //
@@ -28,8 +59,6 @@
 // Un-array
 //
 // Pass more CSmith tests.
-
-package main // import "modernc.org/ccgo/v3"
 
 //TODO merge VaList slots of distinct top level statements.
 
@@ -73,26 +102,6 @@ package main // import "modernc.org/ccgo/v3"
 
 //TODO drop all non-referenced declarators unless forced by a command line flag.
 
-import (
-	"bufio"
-	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"runtime"
-	"strconv"
-	"strings"
-
-	"golang.org/x/tools/go/packages"
-	"modernc.org/cc/v3"
-	"modernc.org/opt"
-)
-
 const (
 	builtin = `
 #ifdef __PTRDIFF_TYPE__
@@ -119,7 +128,6 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #endif;
 
 #define _FILE_OFFSET_BITS 64
-#define __attribute__(x)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 #define __builtin_va_copy(dst, src) dst = src
@@ -131,6 +139,19 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 typedef void *__builtin_va_list;
 typedef long double __float128;
 
+#if defined(__MINGW32__) || defined(__MINGW64__)
+typedef __builtin_va_list va_list;
+int gnu_printf(const char *format, ...);
+int gnu_scanf(const char *format, ...);
+int ms_printf(const char *format, ...);
+int ms_scanf(const char *format, ...);
+#define _VA_LIST_DEFINED
+#define __extension__
+#endif
+
+__UINT16_TYPE__ __builtin_bswap16 (__UINT16_TYPE__ x);
+__UINT32_TYPE__ __builtin_bswap32 (__UINT32_TYPE__ x);
+__UINT64_TYPE__ __builtin_bswap64 (__UINT64_TYPE__ x);
 char *__builtin_strchr(const char *s, int c);
 char *__builtin_strcpy(char *dest, const char *src);
 double __builtin_copysign ( double x, double y );
@@ -141,12 +162,17 @@ float __builtin_copysignf ( float x, float y );
 float __builtin_huge_valf (void);
 float __builtin_inff (void);
 int __builtin_abs(int j);
+int __builtin_add_overflow();
+int __builtin_clzll (unsigned long long);
 int __builtin_memcmp(const void *s1, const void *s2, size_t n);
+int __builtin_mul_overflow();
 int __builtin_printf(const char *format, ...);
 int __builtin_snprintf(char *str, size_t size, const char *format, ...);
 int __builtin_sprintf(char *str, const char *format, ...);
 int __builtin_strcmp(const char *s1, const char *s2);
+int __builtin_sub_overflow();
 long __builtin_expect (long exp, long c);
+long long __builtin_llabs(long long j);
 size_t __builtin_strlen(const char *s);
 void *__builtin_malloc(size_t size);
 void *__builtin_memcpy(void *dest, const void *src, size_t n);
@@ -245,20 +271,25 @@ type task struct {
 	stdout          io.Writer
 	symSearchOrder  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
-	E                   bool // -E
-	cover               bool // -ccgo-cover-instrumentation
-	coverC              bool // -ccgo-cover-instrumentation-c
-	exportDefinesValid  bool // -ccgo-export-defines present
-	exportEnumsValid    bool // -ccgo-export-enums present
-	exportExternsValid  bool // -ccgo-export-externs present
-	exportFieldsValid   bool // -ccgo-export-fields present
-	exportStructsValid  bool // -ccgo-export-structs present
-	exportTypedefsValid bool // -ccgo-export-typedefs present
-	fullPathComments    bool // -ccgo-full-path-comments
-	libc                bool // -ccgo-libc
-	nostdinc            bool // -nostdinc
-	verifyStructs       bool // -ccgo-verify-structs
-	watch               bool // -ccgo-watch-instrumentation
+	E                     bool // -E
+	allErrors             bool // -ccgo-all-errors
+	cover                 bool // -ccgo-cover-instrumentation
+	coverC                bool // -ccgo-cover-instrumentation-c
+	exportDefinesValid    bool // -ccgo-export-defines present
+	exportEnumsValid      bool // -ccgo-export-enums present
+	exportExternsValid    bool // -ccgo-export-externs present
+	exportFieldsValid     bool // -ccgo-export-fields present
+	exportStructsValid    bool // -ccgo-export-structs present
+	exportTypedefsValid   bool // -ccgo-export-typedefs present
+	fullPathComments      bool // -ccgo-full-path-comments
+	header                bool // -ccgo-header
+	libc                  bool // -ccgo-libc
+	mingw                 bool
+	nostdinc              bool // -nostdinc
+	traceTranslationUnits bool // -ccgo-trace-translation-units
+	verifyStructs         bool // -ccgo-verify-structs
+	watch                 bool // -ccgo-watch-instrumentation
+	windows               bool // -ccgo-windows
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -269,8 +300,11 @@ func newTask(args []string, stdout, stderr io.Writer) *task {
 		stderr = os.Stderr
 	}
 	return &task{
-		args:          args,
-		cfg:           &cc.Config{},
+		args: args,
+		cfg: &cc.Config{
+			DoNotTypecheckAsm:         true,
+			SharedFunctionDefinitions: &cc.SharedFunctionDefinitions{},
+		},
 		crt:           "libc.",
 		crtImportPath: defaultCrt,
 		goarch:        env("TARGET_GOARCH", env("GOARCH", runtime.GOARCH)),
@@ -401,12 +435,16 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
+	opts.Opt("ccgo-all-errors", func(opt string) error { t.allErrors = true; return nil })
 	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
 	opts.Opt("ccgo-cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
 	opts.Opt("ccgo-full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
+	opts.Opt("ccgo-header", func(opt string) error { t.header = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
+	opts.Opt("ccgo-trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
+	opts.Opt("ccgo-windows", func(opt string) error { t.windows = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("ccgo-libc", func(opt string) error {
 		t.libc = true
@@ -490,12 +528,10 @@ func (t *task) main() (err error) {
 	}
 
 	t.cfg.ABI = abi
-	t.cfg.Config3 = cc.Config3{
-		IgnoreInclude:             re,
-		NoFieldAndBitfieldOverlap: true,
-		PreserveWhiteSpace:        true,
-		UnsignedEnums:             true,
-	}
+	t.cfg.Config3.IgnoreInclude = re
+	t.cfg.Config3.NoFieldAndBitfieldOverlap = true
+	t.cfg.Config3.PreserveWhiteSpace = true
+	t.cfg.Config3.UnsignedEnums = true
 	hostConfigOpts := strings.Split(t.hostConfigOpts, ",")
 	if t.hostConfigOpts == "" {
 		hostConfigOpts = nil
@@ -504,16 +540,23 @@ func (t *task) main() (err error) {
 	if err != nil {
 		return err
 	}
-	a := strings.Split(hostPredefined, "\n")
-	wi := 0
-	for _, v0 := range a {
-		v := strings.TrimSpace(strings.ToLower(v0))
-		if !strings.HasPrefix(v, "#define __gnu") && !strings.HasPrefix(v, "#define __gcc") {
-			a[wi] = v0
-			wi++
-		}
+
+	t.mingw = detectMingw(hostPredefined)
+	if t.mingw {
+		t.windows = true
 	}
-	hostPredefined = strings.Join(a[:wi], "\n")
+	if !t.mingw {
+		a := strings.Split(hostPredefined, "\n")
+		wi := 0
+		for _, v0 := range a {
+			v := strings.TrimSpace(strings.ToLower(v0))
+			if !strings.HasPrefix(v, "#define __gnu") && !strings.HasPrefix(v, "#define __gcc") {
+				a[wi] = v0
+				wi++
+			}
+		}
+		hostPredefined = strings.Join(a[:wi], "\n")
+	}
 
 	if t.nostdinc {
 		hostIncludes = nil
@@ -555,12 +598,17 @@ func (t *task) main() (err error) {
 	includePaths := append([]string{"@"}, t.I...)
 	includePaths = append(includePaths, hostIncludes...)
 	includePaths = append(includePaths, hostSysIncludes...)
-	includePaths = append(includePaths, filepath.FromSlash("/usr/include")) //TODO nix only
 	// For headers whose names are enclosed in angle brackets ( "<>" ), the
 	// header shall be searched for only in directories named in -I options
 	// and then in the usual places.
 	sysIncludePaths := append(t.I, hostSysIncludes...)
-	for _, v := range t.sources {
+	if t.traceTranslationUnits {
+		fmt.Printf("target: %s/%s\n", t.goos, t.goarch)
+		if t.hostConfigCmd != "" {
+			fmt.Printf("host config cmd: %s\n", t.hostConfigCmd)
+		}
+	}
+	for i, v := range t.sources {
 		tuSources := append(sources, v)
 		if t.E {
 			t.cfg.PreprocessOnly = true
@@ -570,12 +618,21 @@ func (t *task) main() (err error) {
 			continue
 		}
 
+		var t0 time.Time
+		if t.traceTranslationUnits {
+			fmt.Printf("C front end %d/%d: %s ... ", i+1, len(t.sources), v.Name)
+			t0 = time.Now()
+		}
 		ast, err := cc.Translate(t.cfg, includePaths, sysIncludePaths, tuSources)
 		if err != nil {
 			return err
 		}
 
+		if t.traceTranslationUnits {
+			fmt.Println(time.Since(t0))
+		}
 		t.asts = append(t.asts, ast)
+		memGuard(i)
 	}
 	if t.E {
 		return nil
@@ -617,4 +674,36 @@ func (t *task) main() (err error) {
 	}
 
 	return p.main()
+}
+
+func detectMingw(s string) bool {
+	return strings.Contains(s, "#define __MINGW")
+}
+
+func memGuard(i int) {
+	if totalRam == 0 || totalRam > 64e9 {
+		return
+	}
+
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	switch {
+	case ms.Alloc < totalRam/2:
+		return
+	case ms.Alloc < (8*totalRam)/10:
+		switch {
+		case totalRam < 1e9:
+			// ok
+		case totalRam < 16e9:
+			if i&1 == 1 {
+				return
+			}
+		default:
+			if i&3 != 3 {
+				return
+			}
+		}
+	}
+
+	debug.FreeOSMemory()
 }

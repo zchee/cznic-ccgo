@@ -61,6 +61,8 @@ var (
 		"var":         true,  // keyword
 	}
 
+	reservedIds []cc.StringID
+
 	maxInt32  = big.NewInt(math.MaxInt32)
 	maxInt64  = big.NewInt(math.MaxInt64)
 	maxUint32 = big.NewInt(math.MaxUint32)
@@ -69,48 +71,65 @@ var (
 	minInt64  = big.NewInt(math.MinInt64)
 )
 
-type scope map[string]int
+func init() {
+	for k := range reservedNames {
+		reservedIds = append(reservedIds, cc.String(k))
+	}
+}
+
+type scope map[cc.StringID]int32
 
 func newScope() scope {
 	s := scope{}
-	for k := range reservedNames {
-		s.taken(k)
+	for _, k := range reservedIds {
+		s[k] = 0
 	}
 	return s
 }
 
-func (s scope) taken(t string) {
-	if t == "" {
-		panic(todo("internal error"))
-	}
-
-	if _, ok := s[t]; ok {
-		panic(todo("internal error"))
-	}
-
-	s[t] = 0
-}
-
-func (s scope) take(t string) string {
-	if t == "" {
+func (s scope) take(t cc.StringID) string {
+	if t == 0 {
 		panic(todo("internal error"))
 	}
 
 	n, ok := s[t]
 	if !ok {
 		s[t] = 0
-		return t
+		return t.String()
 	}
 
 	for {
 		n++
 		s[t] = n
 		r := fmt.Sprintf("%s%d", t, n)
-		if _, ok := s[r]; !ok {
-			s[r] = 0
+		id := cc.String(r)
+		if _, ok := s[id]; !ok {
+			s[id] = 0
 			return r
 		}
 	}
+}
+
+func parseScopeKey(t cc.StringID) (cc.StringID, int32) {
+	d := 0
+	s := t.String()
+	var n, mul int32 = 0, 1
+loop:
+	for {
+		switch c := s[len(s)-d-1]; {
+		case c < '0' || c > '9':
+			break loop
+		default:
+			n = n + mul*(int32(c)-'0')
+			mul *= 10
+			d++
+		}
+	}
+	if d == 0 {
+		return t, 0
+	}
+
+	return cc.String(s[:len(s)-d]), n
 }
 
 func dumpLayout(t cc.Type, info *structInfo) string {

@@ -77,14 +77,17 @@ func init() {
 
 var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
-	oCSmith     = flag.Duration("csmith", 2*time.Minute, "")
+	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
+	oDebug      = flag.Bool("debug", false, "")
 	oDev        = flag.Bool("dev", false, "Enable developer tests/downloads.")
 	oDownload   = flag.Bool("download", false, "Download missing testdata. Add -dev to download also 100+ MB of developer resources.")
+	oMem        = flag.Bool("mem", false, "")
 	oRE         = flag.String("re", "", "")
 	oStackTrace = flag.Bool("trcstack", false, "")
 	oTrace      = flag.Bool("trc", false, "Print tested paths.")
 	oTraceF     = flag.Bool("trcf", false, "Print test file content")
 	oTraceO     = flag.Bool("trco", false, "Print test output")
+	oXTags      = flag.String("xtags", "", "passed to go build of TestSQLite")
 
 	gccDir    = filepath.FromSlash("testdata/gcc-9.1.0")
 	gpsdDir   = filepath.FromSlash("testdata/gpsd-3.20/")
@@ -125,8 +128,11 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}()
 
-	fmt.Printf("test binary compiled for %s/%s\n", runtime.GOOS, runtime.GOARCH)
-	fmt.Printf("CCGO_CPP=%q\n", os.Getenv("CCGO_CPP"))
+	// fmt.Printf("test binary compiled for %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	// fmt.Printf("temp dir: %s\n", os.TempDir()) //TODO-
+	// if s := os.Getenv("CCGO_CPP"); s != "" {
+	// 	fmt.Printf("CCGO_CPP=%s\n", os.Getenv("CCGO_CPP"))
+	// }
 
 	flag.BoolVar(&oTraceW, "trcw", false, "Print generator writes")
 	flag.BoolVar(&oTraceG, "trcg", false, "Print generator output")
@@ -361,8 +367,14 @@ func newGolden(t *testing.T, fn string) *golden {
 	}
 
 	f, err := os.Create(filepath.FromSlash(fn))
-	if err != nil {
-		t.Fatal(err)
+	if err != nil { // Possibly R/O fs in a VM
+		base := filepath.Base(filepath.FromSlash(fn))
+		f, err = ioutil.TempFile("", base)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Logf("writing results to %s\n", f.Name())
 	}
 
 	w := bufio.NewWriter(f)
@@ -505,7 +517,13 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return err
 		}
 
-		ccgoArgs := []string{"ccgo", "-o", main, "-ccgo-verify-structs", "-ccgo-long-double-is-double"}
+		ccgoArgs := []string{
+			"ccgo",
+			"-o", main,
+			"-ccgo-all-errors",
+			"-ccgo-long-double-is-double",
+			"-ccgo-verify-structs",
+		}
 		var args []string
 		switch base := filepath.Base(path); base {
 		case "31_args.c":
@@ -573,8 +591,10 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return err
 		}
 
+		// trc("out\n%s\nexp\n%s", hex.Dump(out), hex.Dump(exp))
 		out = trim(out)
 		exp = trim(exp)
+		// trc("out\n%s\nexp\n%s", hex.Dump(out), hex.Dump(exp))
 
 		switch base := filepath.Base(path); base {
 		case "70_floating_point_literals.c": //TODO TCC binary extension
@@ -586,7 +606,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			if *oTrace {
 				fmt.Println(err)
 			}
-			t.Errorf("%v: out\n%s\nexp\n%s", path, out, exp)
+			t.Errorf("%v: out\n%s\nexp\n%s\nout\n%s\nexp\n%s", path, out, exp, hex.Dump(out), hex.Dump(exp))
 			return nil
 		}
 
@@ -600,11 +620,12 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func trim(b []byte) (r []byte) {
+	b = bytes.ReplaceAll(b, []byte{'\r'}, nil)
 	b = bytes.TrimLeft(b, "\n")
 	b = bytes.TrimRight(b, "\n")
 	a := bytes.Split(b, []byte("\n"))
 	for i, v := range a {
-		a[i] = bytes.TrimSpace(v)
+		a[i] = bytes.TrimRight(v, " ")
 	}
 	return bytes.Join(a, []byte("\n"))
 }
@@ -704,26 +725,370 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"fp-cmp-1.c":   {}, // sigfpe
 		"fp-cmp-2.c":   {}, // sigfpe
 		"fp-cmp-3.c":   {}, // sigfpe
-		"rbug.c":       {}, // cannot pass on 386
 		"pr15296.c":    {}, // union initializer designates non-first field (gcc extension)
+		"rbug.c":       {}, // cannot pass on 386
 
-		"20000113-1.c":    {}, //TODO non-const bitfield initializer
-		"20000703-1.c":    {}, //TODO statement expression
-		"20000722-1.c":    {}, //TODO composite literal
-		"20000801-3.c":    {}, //TODO designators
-		"20000917-1.c":    {}, //TODO composite literal
-		"20001203-2.c":    {}, //TODO statement expression
-		"20010123-1.c":    {}, //TODO composite literal
-		"20030714-1.c":    {}, //TODO select nested field
-		"20040411-1.c":    {}, //TODO VLA
-		"20040423-1.c":    {}, //TODO VLA
-		"20050613-1.c":    {}, //TODO nested initailizer designator
-		"anon-1.c":        {}, //TODO nested field access
-		"pr41317.c":       {}, //TODO nested field access
-		"pr41463.c":       {}, //TODO link error (report bug?)
-		"pr42570":         {}, //TODO uint8_t foo[1][0];
-		"pr88739.c":       {}, //TODO nested initailizer designator
-		"pushpop_macro.c": {}, //TODO #pragma push_macro("_")
+		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
+		"20000703-1.c":                 {}, //TODO statement expression
+		"20000722-1.c":                 {}, //TODO composite literal
+		"20000801-3.c":                 {}, //TODO designators
+		"20000917-1.c":                 {}, //TODO composite literal
+		"20001203-2.c":                 {}, //TODO statement expression
+		"20010123-1.c":                 {}, //TODO composite literal
+		"20010209-1.c":                 {}, //TODO
+		"20010518-2.c":                 {}, //TODO
+		"20010605-1.c":                 {}, //TODO
+		"20010605-2.c":                 {}, //TODO
+		"20010924-1.c":                 {}, //TODO
+		"20020107-1.c":                 {}, //TODO
+		"20020206-1.c":                 {}, //TODO
+		"20020206-2.c":                 {}, //TODO
+		"20020215-1.c":                 {}, //TODO
+		"20020227-1.c":                 {}, //TODO
+		"20020314-1.c":                 {}, //TODO
+		"20020320-1.c":                 {}, //TODO
+		"20020411-1.c":                 {}, //TODO
+		"20020412-1.c":                 {}, //TODO
+		"20020810-1.c":                 {}, //TODO
+		"20021113-1.c":                 {}, //TODO
+		"20021118-1.c":                 {}, //TODO
+		"20030109-1.c":                 {}, //TODO
+		"20030222-1.c":                 {}, //TODO
+		"20030224-2.c":                 {}, //TODO
+		"20030330-1.c":                 {}, //TODO
+		"20030501-1.c":                 {}, //TODO
+		"20030714-1.c":                 {}, //TODO select nested field
+		"20030811-1.c":                 {}, //TODO
+		"20030910-1.c":                 {}, //TODO
+		"20031003-1.c":                 {}, //TODO
+		"20040223-1.c":                 {}, //TODO
+		"20040302-1.c":                 {}, //TODO
+		"20040308-1.c":                 {}, //TODO
+		"20040411-1.c":                 {}, //TODO VLA
+		"20040423-1.c":                 {}, //TODO VLA
+		"20040520-1.c":                 {}, //TODO
+		"20040629-1.c":                 {}, //TODO
+		"20040705-1.c":                 {}, //TODO
+		"20040705-2.c":                 {}, //TODO
+		"20040707-1.c":                 {}, //TODO
+		"20040709-1.c":                 {}, //TODO
+		"20040709-2.c":                 {}, //TODO
+		"20040709-3.c":                 {}, //TODO
+		"20040811-1.c":                 {}, //TODO
+		"20041124-1.c":                 {}, //TODO
+		"20041201-1.c":                 {}, //TODO
+		"20041214-1.c":                 {}, //TODO
+		"20041218-2.c":                 {}, //TODO
+		"20050107-1.c":                 {}, //TODO
+		"20050119-1.c":                 {}, //TODO
+		"20050119-2.c":                 {}, //TODO
+		"20050121-1.c":                 {}, //TODO
+		"20050316-1.c":                 {}, //TODO
+		"20050316-2.c":                 {}, //TODO
+		"20050316-3.c":                 {}, //TODO
+		"20050604-1.c":                 {}, //TODO
+		"20050607-1.c":                 {}, //TODO
+		"20050613-1.c":                 {}, //TODO nested initailizer designator
+		"20050929-1.c":                 {}, //TODO
+		"20051012-1.c":                 {}, //TODO
+		"20060420-1.c":                 {}, //TODO
+		"20061220-1.c":                 {}, //TODO
+		"20070614-1.c":                 {}, //TODO
+		"20070824-1.c":                 {}, //TODO
+		"20070919-1.c":                 {}, //TODO
+		"20071029-1.c":                 {}, //TODO
+		"20071202-1.c":                 {}, //TODO
+		"20071210-1.c":                 {}, //TODO
+		"20071211-1.c":                 {}, //TODO
+		"20071220-1.c":                 {}, //TODO
+		"20071220-2.c":                 {}, //TODO
+		"20080502-1.c":                 {}, //TODO
+		"20090219-1.c":                 {}, //TODO
+		"20100430-1.c":                 {}, //TODO
+		"20180921-1.c":                 {}, //TODO
+		"920302-1.c":                   {}, //TODO
+		"920415-1.c":                   {}, //TODO
+		"920428-2.c":                   {}, //TODO
+		"920501-1.c":                   {}, //TODO
+		"920501-3.c":                   {}, //TODO
+		"920501-4.c":                   {}, //TODO
+		"920501-5.c":                   {}, //TODO
+		"920501-7.c":                   {}, //TODO
+		"920612-2.c":                   {}, //TODO
+		"920625-1.c":                   {}, //TODO
+		"920721-2.c":                   {}, //TODO
+		"920721-4.c":                   {}, //TODO
+		"920908-1.c":                   {}, //TODO
+		"920929-1.c":                   {}, //TODO
+		"921017-1.c":                   {}, //TODO
+		"921202-1.c":                   {}, //TODO
+		"921208-2.c":                   {}, //TODO
+		"921215-1.c":                   {}, //TODO
+		"930406-1.c":                   {}, //TODO
+		"930930-1.c":                   {}, //TODO
+		"931002-1.c":                   {}, //TODO
+		"931004-10.c":                  {}, //TODO
+		"931004-12.c":                  {}, //TODO
+		"931004-14.c":                  {}, //TODO
+		"931004-2.c":                   {}, //TODO
+		"931004-4.c":                   {}, //TODO
+		"931004-6.c":                   {}, //TODO
+		"931004-8.c":                   {}, //TODO
+		"941014-1.c":                   {}, //TODO
+		"941202-1.c":                   {}, //TODO
+		"950628-1.c":                   {}, //TODO
+		"950906-1.c":                   {}, //TODO
+		"960312-1.c":                   {}, //TODO
+		"960416-1.c":                   {}, //TODO
+		"960512-1.c":                   {}, //TODO
+		"970217-1.c":                   {}, //TODO
+		"980526-1.c":                   {}, //TODO
+		"990130-1.c":                   {}, //TODO
+		"990208-1.c":                   {}, //TODO
+		"990413-2.c":                   {}, //TODO
+		"990524-1.c":                   {}, //TODO
+		"991112-1.c":                   {}, //TODO
+		"991201-1.c":                   {}, //TODO
+		"991227-1.c":                   {}, //TODO
+		"991228-1.c":                   {}, //TODO
+		"alias-2.c":                    {}, //TODO
+		"alias-3.c":                    {}, //TODO
+		"alias-4.c":                    {}, //TODO
+		"align-nest.c":                 {}, //TODO
+		"alloca-1.c":                   {}, //TODO
+		"anon-1.c":                     {}, //TODO nested field access
+		"bcp-1.c":                      {}, //TODO
+		"bitfld-3.c":                   {}, //TODO
+		"bswap-1.c":                    {}, //TODO
+		"bswap-2.c":                    {}, //TODO
+		"built-in-setjmp.c":            {}, //TODO
+		"builtin-bitops-1.c":           {}, //TODO
+		"builtin-constant.c":           {}, //TODO
+		"builtin-nan-1.c":              {}, //TODO
+		"builtin-types-compatible-p.c": {}, //TODO
+		"call-trap-1.c":                {}, //TODO
+		"cbrt.c":                       {}, //TODO
+		"comp-goto-1.c":                {}, //TODO
+		"comp-goto-2.c":                {}, //TODO
+		"compare-fp-1.c":               {}, //TODO
+		"compare-fp-3.c":               {}, //TODO
+		"compare-fp-4.c":               {}, //TODO
+		"complex-1.c":                  {}, //TODO
+		"complex-2.c":                  {}, //TODO
+		"complex-4.c":                  {}, //TODO
+		"complex-5.c":                  {}, //TODO
+		"complex-6.c":                  {}, //TODO
+		"complex-7.c":                  {}, //TODO
+		"compndlit-1.c":                {}, //TODO
+		"copysign1.c":                  {}, //TODO
+		"copysign2.c":                  {}, //TODO
+		"ffs-1.c":                      {}, //TODO
+		"ffs-2.c":                      {}, //TODO
+		"fp-cmp-4.c":                   {}, //TODO
+		"fp-cmp-4f.c":                  {}, //TODO
+		"fp-cmp-4l.c":                  {}, //TODO
+		"fp-cmp-5.c":                   {}, //TODO
+		"fp-cmp-7.c":                   {}, //TODO
+		"fp-cmp-8.c":                   {}, //TODO
+		"fp-cmp-8f.c":                  {}, //TODO
+		"fp-cmp-8l.c":                  {}, //TODO
+		"fprintf-2.c":                  {}, //TODO
+		"frame-address.c":              {}, //TODO
+		"ieee/builtin-nan-1.c":         {}, //TODO
+		"ieee/compare-fp-1.c":          {}, //TODO
+		"ieee/compare-fp-3.c":          {}, //TODO
+		"ieee/compare-fp-4.c":          {}, //TODO
+		"ieee/copysign1.c":             {}, //TODO
+		"ieee/copysign2.c":             {}, //TODO
+		"ieee/fp-cmp-4.c":              {}, //TODO
+		"ieee/fp-cmp-4f.c":             {}, //TODO
+		"ieee/fp-cmp-4l.c":             {}, //TODO
+		"ieee/fp-cmp-5.c":              {}, //TODO
+		"ieee/fp-cmp-7.c":              {}, //TODO
+		"ieee/fp-cmp-8.c":              {}, //TODO
+		"ieee/fp-cmp-8f.c":             {}, //TODO
+		"ieee/fp-cmp-8l.c":             {}, //TODO
+		"ieee/inf-1.c":                 {}, //TODO
+		"ieee/inf-2.c":                 {}, //TODO
+		"ieee/inf-3.c":                 {}, //TODO
+		"ieee/mzero4.c":                {}, //TODO
+		"ieee/pr36332.c":               {}, //TODO
+		"ieee/pr38016.c":               {}, //TODO
+		"ieee/pr50310.c":               {}, //TODO
+		"ieee/pr72824-2.c":             {}, //TODO
+		"inf-1.c":                      {}, //TODO
+		"inf-2.c":                      {}, //TODO
+		"inf-3.c":                      {}, //TODO
+		"medce-1.c":                    {}, //TODO
+		"mzero4.c":                     {}, //TODO
+		"nest-align-1.c":               {}, //TODO
+		"nest-stdar-1.c":               {}, //TODO
+		"nestfunc-1.c":                 {}, //TODO
+		"nestfunc-2.c":                 {}, //TODO
+		"nestfunc-3.c":                 {}, //TODO
+		"nestfunc-5.c":                 {}, //TODO
+		"nestfunc-6.c":                 {}, //TODO
+		"nestfunc-7.c":                 {}, //TODO
+		"pr17377.c":                    {}, //TODO
+		"pr19449.c":                    {}, //TODO
+		"pr22061-1.c":                  {}, //TODO
+		"pr22061-2.c":                  {}, //TODO
+		"pr22061-3.c":                  {}, //TODO
+		"pr22061-4.c":                  {}, //TODO
+		"pr22098-1.c":                  {}, //TODO
+		"pr22098-2.c":                  {}, //TODO
+		"pr22098-3.c":                  {}, //TODO
+		"pr22141-1.c":                  {}, //TODO
+		"pr22141-2.c":                  {}, //TODO
+		"pr23135.c":                    {}, //TODO
+		"pr23324.c":                    {}, //TODO
+		"pr23467.c":                    {}, //TODO
+		"pr24135.c":                    {}, //TODO
+		"pr28289.c":                    {}, //TODO
+		"pr28865.c":                    {}, //TODO
+		"pr30185.c":                    {}, //TODO
+		"pr33382.c":                    {}, //TODO
+		"pr34154.c":                    {}, //TODO
+		"pr34768-1.c":                  {}, //TODO
+		"pr34768-2.c":                  {}, //TODO
+		"pr35456.c":                    {}, //TODO
+		"pr36321.c":                    {}, //TODO
+		"pr36332.c":                    {}, //TODO
+		"pr37780.c":                    {}, //TODO
+		"pr38016.c":                    {}, //TODO
+		"pr38151.c":                    {}, //TODO
+		"pr38533.c":                    {}, //TODO
+		"pr38969.c":                    {}, //TODO
+		"pr39228.c":                    {}, //TODO
+		"pr40022.c":                    {}, //TODO
+		"pr40657.c":                    {}, //TODO
+		"pr41239.c":                    {}, //TODO
+		"pr41317.c":                    {}, //TODO nested field access
+		"pr41463.c":                    {}, //TODO link error (report bug?)
+		"pr41935.c":                    {}, //TODO
+		"pr42248.c":                    {}, //TODO
+		"pr42570":                      {}, //TODO uint8_t foo[1][0];
+		"pr43220.c":                    {}, //TODO
+		"pr43385.c":                    {}, //TODO
+		"pr43560.c":                    {}, //TODO
+		"pr44164.c":                    {}, //TODO
+		"pr44575.c":                    {}, //TODO
+		"pr45695.c":                    {}, //TODO
+		"pr46309.c":                    {}, //TODO
+		"pr47237.c":                    {}, //TODO
+		"pr49218.c":                    {}, //TODO
+		"pr49279.c":                    {}, //TODO
+		"pr49390.c":                    {}, //TODO
+		"pr49644.c":                    {}, //TODO
+		"pr50310.c":                    {}, //TODO
+		"pr51447.c":                    {}, //TODO
+		"pr51877.c":                    {}, //TODO
+		"pr51933.c":                    {}, //TODO
+		"pr52286.c":                    {}, //TODO
+		"pr53645-2.c":                  {}, //TODO
+		"pr53645.c":                    {}, //TODO
+		"pr54471.c":                    {}, //TODO
+		"pr55750.c":                    {}, //TODO
+		"pr56205.c":                    {}, //TODO
+		"pr56837.c":                    {}, //TODO
+		"pr56866.c":                    {}, //TODO
+		"pr56982.c":                    {}, //TODO
+		"pr57130.c":                    {}, //TODO
+		"pr57344-1.c":                  {}, //TODO
+		"pr57344-2.c":                  {}, //TODO
+		"pr57344-3.c":                  {}, //TODO
+		"pr57344-4.c":                  {}, //TODO
+		"pr60003.c":                    {}, //TODO
+		"pr60960.c":                    {}, //TODO
+		"pr61375.c":                    {}, //TODO
+		"pr61725.c":                    {}, //TODO
+		"pr63302.c":                    {}, //TODO
+		"pr63641.c":                    {}, //TODO
+		"pr64006.c":                    {}, //TODO
+		"pr64242.c":                    {}, //TODO
+		"pr65053-1.c":                  {}, //TODO
+		"pr65053-2.c":                  {}, //TODO
+		"pr65170.c":                    {}, //TODO
+		"pr65427.c":                    {}, //TODO
+		"pr65648.c":                    {}, //TODO
+		"pr65956.c":                    {}, //TODO
+		"pr67037.c":                    {}, //TODO
+		"pr67714.c":                    {}, //TODO
+		"pr68249.c":                    {}, //TODO
+		"pr68328.c":                    {}, //TODO
+		"pr68381.c":                    {}, //TODO
+		"pr68532.c":                    {}, //TODO
+		"pr69320-2.c":                  {}, //TODO
+		"pr70460.c":                    {}, //TODO
+		"pr70903.c":                    {}, //TODO
+		"pr71083.c":                    {}, //TODO
+		"pr71494.c":                    {}, //TODO
+		"pr71554.c":                    {}, //TODO
+		"pr71626-1.c":                  {}, //TODO
+		"pr71626-2.c":                  {}, //TODO
+		"pr72824-2.c":                  {}, //TODO
+		"pr77767.c":                    {}, //TODO
+		"pr78438.c":                    {}, //TODO
+		"pr78559.c":                    {}, //TODO
+		"pr78726.c":                    {}, //TODO
+		"pr79286.c":                    {}, //TODO
+		"pr79354.c":                    {}, //TODO
+		"pr79737-2.c":                  {}, //TODO
+		"pr80421.c":                    {}, //TODO
+		"pr80692.c":                    {}, //TODO
+		"pr81588.c":                    {}, //TODO
+		"pr82210.c":                    {}, //TODO
+		"pr82524.c":                    {}, //TODO
+		"pr82954.c":                    {}, //TODO
+		"pr84169.c":                    {}, //TODO
+		"pr84478.c":                    {}, //TODO
+		"pr84524.c":                    {}, //TODO
+		"pr84748.c":                    {}, //TODO
+		"pr85156.c":                    {}, //TODO
+		"pr85169.c":                    {}, //TODO
+		"pr85331.c":                    {}, //TODO
+		"pr85582-2.c":                  {}, //TODO
+		"pr85582-3.c":                  {}, //TODO
+		"pr85756.c":                    {}, //TODO
+		"pr86528.c":                    {}, //TODO
+		"pr88739.c":                    {}, //TODO nested initailizer designator
+		"pr88904.c":                    {}, //TODO
+		"pr89369.c":                    {}, //TODO
+		"pr89434.c":                    {}, //TODO
+		"printf-2.c":                   {}, //TODO
+		"pushpop_macro.c":              {}, //TODO #pragma push_macro("_")
+		"restrict-1.c":                 {}, //TODO
+		"scal-to-vec1.c":               {}, //TODO
+		"scal-to-vec2.c":               {}, //TODO
+		"scal-to-vec3.c":               {}, //TODO
+		"simd-1.c":                     {}, //TODO
+		"simd-2.c":                     {}, //TODO
+		"simd-4.c":                     {}, //TODO
+		"simd-5.c":                     {}, //TODO
+		"simd-6.c":                     {}, //TODO
+		"ssad-run.c":                   {}, //TODO
+		"stdarg-3.c":                   {}, //TODO
+		"stkalign.c":                   {}, //TODO
+		"strct-stdarg-1.c":             {}, //TODO
+		"strct-varg-1.c":               {}, //TODO
+		"string-opt-18.c":              {}, //TODO
+		"string-opt-5.c":               {}, //TODO
+		"struct-ini-1.c":               {}, //TODO
+		"usad-run.c":                   {}, //TODO
+		"user-printf.c":                {}, //TODO
+		"va-arg-2.c":                   {}, //TODO
+		"va-arg-22.c":                  {}, //TODO
+		"va-arg-pack-1.c":              {}, //TODO
+		"vla-dealloc-1.c":              {}, //TODO
+		"widechar-1.c":                 {}, //TODO
+		"widechar-3.c":                 {}, //TODO
+		"zero-struct-1.c":              {}, //TODO
+		"zero-struct-2.c":              {}, //TODO
+		"zerolen-2.c":                  {}, //TODO
+
+	}
+	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
+		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -901,15 +1266,21 @@ func testSQLite(t *testing.T, dir string) {
 		"ccgo",
 		"-DHAVE_USLEEP",
 		"-DLONGDOUBLE_TYPE=double",
+		"-DSQLITE_DEBUG",
 		"-DSQLITE_DEFAULT_MEMSTATUS=0",
 		"-DSQLITE_ENABLE_DBPAGE_VTAB",
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
+		"-DSQLITE_MEMDEBUG",
 		"-DSQLITE_THREADSAFE=0",
+		"-ccgo-all-errors",
 		"-ccgo-long-double-is-double", // stddef.h
 		"-ccgo-verify-structs",
 		"-o", main,
 		filepath.Join(dir, "shell.c"),
 		filepath.Join(dir, "sqlite3.c"),
+	}
+	if *oDebug {
+		ccgoArgs = append(ccgoArgs, "-DSQLITE_DEBUG_OS_TRACE", "-DSQLITE_FORCE_OS_TRACE")
 	}
 	if !func() (r bool) {
 		defer func() {
@@ -941,7 +1312,16 @@ func testSQLite(t *testing.T, dir string) {
 	}() {
 		return
 	}
-	if out, err := exec.Command("go", "build", "-o", "shell", main).CombinedOutput(); err != nil {
+	shell := "./shell"
+	if runtime.GOOS == "windows" {
+		shell = "shell.exe"
+	}
+	args := []string{"build"}
+	if s := *oXTags; s != "" {
+		args = append(args, "-tags", s)
+	}
+	args = append(args, "-o", shell, main)
+	if out, err := exec.Command("go", args...).CombinedOutput(); err != nil {
 		s := strings.TrimSpace(string(out))
 		if s != "" {
 			s += "\n"
@@ -950,7 +1330,13 @@ func testSQLite(t *testing.T, dir string) {
 		return
 	}
 
-	out, err := exec.Command("./shell", "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	var out []byte
+	switch {
+	case *oDebug:
+		out, err = exec.Command(shell, "tmp", ".log stdout", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	default:
+		out, err = exec.Command(shell, "tmp", "create table t(i); insert into t values(42); select 11*i from t;").CombinedOutput()
+	}
 	if err != nil {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)
@@ -960,13 +1346,13 @@ func testSQLite(t *testing.T, dir string) {
 	}
 
 	if g, e := strings.TrimSpace(string(out)), "462"; g != e {
-		t.Errorf("%q %q", g, e)
+		t.Errorf("got: %s\nexp: %s", g, e)
 	}
 	if *oTraceO {
 		fmt.Printf("%s\n", out)
 	}
 
-	if out, err = exec.Command("./shell", "tmp", "select 13*i from t;").CombinedOutput(); err != nil {
+	if out, err = exec.Command(shell, "tmp", "select 13*i from t;").CombinedOutput(); err != nil {
 		if *oTrace {
 			fmt.Printf("%s\n%s\n", out, err)
 		}
@@ -975,7 +1361,7 @@ func testSQLite(t *testing.T, dir string) {
 	}
 
 	if g, e := strings.TrimSpace(string(out)), "546"; g != e {
-		t.Errorf("%q %q", g, e)
+		t.Errorf("got: %s\nexp: %s", g, e)
 	}
 	if *oTraceO {
 		fmt.Printf("%s\n", out)
@@ -983,6 +1369,7 @@ func testSQLite(t *testing.T, dir string) {
 }
 
 func TestMjson(t *testing.T) {
+	return //TODO
 	root := filepath.Join(testWD, filepath.FromSlash(mjsonDir))
 	if _, err := os.Stat(root); err != nil {
 		t.Fatalf("Missing resources in %s. Please run 'go test -download' to fix.", root)
@@ -1212,6 +1599,9 @@ next:
 			}
 		}
 		d := time.Since(t0) / time.Duration(N)
+		if base != "mandelbrot.c" {
+			out = bytes.ReplaceAll(out, []byte{'\r'}, nil)
+		}
 		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
 	}
 	return r
@@ -1219,20 +1609,35 @@ next:
 
 func checkResult(t *testing.T, out []byte, base, rdir string) bool {
 	base = base[:len(base)-len(filepath.Ext(base))]
-	b, err := ioutil.ReadFile(filepath.Join(rdir, base))
+	fn := filepath.Join(rdir, base)
+	b, err := ioutil.ReadFile(fn)
 	if err != nil {
 		t.Errorf("%v: %v", base, err)
 		return false
 	}
 
-	if !bytes.Equal(out, b) {
-		t.Logf("got\n%s", hex.Dump(out))
-		t.Logf("exp\n%s", hex.Dump(b))
-		t.Errorf("%v: result differs", base)
-		return false
+	if bytes.Equal(out, b) {
+		return true
 	}
 
-	return true
+	fn2 := fn + "." + runtime.GOOS
+	b2, err := ioutil.ReadFile(fn2)
+	if err == nil {
+		switch {
+		case bytes.Equal(out, b2):
+			return true
+		default:
+			t.Logf("got\n%s", hex.Dump(out))
+			t.Logf("exp\n%s", hex.Dump(b2))
+			t.Errorf("%v: result differs", base)
+			return false
+		}
+	}
+
+	t.Logf("got\n%s", hex.Dump(out))
+	t.Logf("exp\n%s", hex.Dump(b))
+	t.Errorf("%v: result differs", base)
+	return false
 }
 
 func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
@@ -1294,6 +1699,9 @@ next:
 			}
 		}
 		d := time.Since(t0) / time.Duration(N)
+		if base != "mandelbrot.c" {
+			out = bytes.ReplaceAll(out, []byte{'\r'}, nil)
+		}
 		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
 	}
 	return r
@@ -1471,7 +1879,7 @@ func TestCSmith(t *testing.T) {
 
 	defer os.Chdir(wd)
 
-	temp, err := ioutil.TempDir("", "gocc-test-")
+	temp, err := ioutil.TempDir("", "ccgo-test-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1507,7 +1915,13 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3329111231",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2648215054",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3919255949",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 890611563",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4101947480",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4058772172",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2273393378",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3100949894",
+		//TODO reported "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 963985971",
+		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3363122597",
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()
@@ -1579,6 +1993,7 @@ out:
 			"-ccgo-verify-structs",
 			"main.c",
 		}, &stdout, &stderr)
+		j.cfg.MaxSourceLine = 1 << 20
 
 		func() {
 
@@ -1622,4 +2037,337 @@ out:
 	}
 	d := time.Since(t0)
 	t.Logf("files %v, bytes %v, ok %v in %v", h(files), h(size), h(ok), d)
+}
+
+func TestMem(t *testing.T) {
+	if !*oMem {
+		t.Skip("not enabled")
+		return
+	}
+
+	const args0 = `ccgo
+-D__printf__=printf
+-ccgo-export-defines
+
+-ccgo-export-enums
+
+-ccgo-export-externs
+X
+-ccgo-export-fields
+F
+-ccgo-export-structs
+
+-ccgo-export-typedefs
+
+-ccgo-hide
+TclpCreateProcess
+-ccgo-long-double-is-double
+-ccgo-pkgname
+tcl
+-ccgo-trace-translation-units
+-o
+{{0}}
+../compat/zlib/adler32.c
+../compat/zlib/compress.c
+../compat/zlib/crc32.c
+../compat/zlib/deflate.c
+../compat/zlib/infback.c
+../compat/zlib/inffast.c
+../compat/zlib/inflate.c
+../compat/zlib/inftrees.c
+../compat/zlib/trees.c
+../compat/zlib/uncompr.c
+../compat/zlib/zutil.c
+-DBUILD_tcl
+-I.
+-I{{1}}/testdata/tcl8.6.10/unix
+-I{{1}}/testdata/tcl8.6.10/generic
+-I{{1}}/testdata/tcl8.6.10/libtommath
+-DPACKAGE_NAME="tcl"
+-DPACKAGE_TARNAME="tcl"
+-DPACKAGE_VERSION="8.6"
+-DPACKAGE_STRING="tcl 8.6"
+-DPACKAGE_BUGREPORT=""
+-DSTDC_HEADERS=1
+-DHAVE_SYS_TYPES_H=1
+-DHAVE_SYS_STAT_H=1
+-DHAVE_STDLIB_H=1
+-DHAVE_STRING_H=1
+-DHAVE_MEMORY_H=1
+-DHAVE_STRINGS_H=1
+-DHAVE_INTTYPES_H=1
+-DHAVE_STDINT_H=1
+-DHAVE_UNISTD_H=1
+-DHAVE_SYS_PARAM_H=1
+-DTCL_CFGVAL_ENCODING="iso8859-1"
+-DHAVE_ZLIB=1
+-DMODULE_SCOPE=extern __attribute__((__visibility__("hidden")))
+-DHAVE_HIDDEN=1
+-DHAVE_CAST_TO_UNION=1
+-DTCL_SHLIB_EXT=""
+-DNDEBUG=1
+-DTCL_CFG_OPTIMIZED=1
+-DTCL_TOMMATH=1
+-DMP_PREC=4
+-D_LARGEFILE64_SOURCE=1
+-DTCL_WIDE_INT_IS_LONG=1
+-DHAVE_GETCWD=1
+-DHAVE_MKSTEMP=1
+-DHAVE_OPENDIR=1
+-DHAVE_STRTOL=1
+-DHAVE_WAITPID=1
+-DHAVE_GETNAMEINFO=1
+-DHAVE_GETADDRINFO=1
+-DHAVE_FREEADDRINFO=1
+-DHAVE_GAI_STRERROR=1
+-DHAVE_STRUCT_ADDRINFO=1
+-DHAVE_STRUCT_IN6_ADDR=1
+-DHAVE_STRUCT_SOCKADDR_IN6=1
+-DHAVE_STRUCT_SOCKADDR_STORAGE=1
+-DHAVE_TERMIOS_H=1
+-DHAVE_SYS_IOCTL_H=1
+-DHAVE_SYS_TIME_H=1
+-DTIME_WITH_SYS_TIME=1
+-DHAVE_GMTIME_R=1
+-DHAVE_LOCALTIME_R=1
+-DHAVE_MKTIME=1
+-DHAVE_TM_GMTOFF=1
+-DHAVE_TIMEZONE_VAR=1
+-DHAVE_STRUCT_STAT_ST_BLOCKS=1
+-DHAVE_STRUCT_STAT_ST_BLKSIZE=1
+-DHAVE_BLKCNT_T=1
+-DHAVE_INTPTR_T=1
+-DHAVE_UINTPTR_T=1
+-DNO_UNION_WAIT=1
+-DHAVE_SIGNED_CHAR=1
+-DHAVE_LANGINFO=1
+-DHAVE_MKSTEMPS=1
+-DHAVE_FTS=1
+-DTCL_UNLOAD_DLLS=1
+-DSTATIC_BUILD
+-DMP_FIXED_CUTOFFS
+-DMP_NO_STDINT
+-DCFG_INSTALL_LIBDIR="/usr/local/lib"
+-DCFG_INSTALL_BINDIR="/usr/local/bin"
+-DCFG_INSTALL_SCRDIR="/usr/local/lib/tcl8.6"
+-DCFG_INSTALL_INCDIR="/usr/local/include"
+-DCFG_INSTALL_DOCDIR="/usr/local/man"
+-DCFG_RUNTIME_LIBDIR="/usr/local/lib"
+-DCFG_RUNTIME_BINDIR="/usr/local/bin"
+-DCFG_RUNTIME_SCRDIR="/usr/local/lib/tcl8.6"
+-DCFG_RUNTIME_INCDIR="/usr/local/include"
+-DCFG_RUNTIME_DOCDIR="/usr/local/man"
+-DTCL_LIBRARY="/usr/local/lib/tcl8.6"
+-DTCL_PACKAGE_PATH="/usr/local/lib "
+-UHAVE_CAST_TO_UNION
+{{1}}/testdata/tcl8.6.10/generic/regcomp.c
+{{1}}/testdata/tcl8.6.10/generic/regexec.c
+{{1}}/testdata/tcl8.6.10/generic/regfree.c
+{{1}}/testdata/tcl8.6.10/generic/regerror.c
+{{1}}/testdata/tcl8.6.10/generic/tclAlloc.c
+{{1}}/testdata/tcl8.6.10/generic/tclAssembly.c
+{{1}}/testdata/tcl8.6.10/generic/tclAsync.c
+{{1}}/testdata/tcl8.6.10/generic/tclBasic.c
+{{1}}/testdata/tcl8.6.10/generic/tclBinary.c
+{{1}}/testdata/tcl8.6.10/generic/tclCkalloc.c
+{{1}}/testdata/tcl8.6.10/generic/tclClock.c
+{{1}}/testdata/tcl8.6.10/generic/tclCmdAH.c
+{{1}}/testdata/tcl8.6.10/generic/tclCmdIL.c
+{{1}}/testdata/tcl8.6.10/generic/tclCmdMZ.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompCmds.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompCmdsGR.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompCmdsSZ.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompExpr.c
+{{1}}/testdata/tcl8.6.10/generic/tclCompile.c
+{{1}}/testdata/tcl8.6.10/generic/tclConfig.c
+{{1}}/testdata/tcl8.6.10/generic/tclDate.c
+{{1}}/testdata/tcl8.6.10/generic/tclDictObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclDisassemble.c
+{{1}}/testdata/tcl8.6.10/generic/tclEncoding.c
+{{1}}/testdata/tcl8.6.10/generic/tclEnsemble.c
+{{1}}/testdata/tcl8.6.10/generic/tclEnv.c
+{{1}}/testdata/tcl8.6.10/generic/tclEvent.c
+{{1}}/testdata/tcl8.6.10/generic/tclExecute.c
+{{1}}/testdata/tcl8.6.10/generic/tclFCmd.c
+{{1}}/testdata/tcl8.6.10/generic/tclFileName.c
+{{1}}/testdata/tcl8.6.10/generic/tclGet.c
+{{1}}/testdata/tcl8.6.10/generic/tclHash.c
+{{1}}/testdata/tcl8.6.10/generic/tclHistory.c
+{{1}}/testdata/tcl8.6.10/generic/tclIndexObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclInterp.c
+{{1}}/testdata/tcl8.6.10/generic/tclIO.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOCmd.c
+{{1}}/testdata/tcl8.6.10/generic/tclIORChan.c
+{{1}}/testdata/tcl8.6.10/generic/tclIORTrans.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOGT.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOSock.c
+{{1}}/testdata/tcl8.6.10/generic/tclIOUtil.c
+{{1}}/testdata/tcl8.6.10/generic/tclLink.c
+{{1}}/testdata/tcl8.6.10/generic/tclListObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclLiteral.c
+{{1}}/testdata/tcl8.6.10/generic/tclLoad.c
+{{1}}/testdata/tcl8.6.10/generic/tclMain.c
+{{1}}/testdata/tcl8.6.10/generic/tclNamesp.c
+{{1}}/testdata/tcl8.6.10/generic/tclNotify.c
+{{1}}/testdata/tcl8.6.10/generic/tclObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclOptimize.c
+{{1}}/testdata/tcl8.6.10/generic/tclPanic.c
+{{1}}/testdata/tcl8.6.10/generic/tclParse.c
+{{1}}/testdata/tcl8.6.10/generic/tclPathObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclPipe.c
+{{1}}/testdata/tcl8.6.10/generic/tclPkg.c
+{{1}}/testdata/tcl8.6.10/generic/tclPkgConfig.c
+{{1}}/testdata/tcl8.6.10/generic/tclPosixStr.c
+{{1}}/testdata/tcl8.6.10/generic/tclPreserve.c
+{{1}}/testdata/tcl8.6.10/generic/tclProc.c
+{{1}}/testdata/tcl8.6.10/generic/tclRegexp.c
+{{1}}/testdata/tcl8.6.10/generic/tclResolve.c
+{{1}}/testdata/tcl8.6.10/generic/tclResult.c
+{{1}}/testdata/tcl8.6.10/generic/tclScan.c
+{{1}}/testdata/tcl8.6.10/generic/tclStringObj.c
+{{1}}/testdata/tcl8.6.10/generic/tclStrToD.c
+{{1}}/testdata/tcl8.6.10/generic/tclThread.c
+{{1}}/testdata/tcl8.6.10/generic/tclThreadAlloc.c
+{{1}}/testdata/tcl8.6.10/generic/tclThreadJoin.c
+{{1}}/testdata/tcl8.6.10/generic/tclThreadStorage.c
+{{1}}/testdata/tcl8.6.10/generic/tclStubInit.c
+{{1}}/testdata/tcl8.6.10/generic/tclTimer.c
+{{1}}/testdata/tcl8.6.10/generic/tclTrace.c
+{{1}}/testdata/tcl8.6.10/generic/tclUtf.c
+{{1}}/testdata/tcl8.6.10/generic/tclUtil.c
+{{1}}/testdata/tcl8.6.10/generic/tclVar.c
+{{1}}/testdata/tcl8.6.10/generic/tclZlib.c
+{{1}}/testdata/tcl8.6.10/generic/tclTomMathInterface.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixChan.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixEvent.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixFCmd.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixFile.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixPipe.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixSock.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixTime.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixInit.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixThrd.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixCompat.c
+{{1}}/testdata/tcl8.6.10/unix/tclUnixNotfy.c
+{{1}}/testdata/tcl8.6.10/generic/tclOO.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOBasic.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOCall.c
+{{1}}/testdata/tcl8.6.10/generic/tclOODefineCmds.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOInfo.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOMethod.c
+{{1}}/testdata/tcl8.6.10/generic/tclOOStubInit.c
+{{1}}/testdata/tcl8.6.10/generic/tclLoadNone.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_reverse.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_mul_digs_fast.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_sqr_fast.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_add.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_and.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_add_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_clamp.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_clear.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_clear_multi.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cmp.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cmp_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cmp_mag.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_cnt_lsb.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_copy.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_count_bits.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_2.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_2d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_div_3.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_exch.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_expt_u32.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_grow.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_copy.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_multi.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_set.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_init_size.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_karatsuba_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_karatsuba_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_balance_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_lshd.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mod.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mod_2d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul_2.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul_2d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_mul_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_neg.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_or.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_radix_size.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_radix_smap.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_read_radix.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_rshd.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_set.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_shrink.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sqrt.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sub.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_sub_d.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_signed_rsh.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_to_ubin.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_toom_mul.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_toom_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_to_radix.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_ubin_size.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_xor.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_mp_zero.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_add.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_mul_digs.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_sqr.c
+{{1}}/testdata/tcl8.6.10/libtommath/bn_s_mp_sub.c`
+
+	dir, err := ioutil.TempDir("", "tcl-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(dir)
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.Chdir(cwd)
+
+	out := filepath.Join(dir, "x.go")
+	s := strings.Replace(args0, "{{0}}", out, 1)
+	s = strings.ReplaceAll(s, "{{1}}", cwd)
+	args := strings.Split(s, "\n")
+
+	if err := os.Chdir(filepath.FromSlash("testdata/tcl8.6.10/unix")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := newTask(args, nil, nil).main(); err != nil {
+		t.Fatalf("%s\n", err)
+	}
+}
+
+func newCmd(stdout, stderr io.Writer, bin string, args ...string) *exec.Cmd {
+	r := exec.Command(bin, args...)
+	r.Stdout = multiWriter(os.Stdout, stdout)
+	r.Stderr = multiWriter(os.Stderr, stderr)
+	return r
+}
+
+func multiWriter(w ...io.Writer) io.Writer {
+	var a []io.Writer
+	for _, v := range w {
+		if v != nil {
+			a = append(a, v)
+		}
+	}
+	switch len(a) {
+	case 0:
+		panic("internal error")
+	case 1:
+		return a[0]
+	default:
+		return io.MultiWriter(a...)
+	}
 }
