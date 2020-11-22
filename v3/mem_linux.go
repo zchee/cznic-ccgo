@@ -16,5 +16,5 @@ func init() {
 		return
 	}
 
-	totalRam = si.Totalram
+	totalRam = uint64(si.Totalram)
 }
