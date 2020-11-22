@@ -329,7 +329,7 @@ func env(name, deflt string) (r string) {
 func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, err error) {
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("loading C exports from %s: %v", path, err)
+			err = fmt.Errorf("loading C exports from %s (GO111MODULE=%v): %v", path, os.Getenv("GO111MODULE"), err)
 		}
 	}()
 
