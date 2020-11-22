@@ -330,7 +330,7 @@ func env(name, deflt string) (r string) {
 func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, err error) {
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("loading C exports from %s (GO111MODULE=%v): %v", path, os.Getenv("GO111MODULE"), err)
+			err = fmt.Errorf("loading C exports from %s (GOPATH=%v GO111MODULE=%v): %v", path, os.Getenv(GOPATH), os.Getenv("GO111MODULE"), err)
 		}
 	}()
 
@@ -368,9 +368,10 @@ func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, e
 	}
 
 	ctx := build.Context{
-		GOARCH: t.goarch,
-		GOOS:   t.goos,
-		GOPATH: gopath,
+		GOARCH:   t.goarch,
+		GOOS:     t.goos,
+		GOPATH:   gopath,
+		Compiler: "gc",
 	}
 	pkg, err2 := ctx.ImportDir(filepath.Join(gopath, "src", path), 0)
 	if err2 != nil {
