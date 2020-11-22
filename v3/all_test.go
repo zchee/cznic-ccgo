@@ -492,7 +492,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		}
 
 		if info.IsDir() {
-			return skipDir(path)
+			return nil
 		}
 
 		if filepath.Ext(path) != ".c" || info.Mode()&os.ModeType != 0 {
