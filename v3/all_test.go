@@ -1122,7 +1122,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		}
 
 		if info.IsDir() {
-			return skipDir(path)
+			return nil
 		}
 
 		if strings.Contains(filepath.ToSlash(path), "/builtins/") {
