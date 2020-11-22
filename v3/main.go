@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"io"
@@ -333,7 +334,6 @@ func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, e
 		}
 	}()
 
-	exports = map[string]struct{}{}
 	pkgs, err := packages.Load(
 		&packages.Config{
 			Mode: packages.NeedFiles,
@@ -341,25 +341,47 @@ func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, e
 		},
 		path,
 	)
-	if err != nil {
-		return "", nil, err
-	}
-
-	if len(pkgs) != 1 {
-		return "", nil, fmt.Errorf("expected one package, loaded %d", len(pkgs))
-	}
-
-	pkg := pkgs[0]
-	if len(pkg.Errors) != 0 {
-		var a []string
-		for _, v := range pkg.Errors {
-			a = append(a, v.Error())
+	switch {
+	case err != nil:
+		gopath := os.Getenv("GOPATH")
+		if gopath == "" || !filepath.IsAbs(gopath) {
+			return "", nil, err
 		}
-		return "", nil, fmt.Errorf("%s", strings.Join(a, "\n"))
+
+		ctx := build.Context{
+			GOARCH: t.goarch,
+			GOOS:   t.goos,
+			GOPATH: gopath,
+		}
+		pkg, err2 := ctx.ImportDir(filepath.Join(gopath, "src", path), 0)
+		if err2 != nil {
+			return "", nil, fmt.Errorf("%v (ImportDir: %v)", err, err2)
+		}
+
+		return t.capi2(pkg.GoFiles)
+	default:
+		if len(pkgs) != 1 {
+			return "", nil, fmt.Errorf("expected one package, loaded %d", len(pkgs))
+		}
+
+		pkg := pkgs[0]
+		if len(pkg.Errors) != 0 {
+			var a []string
+			for _, v := range pkg.Errors {
+				a = append(a, v.Error())
+			}
+			return "", nil, fmt.Errorf("%s", strings.Join(a, "\n"))
+		}
+
+		return t.capi2(pkg.GoFiles)
 	}
+}
+
+func (t *task) capi2(files []string) (pkgName string, exports map[string]struct{}, err error) {
+	exports = map[string]struct{}{}
 	base := fmt.Sprintf("capi_%s_%s.go", t.goos, t.goarch)
 	var fn string
-	for _, v := range pkg.GoFiles {
+	for _, v := range files {
 		if filepath.Base(v) == base {
 			fn = v
 			break
