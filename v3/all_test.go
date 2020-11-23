@@ -1896,7 +1896,7 @@ out:
 		}
 
 		binOutA, err := func() ([]byte, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
 			return exec.CommandContext(ctx, binaryName).CombinedOutput()
@@ -1939,7 +1939,7 @@ out:
 		}()
 
 		binOutB, err := func() ([]byte, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 			defer cancel()
 
 			return exec.CommandContext(ctx, "go", "run", mainName).CombinedOutput()
