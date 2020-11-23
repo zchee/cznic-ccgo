@@ -91,7 +91,6 @@ var (
 	gccDir    = filepath.FromSlash("testdata/gcc-9.1.0")
 	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3330000")
 	tccDir    = filepath.FromSlash("testdata/tcc-0.9.27")
-	mjsonDir  = filepath.FromSlash("testdata/microjson-1.5")
 
 	testWD string
 
