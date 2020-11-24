@@ -1299,7 +1299,7 @@ func (p *project) w(s string, args ...interface{}) {
 	if oTraceW {
 		fmt.Printf(s, args...)
 	}
-	// fmt.Printf(s, args...) //TODO-
+	//fmt.Fprintf(&p.buf, "/* %s */", origin(2)) //TODO-
 	fmt.Fprintf(&p.buf, s, args...)
 }
 
@@ -6720,9 +6720,9 @@ func (p *project) bitFieldPatch2(n cc.Node, a, b cc.Operand, promote cc.Type) st
 			s = fmt.Sprintf(")&%#x", m)
 		}
 		if n != 0 {
-			s += fmt.Sprintf("<<%d>>%[1]d)", n)
+			s += fmt.Sprintf("<<%d>>%[1]d", n)
 		}
-		return s
+		return ")" + s
 	default:
 		return fmt.Sprintf(")&%#x)", m)
 	}

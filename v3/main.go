@@ -193,6 +193,7 @@ void __ccgo_va_start(__builtin_va_list ap);
 
 func origin(skip int) string {
 	pc, fn, fl, _ := runtime.Caller(skip)
+	fn = filepath.Base(fn)
 	f := runtime.FuncForPC(pc)
 	var fns string
 	if f != nil {
