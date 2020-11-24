@@ -345,7 +345,6 @@ func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, e
 	)
 	switch {
 	case err == nil:
-	default:
 		if len(pkgs) != 1 {
 			err = fmt.Errorf("expected one package, loaded %d", len(pkgs))
 			break
