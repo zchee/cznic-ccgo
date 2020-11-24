@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 	"modernc.org/cc/v3"
+	_ "modernc.org/libc"
 	"modernc.org/opt"
 )
 
