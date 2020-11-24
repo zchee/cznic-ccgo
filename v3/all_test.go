@@ -1787,6 +1787,10 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func TestCSmith(t *testing.T) {
+	if runtime.GOOS == "darwin" { //TODO setup CSmith on the darwin builder
+		return
+	}
+
 	gcc, err := exec.LookPath("gcc")
 	if err != nil {
 		t.Fatalf("%v", err)
