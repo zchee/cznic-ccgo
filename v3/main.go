@@ -374,9 +374,10 @@ func (t *task) capi(path string) (pkgName string, exports map[string]struct{}, e
 		GOPATH:   gopath,
 		Compiler: "gc",
 	}
-	pkg, err2 := ctx.ImportDir(filepath.Join(gopath, "src", path), 0)
+	arg := filepath.Join(gopath, "src", path)
+	pkg, err2 := ctx.ImportDir(arg, 0)
 	if err2 != nil {
-		return "", nil, fmt.Errorf("%v (ImportDir: %v)", err, err2)
+		return "", nil, fmt.Errorf("%v (ImportDir %q: %v)", err, arg, err2)
 	}
 
 	for i, v := range pkg.GoFiles {
