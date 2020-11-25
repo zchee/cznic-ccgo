@@ -2709,7 +2709,11 @@ func (p *project) externalDeclaration(n *cc.ExternalDeclaration) {
 	case cc.ExternalDeclarationDecl: // Declaration
 		p.declaration(nil, n.Declaration, false)
 	case cc.ExternalDeclarationAsm: // AsmFunctionDefinition
-		panic(todo("", p.pos(n)))
+		if p.task.hideAsm {
+			break
+		}
+
+		panic(todo("", n.Position()))
 	case cc.ExternalDeclarationAsmStmt: // AsmStatement
 		panic(todo("", p.pos(n)))
 	case cc.ExternalDeclarationEmpty: // ';'
@@ -7265,7 +7269,7 @@ func (p *project) castExpressionValueFunction(f *function, n *cc.CastExpression,
 		case tn.Kind() == cc.Ptr && t.Kind() == cc.Ptr:
 			p.castExpression(f, n.CastExpression, op.Type(), exprValue, flags)
 		default:
-			panic(todo("", p.pos(n)))
+			panic(todo("", n.Position()))
 		}
 	default:
 		panic(todo("%v: %v -> %v -> %v", p.pos(n), op.Type(), tn, t))

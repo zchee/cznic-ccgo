@@ -1790,10 +1790,6 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func TestCSmith(t *testing.T) {
-	if runtime.GOOS == "darwin" { //TODO setup CSmith on the darwin builder
-		return
-	}
-
 	gcc, err := exec.LookPath("gcc")
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -1897,6 +1893,10 @@ out:
 		}
 
 		csp := fmt.Sprintf("-I%s", filepath.FromSlash("/usr/include/csmith"))
+		if s := os.Getenv("CSMITH_PATH"); s != "" {
+			csp = fmt.Sprintf("-I%s", s)
+		}
+
 		ccOut, err := exec.Command(gcc, "-o", binaryName, "main.c", csp).CombinedOutput()
 		if err != nil {
 			t.Fatalf("%s\n%s\ncc: %v", extra, ccOut, err)

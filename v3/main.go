@@ -286,6 +286,7 @@ type task struct {
 	exportTypedefsValid   bool // -ccgo-export-typedefs present
 	fullPathComments      bool // -ccgo-full-path-comments
 	header                bool // -ccgo-header
+	hideAsm               bool // -ccgo-hide-asm
 	libc                  bool // -ccgo-libc
 	mingw                 bool
 	nostdinc              bool // -nostdinc
@@ -472,6 +473,7 @@ func (t *task) main() (err error) {
 	opts.Opt("ccgo-cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
 	opts.Opt("ccgo-full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
 	opts.Opt("ccgo-header", func(opt string) error { t.header = true; return nil })
+	opts.Opt("ccgo-hide-asm", func(opt string) error { t.hideAsm = true; return nil })
 	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
 	opts.Opt("ccgo-trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
