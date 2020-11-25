@@ -1083,6 +1083,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
 		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
 	}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "arm" {
+		blacklist["20041210-1.c"] = struct{}{} // reported: https://groups.google.com/g/golang-dev/c/5d4FnuQKNFU/m/qS6BYxi6AQAJ
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
