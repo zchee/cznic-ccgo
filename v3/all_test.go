@@ -931,6 +931,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			"-D__FUNCTION__=__func__",
 			"-o", main,
 			"-ccgo-verify-structs",
+			"-ccgo-hide-asm",
 		}
 		if !func() (r bool) {
 			defer func() {
@@ -1050,6 +1051,7 @@ func testSQLite(t *testing.T, dir string) {
 		"-ccgo-all-errors",
 		"-ccgo-long-double-is-double", // stddef.h
 		"-ccgo-verify-structs",
+		"-ccgo-hide-asm",
 		"-o", main,
 		filepath.Join(dir, "shell.c"),
 		filepath.Join(dir, "sqlite3.c"),
@@ -1381,6 +1383,7 @@ next:
 				"-o", src,
 				fn,
 				"-ccgo-long-double-is-double",
+				"-ccgo-hide-asm",
 			}, nil, nil).main()
 		}(); err != nil {
 			t.Errorf("%s: %s:", base, err)
@@ -1490,6 +1493,7 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			"-o", main,
 			"-ccgo-export-defines", "",
 			"-ccgo-verify-structs",
+			"-ccgo-hide-asm",
 		}
 		var args []string
 		if !func() (r bool) {
@@ -1705,6 +1709,7 @@ out:
 			csp,
 			"-ccgo-long-double-is-double",
 			"-ccgo-verify-structs",
+			"-ccgo-hide-asm",
 			"main.c",
 		}, &stdout, &stderr)
 		j.cfg.MaxSourceLine = 1 << 20
