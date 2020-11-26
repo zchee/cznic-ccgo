@@ -601,7 +601,15 @@ func (t *task) main() (err error) {
 	}
 
 	if t.goos == "darwin" {
-		for _, v := range []string{"__sincosf", "__sincos", "__sincospif", "__sincospi"} {
+		for _, v := range []string{
+			"_OSSwapInt16",
+			"_OSSwapInt32",
+			"_OSSwapInt64",
+			"__sincos",
+			"__sincosf",
+			"__sincospi",
+			"__sincospif",
+		} {
 			t.hide[v] = struct{}{}
 		}
 	}
