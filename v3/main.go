@@ -157,6 +157,8 @@ int ms_scanf(const char *format, ...);
 
 #if defined(__APPLE__)
 #define __attribute__(...)
+#define stdout __stdoutp
+#define stderr __stderrp
 #endif
 
 __UINT16_TYPE__ __builtin_bswap16 (__UINT16_TYPE__ x);
