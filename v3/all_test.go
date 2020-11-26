@@ -294,6 +294,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			"-ccgo-all-errors",
 			"-ccgo-long-double-is-double",
 			"-ccgo-verify-structs",
+			"-ccgo-hide-asm",
 		}
 		var args []string
 		switch base := filepath.Base(path); base {
