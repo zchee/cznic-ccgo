@@ -596,6 +596,12 @@ func (t *task) main() (err error) {
 		hostPredefined = strings.Join(a[:wi], "\n")
 	}
 
+	if t.goos == "darwin" {
+		for _, v := range []string{"__sincosf","__sincos","__sincospif","__sincospi"} {
+			t.hide[v] = struct{}{}
+		}
+	}
+
 	if t.nostdinc {
 		hostIncludes = nil
 		hostSysIncludes = nil
