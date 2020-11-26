@@ -135,6 +135,10 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #define __builtin_va_copy(dst, src) dst = src
 #define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
+#define __printf__ printf
+#define __scanf__ scanf
+#define __strfmon__ strfmon
+#define __strftime__ strfttime
 #define asm __asm__
 #define in6addr_any (*__ccgo_in6addr_anyp())
 

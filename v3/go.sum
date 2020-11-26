@@ -40,6 +40,8 @@ golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8T
 modernc.org/cc/v3 v3.27.0/go.mod h1:h8OMI4KyEYZA64vqFcjg/bMLcaax0jEjh32L9drJrak=
 modernc.org/cc/v3 v3.28.0-darwin h1:TgOEjoViXqZ9K68eoK0BwW6ugUxCkvNiAA9LpmRzyjs=
 modernc.org/cc/v3 v3.28.0-darwin/go.mod h1:5gkTEO77Q4qzRkKOoygzQb5GPfXR9qNnvsB8uL5MITA=
+modernc.org/cc/v3 v3.28.4-darwin h1:GI7ZqEyG5jCWhaboytbCETGAL826yd61WDyuR4Wj4mY=
+modernc.org/cc/v3 v3.28.4-darwin/go.mod h1:5gkTEO77Q4qzRkKOoygzQb5GPfXR9qNnvsB8uL5MITA=
 modernc.org/libc v1.5.0 h1:y0tlaByUWz228AOu6AENDdNIAT6D2hNai7oULIFUJXI=
 modernc.org/libc v1.5.0/go.mod h1:y1B1gK5XILs8YFkLnZ2RbqG+ZT7iywHc/Sl9hpBqDJw=
 modernc.org/libc v1.6.0-darwin h1:h8Ew/PNEkD2ImO5j4zLRlYZqwiZ/qUv5bdnTLiYWYyU=
