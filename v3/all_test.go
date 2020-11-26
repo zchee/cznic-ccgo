@@ -5,19 +5,14 @@
 package main // import "modernc.org/ccgo/v3"
 
 import (
-	"archive/tar"
-	"archive/zip"
 	"bufio"
 	"bytes"
-	"compress/bzip2"
-	"compress/gzip"
 	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -79,8 +74,6 @@ var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
 	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
 	oDebug      = flag.Bool("debug", false, "")
-	oDev        = flag.Bool("dev", false, "Enable developer tests/downloads.")
-	oDownload   = flag.Bool("download", false, "Download missing testdata. Add -dev to download also 100+ MB of developer resources.")
 	oRE         = flag.String("re", "", "")
 	oStackTrace = flag.Bool("trcstack", false, "")
 	oTrace      = flag.Bool("trc", false, "Print tested paths.")
@@ -104,21 +97,16 @@ var (
 		"--no-volatiles",         // --volatiles | --no-volatiles: enable | disable volatiles (enabled by default).
 		"--paranoid",             // --paranoid | --no-paranoid: enable | disable pointer-related assertions (disabled by default).
 	}, " ")
-
-	downloads = []struct {
-		dir, url string
-		sz       int
-		dev      bool
-	}{
-		{gccDir, "http://mirror.koddos.net/gcc/releases/gcc-9.1.0/gcc-9.1.0.tar.gz", 118000, true},
-		{sqliteDir, "https://www.sqlite.org/2020/sqlite-amalgamation-3330000.zip", 2400, false},
-		{tccDir, "http://download.savannah.gnu.org/releases/tinycc/tcc-0.9.27.tar.bz2", 620, false},
-	}
 )
 
 func TestMain(m *testing.M) {
+	var rc int
 	defer func() {
-		os.Exit(m.Run())
+		if err := recover(); err != nil {
+			rc = 1
+			fmt.Fprintf(os.Stderr, "PANIC: %v\n%s\n", err, debug.Stack())
+		}
+		os.Exit(rc)
 	}()
 
 	// fmt.Printf("test binary compiled for %s/%s\n", runtime.GOOS, runtime.GOARCH)
@@ -135,217 +123,7 @@ func TestMain(m *testing.M) {
 		panic("Cannot determine working dir: " + err.Error())
 	}
 
-	if *oDownload {
-		download()
-	}
-}
-
-func download() {
-	tmp, err := ioutil.TempDir("", "")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
-		return
-	}
-
-	defer os.RemoveAll(tmp)
-
-	for _, v := range downloads {
-		dir := filepath.FromSlash(v.dir)
-		root := filepath.Dir(v.dir)
-		fi, err := os.Stat(dir)
-		switch {
-		case err == nil:
-			if !fi.IsDir() {
-				fmt.Fprintf(os.Stderr, "expected %s to be a directory\n", dir)
-			}
-			continue
-		default:
-			if !os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "%s", err)
-				continue
-			}
-
-			if v.dev && !*oDev {
-				fmt.Printf("Not downloading (no -dev) %v MB from %s\n", float64(v.sz)/1000, v.url)
-				continue
-			}
-
-		}
-
-		if err := func() error {
-			fmt.Printf("Downloading %v MB from %s\n", float64(v.sz)/1000, v.url)
-			resp, err := http.Get(v.url)
-			if err != nil {
-				return err
-			}
-
-			defer resp.Body.Close()
-
-			base := filepath.Base(v.url)
-			name := filepath.Join(tmp, base)
-			f, err := os.Create(name)
-			if err != nil {
-				return err
-			}
-
-			defer os.Remove(name)
-
-			n, err := io.Copy(f, resp.Body)
-			if err != nil {
-				return err
-			}
-
-			if _, err := f.Seek(0, io.SeekStart); err != nil {
-				return err
-			}
-
-			switch {
-			case strings.HasSuffix(base, ".tar.bz2"):
-				b2r := bzip2.NewReader(bufio.NewReader(f))
-				tr := tar.NewReader(b2r)
-				for {
-					hdr, err := tr.Next()
-					if err != nil {
-						if err != io.EOF {
-							return err
-						}
-
-						return nil
-					}
-
-					switch hdr.Typeflag {
-					case tar.TypeDir:
-						if err = os.MkdirAll(filepath.Join(root, hdr.Name), 0770); err != nil {
-							return err
-						}
-					case tar.TypeReg, tar.TypeRegA:
-						f, err := os.OpenFile(filepath.Join(root, hdr.Name), os.O_CREATE|os.O_WRONLY, os.FileMode(hdr.Mode))
-						if err != nil {
-							return err
-						}
-
-						w := bufio.NewWriter(f)
-						if _, err = io.Copy(w, tr); err != nil {
-							return err
-						}
-
-						if err := w.Flush(); err != nil {
-							return err
-						}
-
-						if err := f.Close(); err != nil {
-							return err
-						}
-					default:
-						return fmt.Errorf("unexpected tar header typeflag %#02x", hdr.Typeflag)
-					}
-				}
-			case strings.HasSuffix(base, ".tar.gz"):
-				return untar(root, bufio.NewReader(f))
-			case strings.HasSuffix(base, ".zip"):
-				r, err := zip.NewReader(f, n)
-				if err != nil {
-					return err
-				}
-
-				for _, f := range r.File {
-					fi := f.FileInfo()
-					if fi.IsDir() {
-						if err := os.MkdirAll(filepath.Join(root, f.Name), 0770); err != nil {
-							return err
-						}
-
-						continue
-					}
-
-					if err := func() error {
-						rc, err := f.Open()
-						if err != nil {
-							return err
-						}
-
-						defer rc.Close()
-
-						dname := filepath.Join(root, f.Name)
-						g, err := os.Create(dname)
-						if err != nil {
-							return err
-						}
-
-						defer g.Close()
-
-						n, err = io.Copy(g, rc)
-						return err
-					}(); err != nil {
-						return err
-					}
-				}
-				return nil
-			}
-			panic("internal error") //TODOOK
-		}(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}
-}
-
-func untar(root string, r io.Reader) error {
-	gr, err := gzip.NewReader(r)
-	if err != nil {
-		return err
-	}
-
-	tr := tar.NewReader(gr)
-	for {
-		hdr, err := tr.Next()
-		if err != nil {
-			if err != io.EOF {
-				return err
-			}
-
-			return nil
-		}
-
-		switch hdr.Typeflag {
-		case tar.TypeDir:
-			if err = os.MkdirAll(filepath.Join(root, hdr.Name), 0770); err != nil {
-				return err
-			}
-		case tar.TypeSymlink, tar.TypeXGlobalHeader:
-			// skip
-		case tar.TypeReg, tar.TypeRegA:
-			dir := filepath.Dir(filepath.Join(root, hdr.Name))
-			if _, err := os.Stat(dir); err != nil {
-				if !os.IsNotExist(err) {
-					return err
-				}
-
-				if err = os.MkdirAll(dir, 0770); err != nil {
-					return err
-				}
-			}
-
-			f, err := os.OpenFile(filepath.Join(root, hdr.Name), os.O_CREATE|os.O_WRONLY, os.FileMode(hdr.Mode))
-			if err != nil {
-				return err
-			}
-
-			w := bufio.NewWriter(f)
-			if _, err = io.Copy(w, tr); err != nil {
-				return err
-			}
-
-			if err := w.Flush(); err != nil {
-				return err
-			}
-
-			if err := f.Close(); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unexpected tar header typeflag %#02x", hdr.Typeflag)
-		}
-	}
+	rc = m.Run()
 }
 
 type golden struct {
