@@ -130,11 +130,15 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #endif;
 
 #define _FILE_OFFSET_BITS 64
+#define __FUNCTION__ __func__
+#define __PRETTY_FUNCTION__ __func__
+#define __attribute__(...)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 #define __builtin_va_copy(dst, src) dst = src
 #define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
+#define __extension__
 #define __inline__ inline
 #define asm __asm__
 #define in6addr_any (*__ccgo_in6addr_anyp())
@@ -150,10 +154,6 @@ int ms_printf(const char *format, ...);
 int ms_scanf(const char *format, ...);
 #define _VA_LIST_DEFINED
 #define __extension__
-#endif
-
-#if defined(__APPLE__)
-#define __attribute__(...)
 #endif
 
 __UINT16_TYPE__ __builtin_bswap16 (__UINT16_TYPE__ x);
@@ -184,6 +184,7 @@ size_t __builtin_strlen(const char *s);
 void *__builtin_malloc(size_t size);
 void *__builtin_memcpy(void *dest, const void *src, size_t n);
 void *__builtin_memset(void *s, int c, size_t n);
+void *__builtin_mmap(void *addr, __SIZE_TYPE__ length, int prot, int flags, int fd, __INTPTR_TYPE__ offset);
 void *__ccgo_va_arg(__builtin_va_list ap);
 void __builtin_abort(void);
 void __builtin_exit(int status);
@@ -580,28 +581,11 @@ func (t *task) main() (err error) {
 		return err
 	}
 
-	t.mingw = detectMingw(hostPredefined)
-	if t.mingw {
+	if t.mingw = detectMingw(hostPredefined); t.mingw {
 		t.windows = true
 	}
-	if !t.mingw {
-		a := strings.Split(hostPredefined, "\n")
-		wi := 0
-		for _, v0 := range a {
-			v := strings.TrimSpace(strings.ToLower(v0))
-			if !strings.HasPrefix(v, "#define __gnu") && !strings.HasPrefix(v, "#define __gcc") {
-				a[wi] = v0
-				wi++
-			}
-		}
-		hostPredefined = strings.Join(a[:wi], "\n")
-	}
-
 	if t.goos == "darwin" {
 		for _, v := range []string{
-			"_OSSwapInt16",
-			"_OSSwapInt32",
-			"_OSSwapInt64",
 			"__sincos",
 			"__sincosf",
 			"__sincospi",
@@ -610,7 +594,6 @@ func (t *task) main() (err error) {
 			t.hide[v] = struct{}{}
 		}
 	}
-
 	if t.nostdinc {
 		hostIncludes = nil
 		hostSysIncludes = nil

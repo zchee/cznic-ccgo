@@ -3028,6 +3028,16 @@ func (p *project) declaratorDefault(n cc.Node, d *cc.Declarator) {
 			return
 		}
 
+		id := fmt.Sprintf("__builtin_%s", d.Name())
+		switch x := p.symtab[id].(type) {
+		case *imported:
+			x.used = true
+			p.w("%sX%s", x.qualifier, d.Name())
+			return
+		default:
+			panic(todo("%v: %s %T", d.Position(), d.Name(), x))
+		}
+
 		p.err(n, "undefined: %s", d.Name())
 	}
 }
@@ -7680,7 +7690,7 @@ func (p *project) unaryExpressionVoid(f *function, n *cc.UnaryExpression, t cc.T
 		defer p.w("%s", p.convert(n, n.CastExpression.Operand, p.intType, flags|fOutermost))
 		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags|fOutermost)
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
-		panic(todo("", n.Position()))
+		// nop
 	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionLabelAddr: // "&&" IDENTIFIER
@@ -10046,7 +10056,7 @@ func (p *project) primaryExpressionVoid(f *function, n *cc.PrimaryExpression, t 
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), mode, flags|fOutermost)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		p.err(n, "statement expressions not supported")
+		p.compoundStatement(f, n.CompoundStatement, "", true, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
