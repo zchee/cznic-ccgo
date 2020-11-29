@@ -183,10 +183,6 @@ func h(v interface{}) string {
 
 func TestTCC(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(tccDir))
-	if _, err := os.Stat(root); err != nil {
-		t.Fatalf("Missing resources in %s. Please run 'go test -download' to fix.", root)
-	}
-
 	g := newGolden(t, fmt.Sprintf("testdata/tcc_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
 
 	defer g.close()
@@ -463,10 +459,6 @@ func TestText(t *testing.T) {
 
 func TestGCCExec(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(gccDir))
-	if _, err := os.Stat(root); err != nil {
-		t.Fatalf("Missing resources in %s. Please run 'go test -download -dev' to fix.", root)
-	}
-
 	g := newGolden(t, fmt.Sprintf("testdata/gcc_exec_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
 
 	defer g.close()
@@ -1011,10 +1003,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 func TestSQLite(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(sqliteDir))
-	if _, err := os.Stat(root); err != nil {
-		t.Fatalf("Missing resources in %s. Please run 'go test -download' to fix.", root)
-	}
-
 	testSQLite(t, root)
 }
 

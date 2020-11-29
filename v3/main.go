@@ -132,6 +132,7 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #define _FILE_OFFSET_BITS 64
 #define __FUNCTION__ __func__
 #define __PRETTY_FUNCTION__ __func__
+#define __asm __asm__
 #define __attribute__(...)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
@@ -140,6 +141,7 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
 #define __extension__
 #define __inline__ inline
+#define __signed signed
 #define asm __asm__
 #define in6addr_any (*__ccgo_in6addr_anyp())
 
@@ -159,6 +161,9 @@ int ms_scanf(const char *format, ...);
 __UINT16_TYPE__ __builtin_bswap16 (__UINT16_TYPE__ x);
 __UINT32_TYPE__ __builtin_bswap32 (__UINT32_TYPE__ x);
 __UINT64_TYPE__ __builtin_bswap64 (__UINT64_TYPE__ x);
+char *__builtin___strcat_chk (char *dest, const char *src, size_t os);
+char *__builtin___strcpy_chk (char *dest, const char *src, size_t os);
+char *__builtin___strncpy_chk(char *dest, char *src, size_t n, size_t os);
 char *__builtin_strchr(const char *s, int c);
 char *__builtin_strcpy(char *dest, const char *src);
 double __builtin_copysign ( double x, double y );
@@ -168,6 +173,8 @@ double __builtin_inf (void);
 float __builtin_copysignf ( float x, float y );
 float __builtin_huge_valf (void);
 float __builtin_inff (void);
+int __builtin___sprintf_chk (char *s, int flag, size_t os, const char *fmt, ...);
+int __builtin__snprintf_chk(char * str, size_t maxlen, int flag, size_t strlen, const char * format);
 int __builtin_abs(int j);
 int __builtin_add_overflow();
 int __builtin_clzll (unsigned long long);
@@ -180,11 +187,15 @@ int __builtin_strcmp(const char *s1, const char *s2);
 int __builtin_sub_overflow();
 long __builtin_expect (long exp, long c);
 long long __builtin_llabs(long long j);
+size_t __builtin_object_size (void * ptr, int type);
 size_t __builtin_strlen(const char *s);
+void *__builtin___memcpy_chk (void *dest, const void *src, size_t n, size_t os);
+void *__builtin___memmove_chk (void *dest, const void *src, size_t n, size_t os);
+void *__builtin___memset_chk (void *dstpp, int c, size_t len, size_t dstlen);
 void *__builtin_malloc(size_t size);
 void *__builtin_memcpy(void *dest, const void *src, size_t n);
 void *__builtin_memset(void *s, int c, size_t n);
-void *__builtin_mmap(void *addr, __SIZE_TYPE__ length, int prot, int flags, int fd, __INTPTR_TYPE__ offset);
+void *__builtin_mmap(void *addr, size_t length, int prot, int flags, int fd, __INTPTR_TYPE__ offset);
 void *__ccgo_va_arg(__builtin_va_list ap);
 void __builtin_abort(void);
 void __builtin_exit(int status);
@@ -583,16 +594,6 @@ func (t *task) main() (err error) {
 
 	if t.mingw = detectMingw(hostPredefined); t.mingw {
 		t.windows = true
-	}
-	if t.goos == "darwin" {
-		for _, v := range []string{
-			"__sincos",
-			"__sincosf",
-			"__sincospi",
-			"__sincospif",
-		} {
-			t.hide[v] = struct{}{}
-		}
 	}
 	if t.nostdinc {
 		hostIncludes = nil

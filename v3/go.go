@@ -3034,8 +3034,6 @@ func (p *project) declaratorDefault(n cc.Node, d *cc.Declarator) {
 			x.used = true
 			p.w("%sX%s", x.qualifier, d.Name())
 			return
-		default:
-			panic(todo("%v: %s %T", d.Position(), d.Name(), x))
 		}
 
 		p.err(n, "undefined: %s", d.Name())
@@ -3886,7 +3884,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	}
 
 	name := d.Name().String()
-	if _, ok := p.task.hide[name]; ok && d.Linkage == cc.External {
+	if _, ok := p.task.hide[name]; ok {
 		return
 	}
 
@@ -4058,7 +4056,7 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 			break
 		}
 
-		p.err(n, "assembler statements not supported")
+		p.w("panic(`%s: assembler statements not supported`)", n.Position())
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
