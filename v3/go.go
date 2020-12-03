@@ -1357,7 +1357,7 @@ func (p *project) layoutSymtab() error {
 					tld := p.externs[nm]
 					if tld == nil {
 						if d.Type().Kind() != cc.Function && !p.task.header {
-							p.err(d, "undefined: %s %v %v", d.Name(), d.Type(), d.Type().Kind())
+							p.err(d, "back-end: undefined: %s %v %v", d.Name(), d.Type(), d.Type().Kind())
 						}
 						continue
 					}
@@ -3036,7 +3036,7 @@ func (p *project) declaratorDefault(n cc.Node, d *cc.Declarator) {
 			return
 		}
 
-		p.err(n, "undefined: %s", d.Name())
+		p.err(n, "back-end: undefined: %s", d.Name())
 	}
 }
 
@@ -3334,7 +3334,7 @@ func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declara
 		p.functionSignature(f, d.Type(), "")
 		p.w("}{%sX%s}))", x.qualifier, d.Name())
 	default:
-		p.err(d, "undefined: %s", d.Name())
+		p.err(d, "back-end: undefined: %s", d.Name())
 	}
 }
 
