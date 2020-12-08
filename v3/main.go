@@ -8,6 +8,7 @@ package main // import "modernc.org/ccgo/v3"
 
 import (
 	"bufio"
+	"encoding/csv"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -253,7 +254,7 @@ func trc(s string, args ...interface{}) string { //TODO-
 		s = fmt.Sprintf(s, args...)
 	}
 	_, fn, fl, _ := runtime.Caller(1)
-	r := fmt.Sprintf("\n%s:%d: TRC %s", fn, fl, s)
+	r := fmt.Sprintf("%s:%d: TRC %s", fn, fl, s)
 	fmt.Fprintf(os.Stdout, "%s\n", r)
 	os.Stdout.Sync()
 	return r
@@ -286,6 +287,7 @@ type task struct {
 	o               string   // -o
 	out             io.Writer
 	pkgName         string // -ccgo-pkgname
+	scriptFn        string // -ccgo-script
 	sources         []cc.Source
 	stderr          io.Writer
 	stdout          io.Writer
@@ -304,6 +306,7 @@ type task struct {
 	fullPathComments      bool // -ccgo-full-path-comments
 	header                bool // -ccgo-header
 	hideAsm               bool // -ccgo-hide-asm
+	isScripted            bool
 	libc                  bool // -ccgo-libc
 	mingw                 bool
 	nostdinc              bool // -nostdinc
@@ -484,6 +487,7 @@ func (t *task) main() (err error) {
 	opts.Arg("ccgo-host-config-opts", false, func(arg, value string) error { t.hostConfigOpts = value; return nil })
 	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
+	opts.Arg("ccgo-script", false, func(arg, value string) error { t.scriptFn = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("ccgo-all-errors", func(opt string) error { t.allErrors = true; return nil })
 	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
@@ -549,6 +553,10 @@ func (t *task) main() (err error) {
 	}); err != nil {
 		return err
 	}
+	if t.scriptFn != "" {
+		return t.script(t.scriptFn)
+	}
+
 	if len(t.sources) == 0 {
 		return fmt.Errorf("no input files specified")
 	}
@@ -671,10 +679,14 @@ func (t *task) main() (err error) {
 		t.asts = append(t.asts, ast)
 		memGuard(i)
 	}
-	if t.E {
+	if t.E || t.isScripted {
 		return nil
 	}
 
+	return t.link()
+}
+
+func (t *task) link() (err error) {
 	if t.o == "" {
 		t.o = fmt.Sprintf("a_%s_%s.go", t.goos, t.goarch)
 	}
@@ -711,6 +723,70 @@ func (t *task) main() (err error) {
 	}
 
 	return p.main()
+}
+
+func (t *task) script(fn string) error {
+	f, err := os.Open(fn)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.Comment = '#'
+	r.FieldsPerRecord = -1
+	r.TrimLeadingSpace = true
+	script, err := r.ReadAll()
+	if err != nil {
+		return err
+	}
+
+	ccgo := []string{t.args[0]}
+	for i, line := range script {
+		dir := line[0]
+		args := line[1:]
+		for _, v := range args {
+			if strings.HasSuffix(v, ".c") || strings.HasSuffix(v, ".h") {
+				v = filepath.Join(dir, v)
+				if t.traceTranslationUnits {
+					fmt.Printf("script: translate %s\n", v)
+				}
+				t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
+				t.sources = append(t.sources, cc.Source{Name: v})
+			}
+		}
+		t2 := newTask(append(ccgo, args...), t.stdout, t.stderr)
+		t2.isScripted = true
+		if err := inDir(dir, t2.main); err != nil {
+			return err
+		}
+
+		t.asts = append(t.asts, t2.asts...)
+		if i == 0 {
+			t.cfg = t2.cfg
+		}
+	}
+	return t.link()
+}
+
+func inDir(dir string, f func() error) (err error) {
+	var cwd string
+	if cwd, err = os.Getwd(); err != nil {
+		return err
+	}
+
+	defer func() {
+		if err2 := os.Chdir(cwd); err2 != nil {
+			err = err2
+		}
+	}()
+
+	if err = os.Chdir(dir); err != nil {
+		return err
+	}
+
+	return f()
 }
 
 func detectMingw(s string) bool {

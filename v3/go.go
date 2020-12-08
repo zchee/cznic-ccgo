@@ -1269,6 +1269,9 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
+	if p.task.traceTranslationUnits {
+		trc("%v: %s (%v)", n.Position(), fmt.Sprintf(s, args...), origin(2))
+	}
 	if !p.task.allErrors && len(p.errors) >= 10 {
 		return
 	}
@@ -2947,7 +2950,7 @@ func (p *project) declaratorDecay(n cc.Node, f *function, d *cc.Declarator, t cc
 		x.used = true
 		p.w("uintptr(unsafe.Pointer(&%sX%s))", x.qualifier, d.Name())
 	default:
-		panic(todo("%v: %v: %q", n.Position(), p.pos(d), d.Name()))
+		panic(todo("%v: %v: %q %T", n.Position(), p.pos(d), d.Name(), x))
 	}
 }
 
@@ -3466,18 +3469,29 @@ func (p *project) convertType(n cc.Node, from, to cc.Type, flags flags) string {
 	}
 
 	switch from.Kind() {
-	case cc.Function, cc.Struct, cc.Union, cc.Array, cc.Ptr:
+	case cc.Array:
 		if from.Kind() == to.Kind() {
 			return ""
 		}
 
-		panic(todo("", from, to))
+		et := from.Elem()
+		if to.Kind() == cc.Ptr && et.Kind() == to.Elem().Kind() {
+			return fmt.Sprintf("/*go.go:3476: TODO %s -> %s */", from.Alias(), to.Alias()) //TODO
+		}
+
+		panic(todo("", n.Position(), from, to, from.Alias(), to.Alias()))
+	case cc.Function, cc.Struct, cc.Union, cc.Ptr:
+		if from.Kind() == to.Kind() {
+			return ""
+		}
+
+		panic(todo("", n.Position(), from, to, from.Alias(), to.Alias()))
 	case cc.Double, cc.Float:
 		p.w("%s(", p.typ(n, to))
 		return ")"
 	}
 
-	panic(todo("", from, to))
+	panic(todo("", n.Position(), from, to, from.Alias(), to.Alias()))
 }
 
 func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) string {
@@ -4160,7 +4174,12 @@ func (p *project) expressionDecay(f *function, n *cc.Expression, t cc.Type, mode
 	case cc.ExpressionAssign: // AssignmentExpression
 		p.assignmentExpression(f, n.AssignmentExpression, t, mode, flags)
 	case cc.ExpressionComma: // Expression ',' AssignmentExpression
-		panic(todo("", p.pos(n)))
+		defer p.w("%s", p.convertType(n, n.Operand.Type(), t, flags))
+		p.w("func() %v {", p.typ(n, n.AssignmentExpression.Operand.Type()))
+		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, flags)
+		p.w("; return ")
+		p.assignmentExpression(f, n.AssignmentExpression, n.AssignmentExpression.Operand.Type(), exprValue, flags)
+		p.w("}()")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
