@@ -767,6 +767,19 @@ func (t *task) script(fn string) error {
 			t.cfg = t2.cfg
 		}
 	}
+	if t.crtImportPath != "" {
+		t.l = append(t.l, t.crtImportPath)
+		t.symSearchOrder = append(t.symSearchOrder, -len(t.l))
+		m := map[string]struct{}{}
+		for _, v := range t.l {
+			v = strings.TrimSpace(v)
+			if _, ok := m[v]; !ok {
+				t.imported = append(t.imported, &imported{path: v})
+				m[v] = struct{}{}
+			}
+		}
+		t.imported[len(t.imported)-1].used = true // crt is always imported
+	}
 	return t.link()
 }
 
