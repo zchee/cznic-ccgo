@@ -259,7 +259,7 @@ func tidyCommentString(s string) (r string) {
 			}
 			fmt.Fprintf(b, "//%s", a[0])
 			for _, v := range a[1:] {
-				fmt.Fprintf(b, "\n//%s", v)
+				fmt.Fprintf(b, "\n// %s", v)
 			}
 		default:
 			b.WriteByte(c)
@@ -2435,7 +2435,7 @@ package %s
 			fmt.Println(time.Since(t0))
 		}
 		p.task.asts[i] = nil
-		memGuard(i)
+		memGuard(i, p.task.isScripted)
 	}
 	sort.Slice(p.task.imported, func(i, j int) bool { return p.task.imported[i].path < p.task.imported[j].path })
 	p.o(`import (
@@ -2712,11 +2712,7 @@ func (p *project) externalDeclaration(n *cc.ExternalDeclaration) {
 	case cc.ExternalDeclarationDecl: // Declaration
 		p.declaration(nil, n.Declaration, false)
 	case cc.ExternalDeclarationAsm: // AsmFunctionDefinition
-		if p.task.hideAsm {
-			break
-		}
-
-		panic(todo("", n.Position()))
+		// nop
 	case cc.ExternalDeclarationAsmStmt: // AsmStatement
 		panic(todo("", p.pos(n)))
 	case cc.ExternalDeclarationEmpty: // ';'
@@ -3469,18 +3465,7 @@ func (p *project) convertType(n cc.Node, from, to cc.Type, flags flags) string {
 	}
 
 	switch from.Kind() {
-	case cc.Array:
-		if from.Kind() == to.Kind() {
-			return ""
-		}
-
-		et := from.Elem()
-		if to.Kind() == cc.Ptr && et.Kind() == to.Elem().Kind() {
-			return fmt.Sprintf("/*%v: TODO %s -> %s (%v:) */", origin(1), from.Alias(), to.Alias(), origin(2)) //TODO
-		}
-
-		panic(todo("", n.Position(), from, to, from.Alias(), to.Alias()))
-	case cc.Function, cc.Struct, cc.Union, cc.Ptr:
+	case cc.Function, cc.Struct, cc.Union, cc.Ptr, cc.Array:
 		if from.Kind() == to.Kind() {
 			return ""
 		}
@@ -3978,8 +3963,13 @@ func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomme
 		p.w("\nreturn ")
 		p.zeroValue(f.rt)
 	}
+	s := tidyComment("\n", &n.Token2)
+	p.w("%s", s)
 	if brace {
-		p.w("%s}", tidyComment("\n", &n.Token2))
+		if !strings.HasSuffix(s, "\n") {
+			p.w("\n")
+		}
+		p.w("}")
 	}
 	f.block = sv
 }

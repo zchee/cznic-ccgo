@@ -269,51 +269,50 @@ type task struct {
 	capif           string
 	cfg             *cc.Config
 	crt             string
-	crtImportPath   string // -ccgo-crt-import-path
-	exportDefines   string // -ccgo-export-defines
-	exportEnums     string // -ccgo-export-enums
-	exportExterns   string // -ccgo-export-externs
-	exportFields    string // -ccgo-export-fields
-	exportStructs   string // -ccgo-export-structs
-	exportTypedefs  string // -ccgo-export-typedefs
+	crtImportPath   string // -crt-import-path
+	exportDefines   string // -export-defines
+	exportEnums     string // -export-enums
+	exportExterns   string // -export-externs
+	exportFields    string // -export-fields
+	exportStructs   string // -export-structs
+	exportTypedefs  string // -export-typedefs
 	goarch          string
 	goos            string
-	hide            map[string]struct{} // -ccgo-hide
-	hostConfigCmd   string              // -ccgo-host-config-cmd
-	hostConfigOpts  string              // -ccgo-host-config-opts
-	ignoredIncludes string              // -ccgo-ignored-includes
+	hide            map[string]struct{} // -hide
+	hostConfigCmd   string              // -host-config-cmd
+	hostConfigOpts  string              // -host-config-opts
+	ignoredIncludes string              // -ignored-includes
 	imported        []*imported
 	l               []string // -l
 	o               string   // -o
 	out             io.Writer
-	pkgName         string // -ccgo-pkgname
-	scriptFn        string // -ccgo-script
+	pkgName         string // -pkgname
+	scriptFn        string // -script
 	sources         []cc.Source
 	stderr          io.Writer
 	stdout          io.Writer
 	symSearchOrder  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
 	E                     bool // -E
-	allErrors             bool // -ccgo-all-errors
-	cover                 bool // -ccgo-cover-instrumentation
-	coverC                bool // -ccgo-cover-instrumentation-c
-	exportDefinesValid    bool // -ccgo-export-defines present
-	exportEnumsValid      bool // -ccgo-export-enums present
-	exportExternsValid    bool // -ccgo-export-externs present
-	exportFieldsValid     bool // -ccgo-export-fields present
-	exportStructsValid    bool // -ccgo-export-structs present
-	exportTypedefsValid   bool // -ccgo-export-typedefs present
-	fullPathComments      bool // -ccgo-full-path-comments
-	header                bool // -ccgo-header
-	hideAsm               bool // -ccgo-hide-asm
+	allErrors             bool // -all-errors
+	cover                 bool // -cover-instrumentation
+	coverC                bool // -cover-instrumentation-c
+	exportDefinesValid    bool // -export-defines present
+	exportEnumsValid      bool // -export-enums present
+	exportExternsValid    bool // -export-externs present
+	exportFieldsValid     bool // -export-fields present
+	exportStructsValid    bool // -export-structs present
+	exportTypedefsValid   bool // -export-typedefs present
+	fullPathComments      bool // -full-path-comments
+	header                bool // -header
 	isScripted            bool
-	libc                  bool // -ccgo-libc
+	libc                  bool // --libc
 	mingw                 bool
 	nostdinc              bool // -nostdinc
-	traceTranslationUnits bool // -ccgo-trace-translation-units
-	verifyStructs         bool // -ccgo-verify-structs
-	watch                 bool // -ccgo-watch-instrumentation
-	windows               bool // -ccgo-windows
+	traceTranslationUnits bool // -trace-translation-units
+	verifyStructs         bool // -verify-structs
+	watch                 bool // -watch-instrumentation
+	windows               bool // -windows
 }
 
 func newTask(args []string, stdout, stderr io.Writer) *task {
@@ -327,6 +326,7 @@ func newTask(args []string, stdout, stderr io.Writer) *task {
 		args: args,
 		cfg: &cc.Config{
 			DoNotTypecheckAsm:         true,
+			LongDoubleIsDouble:        true,
 			SharedFunctionDefinitions: &cc.SharedFunctionDefinitions{},
 		},
 		crt:           "libc.",
@@ -476,38 +476,36 @@ func (t *task) main() (err error) {
 	opts.Arg("D", true, func(arg, value string) error { t.D = append(t.D, value); return nil })
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
 	opts.Arg("U", true, func(arg, value string) error { t.U = append(t.U, value); return nil })
-	opts.Arg("ccgo-crt-import-path", false, func(arg, value string) error { t.crtImportPath = value; return nil })
-	opts.Arg("ccgo-export-defines", false, func(arg, value string) error { t.exportDefines = value; t.exportDefinesValid = true; return nil })
-	opts.Arg("ccgo-export-enums", false, func(arg, value string) error { t.exportEnums = value; t.exportEnumsValid = true; return nil })
-	opts.Arg("ccgo-export-externs", false, func(arg, value string) error { t.exportExterns = value; t.exportExternsValid = true; return nil })
-	opts.Arg("ccgo-export-fields", false, func(arg, value string) error { t.exportFields = value; t.exportFieldsValid = true; return nil })
-	opts.Arg("ccgo-export-structs", false, func(arg, value string) error { t.exportStructs = value; t.exportStructsValid = true; return nil })
-	opts.Arg("ccgo-export-typedefs", false, func(arg, value string) error { t.exportTypedefs = value; t.exportTypedefsValid = true; return nil })
-	opts.Arg("ccgo-host-config-cmd", false, func(arg, value string) error { t.hostConfigCmd = value; return nil })
-	opts.Arg("ccgo-host-config-opts", false, func(arg, value string) error { t.hostConfigOpts = value; return nil })
-	opts.Arg("ccgo-ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
-	opts.Arg("ccgo-pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
-	opts.Arg("ccgo-script", false, func(arg, value string) error { t.scriptFn = value; return nil })
+	opts.Arg("crt-import-path", false, func(arg, value string) error { t.crtImportPath = value; return nil })
+	opts.Arg("export-defines", false, func(arg, value string) error { t.exportDefines = value; t.exportDefinesValid = true; return nil })
+	opts.Arg("export-enums", false, func(arg, value string) error { t.exportEnums = value; t.exportEnumsValid = true; return nil })
+	opts.Arg("export-externs", false, func(arg, value string) error { t.exportExterns = value; t.exportExternsValid = true; return nil })
+	opts.Arg("export-fields", false, func(arg, value string) error { t.exportFields = value; t.exportFieldsValid = true; return nil })
+	opts.Arg("export-structs", false, func(arg, value string) error { t.exportStructs = value; t.exportStructsValid = true; return nil })
+	opts.Arg("export-typedefs", false, func(arg, value string) error { t.exportTypedefs = value; t.exportTypedefsValid = true; return nil })
+	opts.Arg("host-config-cmd", false, func(arg, value string) error { t.hostConfigCmd = value; return nil })
+	opts.Arg("host-config-opts", false, func(arg, value string) error { t.hostConfigOpts = value; return nil })
+	opts.Arg("ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
+	opts.Arg("pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
+	opts.Arg("script", false, func(arg, value string) error { t.scriptFn = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
-	opts.Opt("ccgo-all-errors", func(opt string) error { t.allErrors = true; return nil })
-	opts.Opt("ccgo-cover-instrumentation", func(opt string) error { t.cover = true; return nil })
-	opts.Opt("ccgo-cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
-	opts.Opt("ccgo-full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
-	opts.Opt("ccgo-header", func(opt string) error { t.header = true; return nil })
-	opts.Opt("ccgo-hide-asm", func(opt string) error { t.hideAsm = true; return nil })
-	opts.Opt("ccgo-long-double-is-double", func(opt string) error { t.cfg.LongDoubleIsDouble = true; return nil })
-	opts.Opt("ccgo-trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
-	opts.Opt("ccgo-verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
-	opts.Opt("ccgo-watch-instrumentation", func(opt string) error { t.watch = true; return nil })
-	opts.Opt("ccgo-windows", func(opt string) error { t.windows = true; return nil })
+	opts.Opt("all-errors", func(opt string) error { t.allErrors = true; return nil })
+	opts.Opt("cover-instrumentation", func(opt string) error { t.cover = true; return nil })
+	opts.Opt("cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
+	opts.Opt("full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
+	opts.Opt("header", func(opt string) error { t.header = true; return nil })
+	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
+	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
+	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
+	opts.Opt("windows", func(opt string) error { t.windows = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
-	opts.Opt("ccgo-libc", func(opt string) error {
+	opts.Opt("-libc", func(opt string) error {
 		t.libc = true
 		t.crt = ""
 		t.crtImportPath = ""
 		return nil
 	})
-	opts.Arg("ccgo-hide", false, func(arg, value string) error {
+	opts.Arg("hide", false, func(arg, value string) error {
 		value = strings.TrimSpace(value)
 		a := strings.Split(value, ",")
 		for _, v := range a {
@@ -677,7 +675,7 @@ func (t *task) main() (err error) {
 			fmt.Println(time.Since(t0))
 		}
 		t.asts = append(t.asts, ast)
-		memGuard(i)
+		memGuard(i, t.isScripted)
 	}
 	if t.E || t.isScripted {
 		return nil
@@ -807,7 +805,7 @@ func detectMingw(s string) bool {
 	return strings.Contains(s, "#define __MINGW")
 }
 
-func memGuard(i int) {
+func memGuard(i int, force bool) {
 	if totalRam == 0 || totalRam > 64e9 {
 		return
 	}
@@ -818,6 +816,10 @@ func memGuard(i int) {
 	case ms.Alloc < totalRam/2:
 		return
 	case ms.Alloc < (8*totalRam)/10:
+		if force {
+			break
+		}
+
 		switch {
 		case totalRam < 1e9:
 			// ok

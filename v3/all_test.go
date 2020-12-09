@@ -286,12 +286,11 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 
 		ccgoArgs := []string{
 			"ccgo",
+
+			"-all-errors",
+			"-hide", "__sincosf,__sincos,__sincospif,__sincospi",
 			"-o", main,
-			"-ccgo-all-errors",
-			"-ccgo-long-double-is-double",
-			"-ccgo-verify-structs",
-			"-ccgo-hide-asm",
-			"-ccgo-hide", "__sincosf,__sincos,__sincospif,__sincospi",
+			"-verify-structs",
 		}
 		var args []string
 		switch base := filepath.Base(path); base {
@@ -920,10 +919,10 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 		ccgoArgs := []string{
 			"ccgo",
+
 			"-D__FUNCTION__=__func__",
 			"-o", main,
-			"-ccgo-verify-structs",
-			"-ccgo-hide-asm",
+			"-verify-structs",
 		}
 		if !func() (r bool) {
 			defer func() {
@@ -939,7 +938,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 				}
 			}()
 
-			ccgoArgs = append(ccgoArgs, path, "-ccgo-long-double-is-double")
+			ccgoArgs = append(ccgoArgs, path)
 			if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
 				if *oTrace {
 					fmt.Println(err)
@@ -1028,6 +1027,7 @@ func testSQLite(t *testing.T, dir string) {
 
 	ccgoArgs := []string{
 		"ccgo",
+
 		"-DHAVE_USLEEP",
 		"-DLONGDOUBLE_TYPE=double",
 		"-DSQLITE_DEBUG",
@@ -1036,11 +1036,9 @@ func testSQLite(t *testing.T, dir string) {
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
 		"-DSQLITE_MEMDEBUG",
 		"-DSQLITE_THREADSAFE=0",
-		"-ccgo-all-errors",
-		"-ccgo-long-double-is-double", // stddef.h
-		"-ccgo-verify-structs",
-		"-ccgo-hide-asm",
+		"-all-errors",
 		"-o", main,
+		"-verify-structs",
 		filepath.Join(dir, "shell.c"),
 		filepath.Join(dir, "sqlite3.c"),
 	}
@@ -1368,10 +1366,9 @@ next:
 			}()
 			return newTask([]string{
 				"ccgo",
+
 				"-o", src,
 				fn,
-				"-ccgo-long-double-is-double",
-				"-ccgo-hide-asm",
 			}, nil, nil).main()
 		}(); err != nil {
 			t.Errorf("%s: %s:", base, err)
@@ -1478,10 +1475,10 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 
 		ccgoArgs := []string{
 			"ccgo",
+
+			"-export-defines", "",
 			"-o", main,
-			"-ccgo-export-defines", "",
-			"-ccgo-verify-structs",
-			"-ccgo-hide-asm",
+			"-verify-structs",
 		}
 		var args []string
 		if !func() (r bool) {
@@ -1693,12 +1690,11 @@ out:
 		var stdout, stderr bytes.Buffer
 		j := newTask([]string{
 			"ccgo",
+
 			"-o", mainName,
-			csp,
-			"-ccgo-long-double-is-double",
-			"-ccgo-verify-structs",
-			"-ccgo-hide-asm",
+			"-verify-structs",
 			"main.c",
+			csp,
 		}, &stdout, &stderr)
 		j.cfg.MaxSourceLine = 1 << 20
 
