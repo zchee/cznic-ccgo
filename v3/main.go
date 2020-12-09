@@ -750,13 +750,14 @@ func (t *task) script(fn string) error {
 			if strings.HasSuffix(v, ".c") || strings.HasSuffix(v, ".h") {
 				v = filepath.Join(dir, v)
 				if t.traceTranslationUnits {
-					fmt.Printf("script: translate %s\n", v)
+					fmt.Printf("ccgo.script: translate %s\n", v)
 				}
 				t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
 				t.sources = append(t.sources, cc.Source{Name: v})
 			}
 		}
 		t2 := newTask(append(ccgo, args...), t.stdout, t.stderr)
+		t2.cfg.SharedFunctionDefinitions = t.cfg.SharedFunctionDefinitions
 		t2.isScripted = true
 		if err := inDir(dir, t2.main); err != nil {
 			return err
