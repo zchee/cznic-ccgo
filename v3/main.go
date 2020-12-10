@@ -174,6 +174,7 @@ double __builtin_inf (void);
 float __builtin_copysignf ( float x, float y );
 float __builtin_huge_valf (void);
 float __builtin_inff (void);
+float __builtin_nanf (const char *str);
 int __builtin___sprintf_chk (char *s, int flag, size_t os, const char *fmt, ...);
 int __builtin__snprintf_chk(char * str, size_t maxlen, int flag, size_t strlen, const char * format);
 int __builtin_abs(int j);
@@ -297,6 +298,7 @@ type task struct {
 	allErrors             bool // -all-errors
 	cover                 bool // -cover-instrumentation
 	coverC                bool // -cover-instrumentation-c
+	errTrace              bool // -err-trace
 	exportDefinesValid    bool // -export-defines present
 	exportEnumsValid      bool // -export-enums present
 	exportExternsValid    bool // -export-externs present
@@ -492,13 +494,14 @@ func (t *task) main() (err error) {
 	opts.Opt("all-errors", func(opt string) error { t.allErrors = true; return nil })
 	opts.Opt("cover-instrumentation", func(opt string) error { t.cover = true; return nil })
 	opts.Opt("cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
+	opts.Opt("err-trace", func(opt string) error { t.errTrace = true; return nil })
 	opts.Opt("full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
 	opts.Opt("header", func(opt string) error { t.header = true; return nil })
+	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Opt("windows", func(opt string) error { t.windows = true; return nil })
-	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("-libc", func(opt string) error {
 		t.libc = true
 		t.crt = ""

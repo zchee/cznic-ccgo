@@ -492,7 +492,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"rbug.c":       {}, // cannot pass on 386
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
-		"20000703-1.c":                 {}, //TODO statement expression
 		"20000722-1.c":                 {}, //TODO composite literal
 		"20000801-3.c":                 {}, //TODO designators
 		"20000917-1.c":                 {}, //TODO composite literal
@@ -518,10 +517,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20030109-1.c":                 {}, //TODO
 		"20030222-1.c":                 {}, //TODO
 		"20030224-2.c":                 {}, //TODO
-		"20030330-1.c":                 {}, //TODO
 		"20030501-1.c":                 {}, //TODO
-		"20030714-1.c":                 {}, //TODO select nested field
-		"20030811-1.c":                 {}, //TODO
 		"20030910-1.c":                 {}, //TODO
 		"20031003-1.c":                 {}, //TODO
 		"20040223-1.c":                 {}, //TODO
@@ -542,9 +538,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20041201-1.c":                 {}, //TODO
 		"20041214-1.c":                 {}, //TODO
 		"20041218-2.c":                 {}, //TODO
-		"20050107-1.c":                 {}, //TODO
-		"20050119-1.c":                 {}, //TODO
-		"20050119-2.c":                 {}, //TODO
 		"20050121-1.c":                 {}, //TODO
 		"20050316-1.c":                 {}, //TODO
 		"20050316-2.c":                 {}, //TODO
@@ -554,7 +547,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20050613-1.c":                 {}, //TODO nested initailizer designator
 		"20050929-1.c":                 {}, //TODO
 		"20051012-1.c":                 {}, //TODO
-		"20060420-1.c":                 {}, //TODO
 		"20061220-1.c":                 {}, //TODO
 		"20070614-1.c":                 {}, //TODO
 		"20070824-1.c":                 {}, //TODO
@@ -567,7 +559,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20071220-2.c":                 {}, //TODO
 		"20080502-1.c":                 {}, //TODO
 		"20090219-1.c":                 {}, //TODO
-		"20100430-1.c":                 {}, //TODO
 		"20180921-1.c":                 {}, //TODO
 		"920302-1.c":                   {}, //TODO
 		"920415-1.c":                   {}, //TODO
@@ -588,7 +579,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"921208-2.c":                   {}, //TODO
 		"921215-1.c":                   {}, //TODO
 		"930406-1.c":                   {}, //TODO
-		"930930-1.c":                   {}, //TODO
 		"931002-1.c":                   {}, //TODO
 		"931004-10.c":                  {}, //TODO
 		"931004-12.c":                  {}, //TODO
@@ -613,7 +603,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"991112-1.c":                   {}, //TODO
 		"991201-1.c":                   {}, //TODO
 		"991227-1.c":                   {}, //TODO
-		"991228-1.c":                   {}, //TODO
 		"alias-2.c":                    {}, //TODO
 		"alias-3.c":                    {}, //TODO
 		"alias-4.c":                    {}, //TODO
@@ -622,7 +611,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"anon-1.c":                     {}, //TODO nested field access
 		"bcp-1.c":                      {}, //TODO
 		"bitfld-3.c":                   {}, //TODO
-		"bswap-1.c":                    {}, //TODO
 		"bswap-2.c":                    {}, //TODO
 		"built-in-setjmp.c":            {}, //TODO
 		"builtin-bitops-1.c":           {}, //TODO
@@ -630,7 +618,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"builtin-nan-1.c":              {}, //TODO
 		"builtin-types-compatible-p.c": {}, //TODO
 		"call-trap-1.c":                {}, //TODO
-		"cbrt.c":                       {}, //TODO
 		"comp-goto-1.c":                {}, //TODO
 		"comp-goto-2.c":                {}, //TODO
 		"compare-fp-1.c":               {}, //TODO
@@ -695,7 +682,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr17377.c":                    {}, //TODO
 		"pr19449.c":                    {}, //TODO
 		"pr22061-1.c":                  {}, //TODO
-		"pr22061-2.c":                  {}, //TODO
 		"pr22061-3.c":                  {}, //TODO
 		"pr22061-4.c":                  {}, //TODO
 		"pr22098-1.c":                  {}, //TODO
@@ -726,8 +712,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr40022.c":                    {}, //TODO
 		"pr40657.c":                    {}, //TODO
 		"pr41239.c":                    {}, //TODO
-		"pr41317.c":                    {}, //TODO nested field access
-		"pr41463.c":                    {}, //TODO link error (report bug?)
 		"pr41935.c":                    {}, //TODO
 		"pr42248.c":                    {}, //TODO
 		"pr42570":                      {}, //TODO uint8_t foo[1][0];
@@ -769,7 +753,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr63641.c":                    {}, //TODO
 		"pr64006.c":                    {}, //TODO
 		"pr64242.c":                    {}, //TODO
-		"pr65053-1.c":                  {}, //TODO
 		"pr65053-2.c":                  {}, //TODO
 		"pr65170.c":                    {}, //TODO
 		"pr65427.c":                    {}, //TODO
@@ -784,7 +767,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr69320-2.c":                  {}, //TODO
 		"pr70460.c":                    {}, //TODO
 		"pr70903.c":                    {}, //TODO
-		"pr71083.c":                    {}, //TODO
 		"pr71494.c":                    {}, //TODO
 		"pr71554.c":                    {}, //TODO
 		"pr71626-1.c":                  {}, //TODO
@@ -812,10 +794,8 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr85331.c":                    {}, //TODO
 		"pr85582-2.c":                  {}, //TODO
 		"pr85582-3.c":                  {}, //TODO
-		"pr85756.c":                    {}, //TODO
 		"pr86528.c":                    {}, //TODO
 		"pr88739.c":                    {}, //TODO nested initailizer designator
-		"pr88904.c":                    {}, //TODO
 		"pr89369.c":                    {}, //TODO
 		"pr89434.c":                    {}, //TODO
 		"printf-2.c":                   {}, //TODO
@@ -847,7 +827,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"widechar-3.c":                 {}, //TODO
 		"zero-struct-1.c":              {}, //TODO
 		"zero-struct-2.c":              {}, //TODO
-		"zerolen-2.c":                  {}, //TODO
 
 	}
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {

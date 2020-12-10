@@ -1269,6 +1269,9 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
+	if p.task.errTrace {
+		s = s + "(" + origin(2) + ")"
+	}
 	if p.task.traceTranslationUnits {
 		trc("%v: %s (%v)", n.Position(), fmt.Sprintf(s, args...), origin(2))
 	}
@@ -2207,6 +2210,7 @@ func (p *project) layoutTLDs() error {
 				name = p.scope.take(cc.String(name))
 				if isMain {
 					p.mainName = name
+					d.Read++
 				}
 				tld := &tld{name: name}
 				p.externs[nm] = tld
@@ -3887,7 +3891,11 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 		return
 	}
 
-	if d.Linkage == cc.Internal && d.Read == 0 && !d.AddressTaken && strings.HasPrefix(name, "__") {
+	if p.isMain && d.Linkage == cc.External && d.Read == 0 && !d.AddressTaken && len(p.task.asts) == 1 {
+		return
+	}
+
+	if d.Linkage == cc.Internal && d.Read == 0 && !d.AddressTaken /*TODO- && strings.HasPrefix(name, "__") */ {
 		return
 	}
 
@@ -3902,7 +3910,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 
 	f := newFunction(p, n)
 	p.pass1 = true
-	p.compoundStatement(f, n.CompoundStatement, "", false, false)
+	p.compoundStatement(f, n.CompoundStatement, "", false, false, false)
 	p.pass1 = false
 	p.functionDefinitionSignature(f, tld)
 	p.w(" ")
@@ -3919,7 +3927,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 		}
 		comment = ""
 	}
-	p.compoundStatement(f, n.CompoundStatement, comment, false, true)
+	p.compoundStatement(f, n.CompoundStatement, comment, false, true, false)
 	p.w(";")
 	p.flushLocalTaggesStructs()
 	p.flushStaticTLDs()
@@ -3939,7 +3947,7 @@ func (p *project) flushStaticTLDs() {
 	p.staticQueue = nil
 }
 
-func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomment string, forceNoBraces, fnBody bool) {
+func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomment string, forceNoBraces, fnBody, statementExpr bool) {
 	// '{' BlockItemList '}'
 	brace := (!n.IsJumpTarget() || n.Parent() == nil) && !forceNoBraces
 	if brace && (n.Parent() != nil || f.off == 0) {
@@ -3957,7 +3965,7 @@ func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomme
 	}
 	var r *cc.JumpStatement
 	for list := n.BlockItemList; list != nil; list = list.BlockItemList {
-		r = p.blockItem(f, list.BlockItem)
+		r = p.blockItem(f, list.BlockItem, statementExpr)
 	}
 	if n.Parent() == nil && r == nil && f.rt.Kind() != cc.Void {
 		p.w("\nreturn ")
@@ -3988,12 +3996,12 @@ func (p *project) zeroValue(t cc.Type) {
 	}
 }
 
-func (p *project) blockItem(f *function, n *cc.BlockItem) (r *cc.JumpStatement) {
+func (p *project) blockItem(f *function, n *cc.BlockItem, returnValue bool) (r *cc.JumpStatement) {
 	switch n.Case {
 	case cc.BlockItemDecl: // Declaration
 		p.declaration(f, n.Declaration, false)
 	case cc.BlockItemStmt: // Statement
-		r = p.statement(f, n.Statement, false, false, false)
+		r = p.statement(f, n.Statement, false, false, false, returnValue)
 		p.w(";")
 		if r == nil {
 			p.instrument(n)
@@ -4025,7 +4033,7 @@ func (p *project) instrument(n cc.Node) {
 	}
 }
 
-func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace, forceNoBraces, switchBlock bool) (r *cc.JumpStatement) {
+func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace, forceNoBraces, switchBlock, returnValue bool) (r *cc.JumpStatement) {
 	if forceCompoundStmtBrace {
 		p.w(" {")
 		if !switchBlock {
@@ -4042,8 +4050,15 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 		if f.hasJumps {
 			forceNoBraces = true
 		}
-		p.compoundStatement(f, n.CompoundStatement, "", forceCompoundStmtBrace || forceNoBraces, false)
+		p.compoundStatement(f, n.CompoundStatement, "", forceCompoundStmtBrace || forceNoBraces, false, false)
 	case cc.StatementExpr: // ExpressionStatement
+		if returnValue {
+			p.w("return ")
+			e := n.ExpressionStatement.Expression
+			p.expression(f, e, e.Operand.Type(), exprValue, fOutermost)
+			break
+		}
+
 		p.expressionStatement(f, n.ExpressionStatement)
 	case cc.StatementSelection: // SelectionStatement
 		p.selectionStatement(f, n.SelectionStatement)
@@ -8769,7 +8784,21 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 			panic(todo("", n.Position(), n.Operand.Type()))
 		}
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-		panic(todo("", p.pos(n)))
+		switch n.Operand.Type().Kind() {
+		case cc.Ptr:
+			switch et := n.Operand.Type().Elem(); et.Kind() {
+			case cc.Function:
+				p.w("(*(*")
+				p.functionSignature(f, n.Operand.Type().Elem(), "")
+				p.w(")(unsafe.Pointer(")
+				p.postfixExpressionCall(f, n, t, exprValue, flags)
+				p.w(")))")
+			default:
+				panic(todo("", p.pos(n), et, et.Kind()))
+			}
+		default:
+			panic(todo("", n.Position(), n.Operand.Type()))
+		}
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 		switch n.Operand.Type().Kind() {
 		case cc.Ptr:
@@ -10067,7 +10096,7 @@ func (p *project) primaryExpressionVoid(f *function, n *cc.PrimaryExpression, t 
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), mode, flags|fOutermost)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		p.compoundStatement(f, n.CompoundStatement, "", true, false)
+		p.compoundStatement(f, n.CompoundStatement, "", true, false, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -10304,10 +10333,17 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 		}
 		p.expression(f, n.Expression, t, mode, flags|fOutermost)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
-		p.err(n, "statement expressions not supported")
+		p.statementExpression(f, n.CompoundStatement, t, mode, flags)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
+}
+
+func (p *project) statementExpression(f *function, n *cc.CompoundStatement, t cc.Type, mode exprMode, flags flags) {
+	defer p.w("%s", p.convert(n, n.Operand, t, flags))
+	p.w(" func() %v {", p.typ(n, n.Operand.Type()))
+	p.compoundStatement(f, n, "", true, false, true)
+	p.w("}()")
 }
 
 func (p *project) primaryExpressionLValue(f *function, n *cc.PrimaryExpression, t cc.Type, mode exprMode, flags flags) {
@@ -11048,14 +11084,14 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			p.w("__%d: if !(", a)
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 			p.w(") { goto __%d };", b)
-			p.statement(f, n.Statement, false, false, false)
+			p.statement(f, n.Statement, false, false, false, false)
 			p.w("; goto __%d; __%d:", a, b)
 			break
 		}
 
 		p.w("for ")
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
-		p.statement(f, n.Statement, true, false, false)
+		p.statement(f, n.Statement, true, false, false, false)
 	case cc.IterationStatementDo: // "do" Statement "while" '(' Expression ')' ';'
 		if f.hasJumps {
 			// a:	stmt
@@ -11067,7 +11103,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			f.continueCtx = b
 			f.breakCtx = c
 			p.w("__%d:", a)
-			p.statement(f, n.Statement, false, false, false)
+			p.statement(f, n.Statement, false, false, false, false)
 			p.w(";goto __%d; __%[1]d: if ", b)
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 			p.w("{goto __%d};goto __%d;__%[2]d:", a, c)
@@ -11080,7 +11116,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		}
 		p.w("for %v := true; %[1]v; %[1]v = ", v)
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
-		p.statement(f, n.Statement, true, false, false)
+		p.statement(f, n.Statement, true, false, false, false)
 	case cc.IterationStatementFor: // "for" '(' Expression ';' Expression ';' Expression ')' Statement
 		if f.hasJumps || n.Expression3 != nil && n.Expression3.Case == cc.ExpressionComma {
 			//	expr
@@ -11108,7 +11144,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 				p.w(") { goto __%d }", c)
 			}
 			p.w("%s", semi)
-			p.statement(f, n.Statement, false, false, false)
+			p.statement(f, n.Statement, false, false, false, false)
 			p.w(";goto __%d; __%[1]d:", b)
 			if n.Expression3 != nil {
 				p.expression(f, n.Expression3, n.Expression3.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
@@ -11135,7 +11171,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		if n.Expression3 != nil {
 			p.expression(f, n.Expression3, n.Expression3.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
 		}
-		p.statement(f, n.Statement, true, false, false)
+		p.statement(f, n.Statement, true, false, false, false)
 	case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
 		if true || f.block.isFlat() {
 			panic(todo("", p.pos(n)))
@@ -11163,14 +11199,14 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 			p.w("if !(")
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 			p.w(") { goto __%d };", a)
-			p.statement(f, n.Statement, false, false, false)
+			p.statement(f, n.Statement, false, false, false, false)
 			p.w(";__%d: ", a)
 			break
 		}
 
 		p.w("if ")
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
-		p.statement(f, n.Statement, true, false, false)
+		p.statement(f, n.Statement, true, false, false, false)
 	case cc.SelectionStatementIfElse: // "if" '(' Expression ')' Statement "else" Statement
 		sv := f.ifCtx
 		f.ifCtx = n
@@ -11187,22 +11223,22 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 			p.w("if !(")
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
 			p.w(") { goto __%d };", a)
-			p.statement(f, n.Statement, false, false, false)
+			p.statement(f, n.Statement, false, false, false, false)
 			p.w(";goto __%d; __%d:", b, a)
-			p.statement(f, n.Statement2, false, false, false)
+			p.statement(f, n.Statement2, false, false, false, false)
 			p.w(";__%d:", b)
 			break
 		}
 
 		p.w("if ")
 		p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
-		p.statement(f, n.Statement, true, false, false)
+		p.statement(f, n.Statement, true, false, false, false)
 		p.w(" else ")
 		switch {
 		case p.isIfStmt(n.Statement2):
-			p.statement(f, n.Statement2, false, true, false)
+			p.statement(f, n.Statement2, false, true, false, false)
 		default:
-			p.statement(f, n.Statement2, true, false, false)
+			p.statement(f, n.Statement2, true, false, false, false)
 		}
 	case cc.SelectionStatementSwitch: // "switch" '(' Expression ')' Statement
 		sv := f.switchCtx
@@ -11221,7 +11257,7 @@ func (p *project) selectionStatement(f *function, n *cc.SelectionStatement) {
 		f.switchCtx = inSwitchFirst
 		p.w("switch ")
 		p.expression(f, n.Expression, n.Promote(), exprValue, fOutermost)
-		p.statement(f, n.Statement, true, false, true)
+		p.statement(f, n.Statement, true, false, true, false)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -11278,7 +11314,7 @@ func (p *project) flatSwitch(f *function, n *cc.SelectionStatement) {
 	p.w("}; goto __%d;", f.breakCtx)
 	svLabels := f.flatSwitchLabels
 	f.flatSwitchLabels = labels
-	p.statement(f, n.Statement, false, true, false)
+	p.statement(f, n.Statement, false, true, false, false)
 	f.flatSwitchLabels = svLabels
 	p.w("__%d:", f.breakCtx)
 	f.breakCtx = svBreakCtx
@@ -11305,7 +11341,7 @@ func (p *project) labeledStatement(f *function, n *cc.LabeledStatement) (r *cc.J
 			p.w("goto %s;", f.labelNames[n.Token.Value])
 		}
 		p.w("%s%s:", comment("\n", n), f.labelNames[n.Token.Value])
-		r = p.statement(f, n.Statement, false, false, false)
+		r = p.statement(f, n.Statement, false, false, false, false)
 	case
 		cc.LabeledStatementCaseLabel, // "case" ConstantExpression ':' Statement
 		cc.LabeledStatementDefault:   // "default" ':' Statement
@@ -11326,7 +11362,7 @@ func (p *project) labeledStatementFlat(f *function, n *cc.LabeledStatement) (r *
 			p.w("goto %s;", f.labelNames[n.Token.Value])
 		}
 		p.w("%s%s:", tidyComment("\n", n), f.labelNames[n.Token.Value])
-		r = p.statement(f, n.Statement, false, false, false)
+		r = p.statement(f, n.Statement, false, false, false, false)
 	case
 		cc.LabeledStatementCaseLabel, // "case" ConstantExpression ':' Statement
 		cc.LabeledStatementDefault:   // "default" ':' Statement
@@ -11373,7 +11409,7 @@ func (p *project) labeledStatementCase(f *function, n *cc.LabeledStatement) {
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
-	p.statement(f, n.Statement, false, false, false)
+	p.statement(f, n.Statement, false, false, false, false)
 }
 
 func (p *project) constantExpression(f *function, n *cc.ConstantExpression, t cc.Type, mode exprMode, flags flags) {
