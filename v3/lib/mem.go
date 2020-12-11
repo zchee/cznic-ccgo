@@ -4,6 +4,6 @@
 
 // +build !linux
 
-package main // import "modernc.org/ccgo/v3"
+package ccgo // import "modernc.org/ccgo/v3/lib"
 
 var totalRam uint64

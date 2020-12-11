@@ -2,11 +2,10 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	all bench clean cover cpu editor internalError later mem nuke todo edit devbench
+.PHONY:	all clean editor internalError later nuke todo edit 
 
 grep=--include=*.go
 ngrep='TODOOK\|internalError\|testdata'
-testlog=testdata/testlog-$(shell echo $$GOOS)-$(shell echo $$GOARCH)-on-$(shell go env GOOS)-$(shell go env GOARCH)
 
 all:
 	LC_ALL=C make all_log 2>&1 | tee log
@@ -36,56 +35,9 @@ all_log:
 	grep -c 'exit status 2' log || true
 	LC_ALL=C date 2>&1 | tee -a log
 
-test:
-	LC_ALL=C make test_log 2>&1 | tee $(testlog)
-	grep -ni --color=always fail $(testlog) || true
-
-test_log:
-	go version
-	uname -a
-	go test -v -timeout 24h
-	date | tee -a $(testlog)
-	grep -ni fail || true
-
-test_linux_amd64:
-	GOOS=linux GOARCH=amd64 make test
-
-test_linux_386:
-	GOOS=linux GOARCH=386 make test
-
-test_linux_arm:
-	GOOS=linux GOARCH=arm make test
-
-test_linux_arm64:
-	GOOS=linux GOARCH=arm64 make test
-
-test_windows_amd64:
-	go version | tee %TEMP%\testlog-windows-amd64
-	go test -v -timeout 24h | tee -a %TEMP%\testlog-windows-amd64
-	date /T | tee -a %TEMP%\testlog-windows-amd64
-	time /T | tee -a %TEMP%\testlog-windows-amd64
-
-
-devbench:
-	date 2>&1 | tee log-devbench
-	go test -timeout 24h -dev -run @ -bench . 2>&1 | tee -a log-devbench
-	grep -n 'FAIL\|SKIP' log-devbench || true
-
-bench:
-	date 2>&1 | tee log-bench
-	go test -timeout 24h -v -run '^[^E]' -bench . 2>&1 | tee -a log-bench
-	grep -n 'FAIL\|SKIP' log-bench || true
-
 clean:
 	go clean
 	rm -f *~ *.test *.out
-
-cover:
-	t=$(shell mktemp) ; go test -coverprofile $$t && go tool cover -html $$t && unlink $$t
-
-cpu: clean
-	go test -run @ -bench . -cpuprofile cpu.out
-	go tool pprof -lines *.test cpu.out
 
 edit:
 	touch log
@@ -93,15 +45,11 @@ edit:
 
 editor:
 	gofmt -l -s -w *.go
-	go build -v -o $(GOPATH)/bin/ccgo
+	GO111MODULE=off go build -v -o $(GOPATH)/bin/ccgo
 
 later:
 	@grep -n $(grep) LATER * || true
 	@grep -n $(grep) MAYBE * || true
-
-mem: clean
-	go test -run Mem -mem -memprofile mem.out -timeout 24h
-	go tool pprof -lines -web -alloc_space *.test mem.out
 
 nuke: clean
 	go clean -i

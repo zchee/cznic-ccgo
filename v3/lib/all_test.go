@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main // import "modernc.org/ccgo/v3"
+package ccgo // import "modernc.org/ccgo/v3/lib"
 
 import (
 	"bufio"
@@ -318,7 +318,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			}()
 
 			ccgoArgs = append(ccgoArgs, path)
-			if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
+			if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 				if *oTrace {
 					fmt.Println(err)
 				}
@@ -424,7 +424,7 @@ func skipDir(path string) error {
 }
 
 func TestCAPI(t *testing.T) {
-	task := newTask(nil, nil, nil)
+	task := NewTask(nil, nil, nil)
 	pkgName, capi, err := task.capi("modernc.org/libc")
 	if err != nil {
 		t.Fatal(err)
@@ -918,7 +918,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			}()
 
 			ccgoArgs = append(ccgoArgs, path)
-			if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
+			if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 				if *oTrace {
 					fmt.Println(err)
 				}
@@ -1042,7 +1042,7 @@ func testSQLite(t *testing.T, dir string) {
 			}
 		}()
 
-		if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
+		if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 			if *oTrace {
 				fmt.Println(err)
 			}
@@ -1343,12 +1343,12 @@ next:
 					err = fmt.Errorf("%v", e)
 				}
 			}()
-			return newTask([]string{
+			return NewTask([]string{
 				"ccgo",
 
 				"-o", src,
 				fn,
-			}, nil, nil).main()
+			}, nil, nil).Main()
 		}(); err != nil {
 			t.Errorf("%s: %s:", base, err)
 			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
@@ -1475,7 +1475,7 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			}()
 
 			ccgoArgs = append(ccgoArgs, path)
-			if err := newTask(ccgoArgs, nil, nil).main(); err != nil {
+			if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 				if *oTrace {
 					fmt.Println(err)
 				}
@@ -1667,7 +1667,7 @@ out:
 
 		files++
 		var stdout, stderr bytes.Buffer
-		j := newTask([]string{
+		j := NewTask([]string{
 			"ccgo",
 
 			"-o", mainName,
@@ -1686,7 +1686,7 @@ out:
 				}
 			}()
 
-			if err := j.main(); err != nil || stdout.Len() != 0 {
+			if err := j.Main(); err != nil || stdout.Len() != 0 {
 				t.Errorf("%s\n%s\nccgo: %s\n%s", extra, csOut, stdout.Bytes(), stderr.Bytes())
 				t.Fatal(err)
 			}

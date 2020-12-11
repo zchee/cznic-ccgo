@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main // import "modernc.org/ccgo/v3"
+package ccgo // import "modernc.org/ccgo/v3/lib"
 
 import (
 	"bytes"
@@ -1166,7 +1166,7 @@ type project struct {
 	staticQueue        []*cc.InitDeclarator
 	structs            map[cc.StringID]*taggedStruct // key: C tag
 	symtab             map[string]interface{}        // *tld or *imported
-	task               *task
+	task               *Task
 	tlds               map[*cc.Declarator]*tld
 	ts                 bytes.Buffer // Text segment
 	tsW                []rune       // Text segment, wcha_t
@@ -1187,7 +1187,7 @@ type project struct {
 	pass1  bool
 }
 
-func newProject(t *task) (*project, error) {
+func newProject(t *Task) (*project, error) {
 	intType := t.cfg.ABI.Type(cc.Int)
 	if intType.Size() != 4 { // We're assuming wchar_t is int32.
 		return nil, fmt.Errorf("unsupported C int size: %d", intType.Size())
@@ -3026,7 +3026,7 @@ func (p *project) declaratorDefault(n cc.Node, d *cc.Declarator) {
 			}
 		}
 
-		if d.Linkage == cc.External && p.task.libc {
+		if d.Linkage == cc.External && p.task.nostdlib {
 			p.w("X%s", d.Name())
 			return
 		}
@@ -7804,9 +7804,12 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 				p.w(" ^")
 				p.castExpression(f, n.CastExpression, n.Operand.Type(), exprValue, flags|fForceRuntimeConv)
 			default:
-				p.w("^")
-				defer p.w("%s", p.convert(n, n.CastExpression.Operand, t, flags|fForceConv))
-				p.w("%s%sFrom%[2]s(", p.task.crt, p.helperType(n, n.Operand.Type()))
+				if n.CastExpression.Operand.IsZero() {
+					p.w("^%s(0)", p.typ(n, t))
+					break
+				}
+
+				p.w("^%s(", p.helperType2(n, n.CastExpression.Operand.Type(), t))
 				p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags|fOutermost)
 				p.w(")")
 			}
