@@ -7718,7 +7718,7 @@ func (p *project) unaryExpressionVoid(f *function, n *cc.UnaryExpression, t cc.T
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
 		// nop
 	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
-		panic(todo("", n.Position()))
+		// nop
 	case cc.UnaryExpressionLabelAddr: // "&&" IDENTIFIER
 		panic(todo("", n.Position()))
 	case cc.UnaryExpressionAlignofExpr: // "_Alignof" UnaryExpression
