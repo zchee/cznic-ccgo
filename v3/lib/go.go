@@ -3410,7 +3410,7 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 		x.used = true
 		p.w("uintptr(unsafe.Pointer(&%sX%s))", x.qualifier, d.Name())
 	default:
-		panic(todo("%v: %v: %q", n.Position(), p.pos(d), d.Name()))
+		panic(todo("%v: %v: %q %T", n.Position(), p.pos(d), d.Name(), x))
 	}
 }
 

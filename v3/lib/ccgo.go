@@ -180,6 +180,7 @@ int __builtin__snprintf_chk(char * str, size_t maxlen, int flag, size_t strlen, 
 int __builtin_abs(int j);
 int __builtin_add_overflow();
 int __builtin_clzll (unsigned long long);
+int __builtin_isnan(double);
 int __builtin_memcmp(const void *s1, const void *s2, size_t n);
 int __builtin_mul_overflow();
 int __builtin_printf(const char *format, ...);
