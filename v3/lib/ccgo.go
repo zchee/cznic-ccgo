@@ -662,7 +662,7 @@ func (t *Task) Main() (err error) {
 		tuSources := append(sources, v)
 		if t.E {
 			t.cfg.PreprocessOnly = true
-			if err := cc.Preprocess(t.cfg, includePaths, sysIncludePaths, tuSources, os.Stdout); err != nil {
+			if err := cc.Preprocess(t.cfg, includePaths, sysIncludePaths, tuSources, t.stdout); err != nil {
 				return err
 			}
 			continue

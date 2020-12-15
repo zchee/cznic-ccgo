@@ -73,6 +73,7 @@ func init() {
 var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
 	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
+	oCpp        = flag.Bool("cpp", false, "Amend compiler errors withe proprocessor output")
 	oDebug      = flag.Bool("debug", false, "")
 	oRE         = flag.String("re", "", "")
 	oStackTrace = flag.Bool("trcstack", false, "")
@@ -322,6 +323,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 				if *oTrace {
 					fmt.Println(err)
 				}
+				err = cpp(*oCpp, ccgoArgs, err)
 				t.Errorf("%s: %v", path, err)
 				return false
 			}
@@ -385,6 +387,20 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		t.Errorf("%v", err)
 	}
 	return files, ok
+}
+
+func cpp(enabled bool, args []string, err0 error) error {
+	if !enabled {
+		return err0
+	}
+
+	args = append(args, "-E")
+	var out bytes.Buffer
+	if err := NewTask(args, &out, &out).Main(); err != nil {
+		return fmt.Errorf("error while acquiring preprocessor output: %v\n%v", err, err0)
+	}
+
+	return fmt.Errorf("preprocessor output:\n%s\n%v", out.Bytes(), err0)
 }
 
 func trim(b []byte) (r []byte) {
@@ -922,6 +938,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 				if *oTrace {
 					fmt.Println(err)
 				}
+				err = cpp(*oCpp, ccgoArgs, err)
 				t.Errorf("%s: %v", path, err)
 				return false
 			}
@@ -1046,6 +1063,7 @@ func testSQLite(t *testing.T, dir string) {
 			if *oTrace {
 				fmt.Println(err)
 			}
+			err = cpp(*oCpp, ccgoArgs, err)
 			t.Errorf("%v", err)
 			return false
 		}
@@ -1334,6 +1352,7 @@ next:
 		}
 		src := nm + "-" + base + ".go"
 		bin := nm + "-" + base + ".out"
+		var args []string
 		if err := func() (err error) {
 			defer func() {
 				if e := recover(); e != nil && err == nil {
@@ -1343,13 +1362,15 @@ next:
 					err = fmt.Errorf("%v", e)
 				}
 			}()
-			return NewTask([]string{
+			args = []string{
 				"ccgo",
 
 				"-o", src,
 				fn,
-			}, nil, nil).Main()
+			}
+			return NewTask(args, nil, nil).Main()
 		}(); err != nil {
+			err = cpp(*oCpp, args, err)
 			t.Errorf("%s: %s:", base, err)
 			r = append(r, &compCertResult{nm, base, 0, 0, false, false, false})
 			continue
@@ -1479,6 +1500,7 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 				if *oTrace {
 					fmt.Println(err)
 				}
+				err = cpp(*oCpp, ccgoArgs, err)
 				t.Errorf("%s: %v", path, err)
 				return false
 			}
