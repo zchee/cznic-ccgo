@@ -1692,6 +1692,10 @@ func (p *project) layoutStructs() error {
 }
 
 func (p *project) captureStructTags(n cc.Node, t cc.Type, m map[cc.StringID]*taggedStruct, tags *[]cc.StringID) {
+	if t == nil {
+		return
+	}
+
 	t = t.Alias()
 	for t.Kind() == cc.Ptr {
 		t = t.Alias().Elem().Alias()

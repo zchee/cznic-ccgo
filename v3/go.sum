@@ -34,10 +34,10 @@ golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 h1:go1bK/D/BFZV2I8cIQd1NKEZ+0owSTG1fDTci4IqFcE=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-modernc.org/cc/v3 v3.0.0-20201216103414-11fe14e6ce13 h1:p6WFs4efJZHTnyXse0rz4HBAQ7Qtt9KdDxRuUdFIB0M=
-modernc.org/cc/v3 v3.0.0-20201216103414-11fe14e6ce13/go.mod h1:5gkTEO77Q4qzRkKOoygzQb5GPfXR9qNnvsB8uL5MITA=
-modernc.org/libc v0.0.0-20201215101532-17dd8917aa3b h1:IRqSjTA8dbp7VyGd4knzO016M+ztwFah6IFc5pBgchY=
-modernc.org/libc v0.0.0-20201215101532-17dd8917aa3b/go.mod h1:+CUpZpxGy66ltK+rD33+pozVpxhkkexlsAfaiSeVv7Y=
+modernc.org/cc/v3 v3.0.0-20201216173153-b88b2988d007 h1:rWYSuZMxEcxlDPkWBcR4hMEHaeCC6dDtQHsd2uPBQxs=
+modernc.org/cc/v3 v3.0.0-20201216173153-b88b2988d007/go.mod h1:5gkTEO77Q4qzRkKOoygzQb5GPfXR9qNnvsB8uL5MITA=
+modernc.org/libc v0.0.0-20201216171826-fa26c56ea341 h1:XwK/6eCej9C17Gecafqa7yCwPsbg1pWOb7pcDvEB1CM=
+modernc.org/libc v0.0.0-20201216171826-fa26c56ea341/go.mod h1:+CUpZpxGy66ltK+rD33+pozVpxhkkexlsAfaiSeVv7Y=
 modernc.org/mathutil v1.1.1 h1:FeylZSVX8S+58VsyJlkEj2bcpdytmp9MmDKZkKx8OIE=
 modernc.org/mathutil v1.1.1/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
 modernc.org/memory v1.0.1 h1:bhVo78NAdgvRD4N+b2hGnAwL5RP2+QyiEJDsX3jpeDA=
