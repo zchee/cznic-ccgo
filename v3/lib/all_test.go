@@ -73,7 +73,7 @@ func init() {
 var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
 	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
-	oCpp        = flag.Bool("cpp", false, "Amend compiler errors withe proprocessor output")
+	oCpp        = flag.Bool("cpp", false, "Amend compiler errors with proprocessor output")
 	oDebug      = flag.Bool("debug", false, "")
 	oRE         = flag.String("re", "", "")
 	oStackTrace = flag.Bool("trcstack", false, "")
