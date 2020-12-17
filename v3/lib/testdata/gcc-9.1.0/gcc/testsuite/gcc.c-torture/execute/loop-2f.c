@@ -4,6 +4,7 @@
 #include <limits.h>
 
 #include <sys/types.h>
+#if !defined(__MINGW32__) && !defined(__MINGW64__)
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -25,6 +26,9 @@
 #define MAP_LEN 0x10000
 
 #define OFFSET (MAP_LEN/2 - 2 * sizeof (char));
+
+#endif
+
 
 f (int s, char *p)
 {
