@@ -1313,9 +1313,7 @@ func checkResult(t *testing.T, out []byte, base, rdir string) bool {
 
 	if runtime.GOOS == "windows" {
 		// '\n'  -->  '\r\n'
-		var tmpStr = string(out)
-		tmpStr = strings.ReplaceAll(tmpStr, "\n", "\r\n")
-		out = []byte(tmpStr)
+		out = bytes.ReplaceAll(out, []byte("\n"), []byte("\r\n"))
 	}
 
 	if bytes.Equal(out, b) {
