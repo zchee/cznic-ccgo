@@ -36,10 +36,11 @@ golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 h1:go1bK/D/BFZV2I8cIQd1N
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 modernc.org/cc/v3 v3.0.0-20201216173153-b88b2988d007 h1:rWYSuZMxEcxlDPkWBcR4hMEHaeCC6dDtQHsd2uPBQxs=
 modernc.org/cc/v3 v3.0.0-20201216173153-b88b2988d007/go.mod h1:5gkTEO77Q4qzRkKOoygzQb5GPfXR9qNnvsB8uL5MITA=
-modernc.org/libc v0.0.0-20201218165250-4dd8d87b4139 h1:yQIa4aZPjgajkHsnRyhvuYstm44L0aH/x+e8l7c5aw0=
-modernc.org/libc v0.0.0-20201218165250-4dd8d87b4139/go.mod h1:+CUpZpxGy66ltK+rD33+pozVpxhkkexlsAfaiSeVv7Y=
-modernc.org/mathutil v1.1.1 h1:FeylZSVX8S+58VsyJlkEj2bcpdytmp9MmDKZkKx8OIE=
+modernc.org/libc v0.0.0-20201220183212-f16ea39bee04 h1:h++rKqCtWamrTuzmHlGfQc5PDVj8GknXlN7c+ogr3ms=
+modernc.org/libc v0.0.0-20201220183212-f16ea39bee04/go.mod h1:IR66laG5b3bONN1tfix3Gpy8xk/6WDf+Rtc4NqNczls=
 modernc.org/mathutil v1.1.1/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
+modernc.org/mathutil v1.2.1 h1:PSIN4RdyeB6MbFsNLSkFCzDjnEVEMS3H/hFHcJtAJ9g=
+modernc.org/mathutil v1.2.1/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
 modernc.org/memory v1.0.1 h1:bhVo78NAdgvRD4N+b2hGnAwL5RP2+QyiEJDsX3jpeDA=
 modernc.org/memory v1.0.1/go.mod h1:NSjvC08+g3MLOpcAxQbdctcThAEX4YlJ20WWHYEhvRg=
 modernc.org/opt v0.1.1 h1:/0RX92k9vwVeDXj+Xn23DKp2VJubL7k8qNffND6qn3A=
