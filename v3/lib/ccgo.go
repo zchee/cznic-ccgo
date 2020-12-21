@@ -140,6 +140,7 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #define __builtin_va_copy(dst, src) dst = src
 #define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
+#define __ccgo_fd_zero(set) __builtin_memset(set, 0, sizeof(fd_set))
 #define __extension__
 #define __inline__ inline
 #define __signed signed
@@ -290,6 +291,7 @@ type Task struct {
 	o               string   // -o
 	out             io.Writer
 	pkgName         string // -pkgname
+	replaceFdZero   string // -replace-fd-zero
 	scriptFn        string // -script
 	sources         []cc.Source
 	stderr          io.Writer
@@ -493,6 +495,7 @@ func (t *Task) Main() (err error) {
 	opts.Arg("host-config-opts", false, func(arg, value string) error { t.hostConfigOpts = value; return nil })
 	opts.Arg("ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
+	opts.Arg("replace-fd-zero", false, func(arg, value string) error { t.replaceFdZero = value; return nil })
 	opts.Arg("script", false, func(arg, value string) error { t.scriptFn = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("all-errors", func(opt string) error { t.allErrors = true; return nil })
@@ -592,6 +595,7 @@ func (t *Task) Main() (err error) {
 	}
 
 	t.cfg.ABI = abi
+	t.cfg.ReplaceMacroFdZero = t.replaceFdZero
 	t.cfg.Config3.IgnoreInclude = re
 	t.cfg.Config3.NoFieldAndBitfieldOverlap = true
 	t.cfg.Config3.PreserveWhiteSpace = true
