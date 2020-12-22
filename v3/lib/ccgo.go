@@ -141,6 +141,8 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
 #define __ccgo_fd_zero(set) __builtin_memset(set, 0, sizeof(fd_set))
+#define __ccgo_tcl_default_double_rounding(set) ((void)0)
+#define __ccgo_tcl_ieee_double_rounding(set) ((void)0)
 #define __extension__
 #define __inline__ inline
 #define __signed signed
@@ -265,38 +267,40 @@ func trc(s string, args ...interface{}) string { //TODO-
 
 // Task represents a compilation job.
 type Task struct {
-	D               []string // -D
-	I               []string // -I
-	U               []string // -U
-	args            []string
-	asts            []*cc.AST
-	capif           string
-	cfg             *cc.Config
-	crt             string
-	crtImportPath   string // -crt-import-path
-	exportDefines   string // -export-defines
-	exportEnums     string // -export-enums
-	exportExterns   string // -export-externs
-	exportFields    string // -export-fields
-	exportStructs   string // -export-structs
-	exportTypedefs  string // -export-typedefs
-	goarch          string
-	goos            string
-	hide            map[string]struct{} // -hide
-	hostConfigCmd   string              // -host-config-cmd
-	hostConfigOpts  string              // -host-config-opts
-	ignoredIncludes string              // -ignored-includes
-	imported        []*imported
-	l               []string // -l
-	o               string   // -o
-	out             io.Writer
-	pkgName         string // -pkgname
-	replaceFdZero   string // -replace-fd-zero
-	scriptFn        string // -script
-	sources         []cc.Source
-	stderr          io.Writer
-	stdout          io.Writer
-	symSearchOrder  []int // >= 0: asts[i], < 0 : imported[-i-1]
+	D                               []string // -D
+	I                               []string // -I
+	U                               []string // -U
+	args                            []string
+	asts                            []*cc.AST
+	capif                           string
+	cfg                             *cc.Config
+	crt                             string
+	crtImportPath                   string // -crt-import-path
+	exportDefines                   string // -export-defines
+	exportEnums                     string // -export-enums
+	exportExterns                   string // -export-externs
+	exportFields                    string // -export-fields
+	exportStructs                   string // -export-structs
+	exportTypedefs                  string // -export-typedefs
+	goarch                          string
+	goos                            string
+	hide                            map[string]struct{} // -hide
+	hostConfigCmd                   string              // -host-config-cmd
+	hostConfigOpts                  string              // -host-config-opts
+	ignoredIncludes                 string              // -ignored-includes
+	imported                        []*imported
+	l                               []string // -l
+	o                               string   // -o
+	out                             io.Writer
+	pkgName                         string // -pkgname
+	replaceFdZero                   string // -replace-fd-zero
+	replaceTclDefaultDoubleRounding string // -replace-tcl-default-double-rounding
+	replaceTclIeeeDoubleRounding    string // -replace-tcl-default-double-rounding
+	scriptFn                        string // -script
+	sources                         []cc.Source
+	stderr                          io.Writer
+	stdout                          io.Writer
+	symSearchOrder                  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
 	E                     bool // -E
 	allErrors             bool // -all-errors
@@ -496,6 +500,8 @@ func (t *Task) Main() (err error) {
 	opts.Arg("ignored-includes", false, func(arg, value string) error { t.ignoredIncludes = value; return nil })
 	opts.Arg("pkgname", false, func(arg, value string) error { t.pkgName = value; return nil })
 	opts.Arg("replace-fd-zero", false, func(arg, value string) error { t.replaceFdZero = value; return nil })
+	opts.Arg("replace-tcl-default-double-rounding", false, func(arg, value string) error { t.replaceTclDefaultDoubleRounding = value; return nil })
+	opts.Arg("replace-tcl-ieee-double-rounding", false, func(arg, value string) error { t.replaceTclIeeeDoubleRounding = value; return nil })
 	opts.Arg("script", false, func(arg, value string) error { t.scriptFn = value; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("all-errors", func(opt string) error { t.allErrors = true; return nil })
@@ -596,6 +602,8 @@ func (t *Task) Main() (err error) {
 
 	t.cfg.ABI = abi
 	t.cfg.ReplaceMacroFdZero = t.replaceFdZero
+	t.cfg.ReplaceMacroTclDefaultDoubleRounding = t.replaceTclDefaultDoubleRounding
+	t.cfg.ReplaceMacroTclIeeeDoubleRounding = t.replaceTclIeeeDoubleRounding
 	t.cfg.Config3.IgnoreInclude = re
 	t.cfg.Config3.NoFieldAndBitfieldOverlap = true
 	t.cfg.Config3.PreserveWhiteSpace = true
