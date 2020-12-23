@@ -75,6 +75,7 @@ var (
 	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
 	oCpp        = flag.Bool("cpp", false, "Amend compiler errors with proprocessor output")
 	oDebug      = flag.Bool("debug", false, "")
+	oKeep       = flag.Bool("keep", false, "keep temp directories")
 	oRE         = flag.String("re", "", "")
 	oStackTrace = flag.Bool("trcstack", false, "")
 	oTrace      = flag.Bool("trc", false, "Print tested paths.")
@@ -1015,7 +1016,12 @@ func testSQLite(t *testing.T, dir string) {
 		t.Fatal(err)
 	}
 
-	defer os.RemoveAll(temp)
+	switch {
+	case *oKeep:
+		t.Log(temp)
+	default:
+		defer os.RemoveAll(temp)
+	}
 
 	if err := os.Chdir(temp); err != nil {
 		t.Fatal(err)
