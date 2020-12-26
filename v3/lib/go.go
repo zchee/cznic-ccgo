@@ -26,26 +26,27 @@ import (
 )
 
 var (
-	idAddOverflow  = cc.String("__builtin_add_overflow") // bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
-	idAligned      = cc.String("aligned")                // int __attribute__ ((aligned (8))) foo;
-	idAtomicLoadN  = cc.String("__atomic_load_n")        // type __atomic_load_n (type *ptr, int memorder)
-	idAtomicStoreN = cc.String("__atomic_store_n")       // void __atomic_store_n (type *ptr, type val, int memorder)
-	idBp           = cc.String("bp")
-	idCAPI         = cc.String("CAPI")
-	idChooseExpr   = cc.String("__builtin_choose_expr")
-	idEnviron      = cc.String("environ")
-	idMain         = cc.String("main")
-	idMulOverflow  = cc.String("__builtin_mul_overflow") // bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
-	idPacked       = cc.String("packed")                 // __attribute__((packed))
-	idSubOverflow  = cc.String("__builtin_sub_overflow") // bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
-	idTls          = cc.String("tls")
-	idTs           = cc.String("ts")
-	idVa           = cc.String("va")
-	idVaArg        = cc.String("__ccgo_va_arg")
-	idVaEnd        = cc.String("__ccgo_va_end")
-	idVaList       = cc.String("va_list")
-	idVaStart      = cc.String("__ccgo_va_start")
-	idWtext        = cc.String("wtext")
+	idAddOverflow          = cc.String("__builtin_add_overflow") // bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
+	idAligned              = cc.String("aligned")                // int __attribute__ ((aligned (8))) foo;
+	idAtomicLoadN          = cc.String("__atomic_load_n")        // type __atomic_load_n (type *ptr, int memorder)
+	idAtomicStoreN         = cc.String("__atomic_store_n")       // void __atomic_store_n (type *ptr, type val, int memorder)
+	idBp                   = cc.String("bp")
+	idBuiltinConstantPImpl = cc.String("__builtin_constant_p_impl")
+	idCAPI                 = cc.String("CAPI")
+	idChooseExpr           = cc.String("__builtin_choose_expr")
+	idEnviron              = cc.String("environ")
+	idMain                 = cc.String("main")
+	idMulOverflow          = cc.String("__builtin_mul_overflow") // bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
+	idPacked               = cc.String("packed")                 // __attribute__((packed))
+	idSubOverflow          = cc.String("__builtin_sub_overflow") // bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
+	idTls                  = cc.String("tls")
+	idTs                   = cc.String("ts")
+	idVa                   = cc.String("va")
+	idVaArg                = cc.String("__ccgo_va_arg")
+	idVaEnd                = cc.String("__ccgo_va_end")
+	idVaList               = cc.String("va_list")
+	idVaStart              = cc.String("__ccgo_va_start")
+	idWtext                = cc.String("wtext")
 
 	bytesBufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 
@@ -9639,6 +9640,9 @@ func (p *project) postfixExpressionCallBool(f *function, n *cc.PostfixExpression
 		case idAtomicLoadN:
 			p.atomicLoadN(f, n, t, mode, flags)
 			return
+		case idBuiltinConstantPImpl:
+			p.w("%v", n.Operand.Value())
+			return
 		}
 	}
 
@@ -9682,6 +9686,9 @@ func (p *project) postfixExpressionCallValue(f *function, n *cc.PostfixExpressio
 			return
 		case idMulOverflow:
 			p.mulOverflow(f, n, t, mode, flags)
+			return
+		case idBuiltinConstantPImpl:
+			p.w("%v", n.Operand.Value())
 			return
 		}
 	}

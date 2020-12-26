@@ -46,7 +46,6 @@ test_log:
 	uname -a
 	go test -v -timeout 24h
 	date | tee -a $(testlog)
-	grep -ni fail || true
 
 test_linux_amd64:
 	GOOS=linux GOARCH=amd64 make test

@@ -135,6 +135,7 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #define __PRETTY_FUNCTION__ __func__
 #define __asm __asm__
 #define __attribute__(...)
+#define __builtin_constant_p(x) __builtin_constant_p_impl(0, x)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
 #define __builtin_va_copy(dst, src) dst = src
@@ -144,6 +145,8 @@ typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
 #define __ccgo_tcl_default_double_rounding(set) ((void)0)
 #define __ccgo_tcl_ieee_double_rounding(set) ((void)0)
 #define __extension__
+#define __has_include(...) __has_include_impl(#__VA_ARGS__)
+#define __has_include_impl(x)
 #define __inline__ inline
 #define __signed signed
 #define asm __asm__
@@ -183,6 +186,7 @@ int __builtin__snprintf_chk(char * str, size_t maxlen, int flag, size_t strlen, 
 int __builtin_abs(int j);
 int __builtin_add_overflow();
 int __builtin_clzll (unsigned long long);
+int __builtin_constant_p_impl(int, ...);
 int __builtin_isnan(double);
 int __builtin_memcmp(const void *s1, const void *s2, size_t n);
 int __builtin_mul_overflow();
