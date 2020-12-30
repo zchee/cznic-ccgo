@@ -10466,7 +10466,7 @@ func (p *project) wideStringLiteral(v cc.Value, pad int) string {
 			}
 			p.tsW = append(p.tsW, s...)
 			p.tsW = append(p.tsW, 0)
-			p.tsOffs[id] = off
+			p.tsWOffs[id] = off
 		}
 		return fmt.Sprintf("%s%s", p.tsWNameP, nonZeroUintptr(off))
 	default:
