@@ -33,7 +33,10 @@ import (
 
 //TODO parallel
 
+//TODO CPython
+//TODO Cython
 //TODO gmp
+//TODO gofrontend
 //TODO gsl
 //TODO minigmp
 //TODO mpc
@@ -41,13 +44,11 @@ import (
 //TODO pcre
 //TODO pcre2
 //TODO quickjs
+//TODO redis
+//TODO wolfssl
 //TODO zdat
 //TODO zlib
-//TODO CPython
-//TODO Cython
-//TODO redis
-//TODO gofrontend
-//TODO wolfssl
+//TODO zstd
 
 //TODO 2020-07-17
 //
