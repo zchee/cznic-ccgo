@@ -4,6 +4,7 @@
 
 //go:generate stringer -output stringer.go -type=exprMode,opKind
 
+// Package ccgo implements the ccgo command.
 package ccgo // import "modernc.org/ccgo/v3/lib"
 
 import (
