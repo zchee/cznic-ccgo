@@ -2191,7 +2191,6 @@ func (p *project) layoutTLDs() error {
 			}
 			nm := d.Name()
 			name := nm.String()
-			shouldPrint := name == "Fts5ExtensionApi" //DELETE
 
 			switch d.Linkage {
 			case cc.External:
