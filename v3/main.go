@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"modernc.org/ccgo/v3/lib"
+	ccgo "modernc.org/ccgo/v3/lib"
 	_ "modernc.org/libc"
 )
 
