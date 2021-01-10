@@ -58,6 +58,7 @@ type exprMode int
 
 const (
 	doNotExport = iota
+	doNotChange
 	exportCapitalize
 	exportPrefix
 )
@@ -1491,7 +1492,7 @@ func (p *project) layoutEnums() error {
 		defer func() { fmt.Println(time.Since(t0)) }()
 	}
 
-	var export int
+	export := doNotChange
 	if p.task.exportEnumsValid {
 		switch {
 		case p.task.exportEnums != "":
@@ -1499,6 +1500,8 @@ func (p *project) layoutEnums() error {
 		default:
 			export = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		export = doNotExport
 	}
 
 	var enumList []*cc.EnumSpecifier
@@ -1575,6 +1578,8 @@ func (p *project) layoutEnums() error {
 		name := nm.String()
 		switch export {
 		case doNotExport:
+			name = unCapitalize(name)
+		case doNotChange:
 			// nop
 		case exportCapitalize:
 			name = capitalize(name)
@@ -1628,7 +1633,7 @@ func (p *project) layoutStructs() error {
 		defer func() { fmt.Println(time.Since(t0)) }()
 	}
 
-	var export int
+	export := doNotChange
 	if p.task.exportStructsValid {
 		switch {
 		case p.task.exportStructs != "":
@@ -1636,7 +1641,10 @@ func (p *project) layoutStructs() error {
 		default:
 			export = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		export = doNotExport
 	}
+
 	m := map[cc.StringID]*taggedStruct{}
 	var tags []cc.StringID
 	for _, v := range p.task.asts {
@@ -1675,6 +1683,10 @@ func (p *project) layoutStructs() error {
 
 		name := k.String()
 		switch export {
+		case doNotExport:
+			name = unCapitalize(name)
+		case doNotChange:
+			// nop
 		case exportCapitalize:
 			name = capitalize(name)
 		case exportPrefix:
@@ -2025,6 +2037,10 @@ func (p *project) fieldName(n cc.Node, id cc.StringID) string {
 
 	if !p.task.exportFieldsValid {
 		s := id.String()
+		if p.task.defaultUnExport {
+			s = unCapitalize(s)
+		}
+
 		if !reservedNames[s] {
 			return s
 		}
@@ -2106,7 +2122,7 @@ func (p *project) layoutTLDs() error {
 		defer func() { fmt.Println(time.Since(t0)) }()
 	}
 
-	var exportExtern, exportTypedef int
+	exportExtern, exportTypedef := doNotChange, doNotChange
 	if p.task.exportExternsValid {
 		switch {
 		case p.task.exportExterns != "":
@@ -2114,7 +2130,10 @@ func (p *project) layoutTLDs() error {
 		default:
 			exportExtern = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		exportExtern = doNotExport
 	}
+
 	if p.task.exportTypedefsValid {
 		switch {
 		case p.task.exportTypedefs != "":
@@ -2122,7 +2141,10 @@ func (p *project) layoutTLDs() error {
 		default:
 			exportTypedef = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		exportTypedef = doNotExport
 	}
+
 	var a []*cc.Declarator
 	if p.task.pkgName == "" || p.task.pkgName == "main" {
 	out:
@@ -2182,12 +2204,14 @@ func (p *project) layoutTLDs() error {
 			return a[i].NameTok().Seq() < a[j].NameTok().Seq()
 		})
 		for _, d := range a {
+
 			switch d.Type().Kind() {
 			case cc.Struct, cc.Union:
 				p.checkAttributes(d.Type())
 			}
 			nm := d.Name()
 			name := nm.String()
+
 			switch d.Linkage {
 			case cc.External:
 				if ex := p.externs[nm]; ex != nil {
@@ -2206,6 +2230,8 @@ func (p *project) layoutTLDs() error {
 				isMain := p.isMain && nm == idMain
 				switch exportExtern {
 				case doNotExport:
+					name = unCapitalize(name)
+				case doNotChange:
 					// nop
 				case exportCapitalize:
 					name = capitalize(name)
@@ -2238,13 +2264,13 @@ func (p *project) layoutTLDs() error {
 					}
 				}
 			case cc.None:
+
 				if d.IsTypedefName {
 					if d.Type().IsIncomplete() {
 						break
 					}
 
-					name := nm.String()
-					if exportTypedef == doNotExport && strings.HasPrefix(name, "__") {
+					if exportTypedef == doNotChange && strings.HasPrefix(name, "__") {
 						break
 					}
 
@@ -2264,12 +2290,15 @@ func (p *project) layoutTLDs() error {
 
 					switch exportTypedef {
 					case doNotExport:
+						name = unCapitalize(name)
+					case doNotChange:
 						// nop
 					case exportCapitalize:
 						name = capitalize(name)
 					case exportPrefix:
 						name = p.task.exportTypedefs + name
 					}
+
 					tld := &tld{name: p.scope.take(cc.String(name))}
 					p.typedefTypes[d.Name()] = &typedef{p.typeSignature(d, d.Type()), tld}
 					for _, v := range ast.Scope[nm] {
@@ -2390,6 +2419,14 @@ func (p *project) checkAttributes(t cc.Type) (r bool) {
 		}
 	}
 	return r
+}
+
+func unCapitalize(s string) string {
+	if strings.HasPrefix(s, "_") {
+		return s
+	}
+	a := []rune(s)
+	return strings.ToLower(string(a[0])) + string(a[1:])
 }
 
 func capitalize(s string) string {
