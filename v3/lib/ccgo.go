@@ -308,6 +308,7 @@ type Task struct {
 	stdout                          io.Writer
 	symSearchOrder                  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
+	defaultUnExport       bool // -unexported-by-defautl
 	E                     bool // -E
 	allErrors             bool // -all-errors
 	cover                 bool // -cover-instrumentation
@@ -509,6 +510,8 @@ func (t *Task) Main() (err error) {
 	opts.Arg("replace-tcl-default-double-rounding", false, func(arg, value string) error { t.replaceTclDefaultDoubleRounding = value; return nil })
 	opts.Arg("replace-tcl-ieee-double-rounding", false, func(arg, value string) error { t.replaceTclIeeeDoubleRounding = value; return nil })
 	opts.Arg("script", false, func(arg, value string) error { t.scriptFn = value; return nil })
+
+	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("all-errors", func(opt string) error { t.allErrors = true; return nil })
 	opts.Opt("cover-instrumentation", func(opt string) error { t.cover = true; return nil })

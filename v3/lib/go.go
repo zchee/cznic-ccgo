@@ -58,6 +58,7 @@ type exprMode int
 
 const (
 	doNotExport = iota
+	doNotChange
 	exportCapitalize
 	exportPrefix
 )
@@ -1184,8 +1185,9 @@ type project struct {
 	wanted             map[*cc.Declarator]struct{}
 	wcharSize          uintptr
 
-	isMain bool
-	pass1  bool
+	defaultUnExport bool
+	isMain          bool
+	pass1           bool
 }
 
 func newProject(t *Task) (*project, error) {
@@ -1491,7 +1493,7 @@ func (p *project) layoutEnums() error {
 		defer func() { fmt.Println(time.Since(t0)) }()
 	}
 
-	var export int
+	export := doNotChange
 	if p.task.exportEnumsValid {
 		switch {
 		case p.task.exportEnums != "":
@@ -1499,6 +1501,8 @@ func (p *project) layoutEnums() error {
 		default:
 			export = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		export = doNotExport
 	}
 
 	var enumList []*cc.EnumSpecifier
@@ -1576,6 +1580,8 @@ func (p *project) layoutEnums() error {
 		switch export {
 		case doNotExport:
 			name = unCapitalize(name)
+		case doNotChange:
+			// nop
 		case exportCapitalize:
 			name = capitalize(name)
 		case exportPrefix:
@@ -1628,7 +1634,7 @@ func (p *project) layoutStructs() error {
 		defer func() { fmt.Println(time.Since(t0)) }()
 	}
 
-	var export int
+	export := doNotChange
 	if p.task.exportStructsValid {
 		switch {
 		case p.task.exportStructs != "":
@@ -1636,7 +1642,10 @@ func (p *project) layoutStructs() error {
 		default:
 			export = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		export = doNotExport
 	}
+
 	m := map[cc.StringID]*taggedStruct{}
 	var tags []cc.StringID
 	for _, v := range p.task.asts {
@@ -1677,6 +1686,8 @@ func (p *project) layoutStructs() error {
 		switch export {
 		case doNotExport:
 			name = unCapitalize(name)
+		case doNotChange:
+			// nop
 		case exportCapitalize:
 			name = capitalize(name)
 		case exportPrefix:
@@ -2026,7 +2037,11 @@ func (p *project) fieldName(n cc.Node, id cc.StringID) string {
 	}
 
 	if !p.task.exportFieldsValid {
-		s := unCapitalize(id.String())
+		s := id.String()
+		if p.task.defaultUnExport {
+			s = unCapitalize(s)
+		}
+
 		if !reservedNames[s] {
 			return s
 		}
@@ -2108,7 +2123,7 @@ func (p *project) layoutTLDs() error {
 		defer func() { fmt.Println(time.Since(t0)) }()
 	}
 
-	var exportExtern, exportTypedef int
+	exportExtern, exportTypedef := doNotChange, doNotChange
 	if p.task.exportExternsValid {
 		switch {
 		case p.task.exportExterns != "":
@@ -2116,7 +2131,10 @@ func (p *project) layoutTLDs() error {
 		default:
 			exportExtern = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		exportExtern = doNotExport
 	}
+
 	if p.task.exportTypedefsValid {
 		switch {
 		case p.task.exportTypedefs != "":
@@ -2124,7 +2142,10 @@ func (p *project) layoutTLDs() error {
 		default:
 			exportTypedef = exportCapitalize
 		}
+	} else if p.task.defaultUnExport {
+		exportTypedef = doNotExport
 	}
+
 	var a []*cc.Declarator
 	if p.task.pkgName == "" || p.task.pkgName == "main" {
 	out:
@@ -2211,6 +2232,8 @@ func (p *project) layoutTLDs() error {
 				switch exportExtern {
 				case doNotExport:
 					name = unCapitalize(name)
+				case doNotChange:
+					// nop
 				case exportCapitalize:
 					name = capitalize(name)
 				case exportPrefix:
@@ -2269,6 +2292,8 @@ func (p *project) layoutTLDs() error {
 					switch exportTypedef {
 					case doNotExport:
 						name = unCapitalize(name)
+					case doNotChange:
+						// nop
 					case exportCapitalize:
 						name = capitalize(name)
 					case exportPrefix:
