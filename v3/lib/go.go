@@ -1185,9 +1185,8 @@ type project struct {
 	wanted             map[*cc.Declarator]struct{}
 	wcharSize          uintptr
 
-	defaultUnExport bool
-	isMain          bool
-	pass1           bool
+	isMain bool
+	pass1  bool
 }
 
 func newProject(t *Task) (*project, error) {
@@ -2271,7 +2270,7 @@ func (p *project) layoutTLDs() error {
 						break
 					}
 
-					if exportTypedef == doNotExport && strings.HasPrefix(name, "__") {
+					if exportTypedef == doNotChange && strings.HasPrefix(name, "__") {
 						break
 					}
 
