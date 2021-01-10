@@ -2478,7 +2478,9 @@ func main() { %sStart(%s) }`, p.task.crt, p.mainName)
 	p.flushStructs()
 	p.initPatches()
 	p.flushTS()
-	p.flushCAPI()
+	if !p.task.noCapi {
+		p.flushCAPI()
+	}
 	p.doVerifyStructs()
 	if err := p.Err(); err != nil {
 		return err
