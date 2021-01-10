@@ -323,6 +323,7 @@ type Task struct {
 	header                bool // -header
 	isScripted            bool
 	mingw                 bool
+	noCapi                bool // -nocapi
 	nostdinc              bool // -nostdinc
 	nostdlib              bool // -nostdlib
 	traceTranslationUnits bool // -trace-translation-units
@@ -521,6 +522,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Opt("windows", func(opt string) error { t.windows = true; return nil })
+	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdlib", func(opt string) error {
 		t.nostdlib = true
 		t.crt = ""
