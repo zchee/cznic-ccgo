@@ -1690,7 +1690,7 @@ func (p *project) layoutStructs() error {
 		case exportCapitalize:
 			name = capitalize(name)
 		case exportPrefix:
-			name = p.task.exportExterns + name
+			name = p.task.exportStructs + name
 		}
 		v.name = p.scope.take(cc.String(name))
 	}
