@@ -9,7 +9,9 @@ package ccgo // import "modernc.org/ccgo/v3/lib"
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -280,6 +282,7 @@ type Task struct {
 	asts                            []*cc.AST
 	capif                           string
 	cfg                             *cc.Config
+	compiledb                       string // -compiledb
 	crt                             string
 	crtImportPath                   string // -crt-import-path
 	exportDefines                   string // -export-defines
@@ -308,11 +311,12 @@ type Task struct {
 	stdout                          io.Writer
 	symSearchOrder                  []int // >= 0: asts[i], < 0 : imported[-i-1]
 
-	defaultUnExport       bool // -unexported-by-defautl
 	E                     bool // -E
 	allErrors             bool // -all-errors
+	compiledbValid        bool // -compiledb present
 	cover                 bool // -cover-instrumentation
 	coverC                bool // -cover-instrumentation-c
+	defaultUnExport       bool // -unexported-by-default
 	errTrace              bool // -err-trace
 	exportDefinesValid    bool // -export-defines present
 	exportEnumsValid      bool // -export-enums present
@@ -496,6 +500,7 @@ func (t *Task) Main() (err error) {
 	opts.Arg("D", true, func(arg, value string) error { t.D = append(t.D, value); return nil })
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
 	opts.Arg("U", true, func(arg, value string) error { t.U = append(t.U, value); return nil })
+	opts.Arg("compiledb", false, func(arg, value string) error { t.compiledb = value; t.compiledbValid = true; return opt.Skip(nil) })
 	opts.Arg("crt-import-path", false, func(arg, value string) error { t.crtImportPath = value; return nil })
 	opts.Arg("export-defines", false, func(arg, value string) error { t.exportDefines = value; t.exportDefinesValid = true; return nil })
 	opts.Arg("export-enums", false, func(arg, value string) error { t.exportEnums = value; t.exportEnumsValid = true; return nil })
@@ -512,7 +517,6 @@ func (t *Task) Main() (err error) {
 	opts.Arg("replace-tcl-ieee-double-rounding", false, func(arg, value string) error { t.replaceTclIeeeDoubleRounding = value; return nil })
 	opts.Arg("script", false, func(arg, value string) error { t.scriptFn = value; return nil })
 
-	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("all-errors", func(opt string) error { t.allErrors = true; return nil })
 	opts.Opt("cover-instrumentation", func(opt string) error { t.cover = true; return nil })
@@ -520,12 +524,14 @@ func (t *Task) Main() (err error) {
 	opts.Opt("err-trace", func(opt string) error { t.errTrace = true; return nil })
 	opts.Opt("full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
 	opts.Opt("header", func(opt string) error { t.header = true; return nil })
+	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
+	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Opt("windows", func(opt string) error { t.windows = true; return nil })
-	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
+
 	opts.Opt("nostdlib", func(opt string) error {
 		t.nostdlib = true
 		t.crt = ""
@@ -576,7 +582,21 @@ func (t *Task) Main() (err error) {
 
 		return nil
 	}); err != nil {
-		return err
+		switch x := err.(type) {
+		case opt.Skip:
+			if t.compiledbValid {
+				cmd := []string(x)[1:]
+				if len(cmd) == 0 {
+					return fmt.Errorf("missing command after -compiledb <file>")
+				}
+
+				return t.createCompileDB(cmd)
+			}
+
+			return err
+		default:
+			return err
+		}
 	}
 	if t.scriptFn != "" {
 		return t.script(t.scriptFn)
@@ -810,6 +830,196 @@ func (t *Task) script(fn string) error {
 		t.imported[len(t.imported)-1].used = true // crt is always imported
 	}
 	return t.link()
+}
+
+func (t *Task) createCompileDB(command []string) (rerr error) {
+	switch command[0] {
+	case "make":
+		sh, err := exec.LookPath("sh")
+		if err != nil {
+			return err
+		}
+
+		f, err := os.Create(t.compiledb)
+		if err != nil {
+			return rerr
+		}
+
+		defer func() {
+			if err := f.Close(); err != nil && rerr == nil {
+				rerr = err
+			}
+		}()
+
+		w := bufio.NewWriter(f)
+
+		defer func() {
+			if err := w.Flush(); err != nil && rerr == nil {
+				rerr = err
+			}
+		}()
+
+		if _, err := w.WriteString("[\n"); err != nil {
+			return err
+		}
+
+		defer func() {
+			if _, err := w.WriteString("\n]\n"); err != nil && rerr == nil {
+				rerr = err
+			}
+		}()
+
+		command = append([]string{sh, "-c"}, join(" ", command[0], "SHELL='sh -x'", command[1:]))
+		cmd := exec.Command(command[0], command[1:]...)
+		cmd.Env = append(os.Environ(), "LC_ALL=c")
+		cmd.Stdout = newCdbMakeWriter(w)
+		cmd.Stderr = cmd.Stdout
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("usupported command: %s", command[0])
+	}
+}
+
+type cdbItem struct {
+	Arguments []string `json:"arguments"`
+	Directory string   `json:"directory"`
+	File      string   `json:"file"`
+	Output    string   `json:"output,omitempty"`
+}
+
+type cdbMakeWriter struct {
+	b   bytes.Buffer
+	sc  *bufio.Scanner
+	dir string
+	w   io.Writer
+	it  cdbItem
+
+	first bool
+}
+
+func newCdbMakeWriter(w io.Writer) *cdbMakeWriter {
+	const sz = 1 << 16
+	r := &cdbMakeWriter{w: w, first: true}
+	r.sc = bufio.NewScanner(&r.b)
+	r.sc.Buffer(make([]byte, sz), sz)
+	return r
+}
+
+func (w *cdbMakeWriter) Write(b []byte) (int, error) {
+	w.b.Write(b)
+	for bytes.Contains(w.b.Bytes(), []byte{'\n'}) {
+		if !w.sc.Scan() {
+			panic(todo("internal error"))
+		}
+
+		switch s := w.sc.Text(); {
+		case strings.HasPrefix(s, "+ "):
+			s = s[2:]
+			switch {
+			case strings.HasPrefix(s, "gcc "):
+				fmt.Println(s)
+				if err := w.gcc(s); err != nil {
+					return 0, err
+				}
+			case strings.HasPrefix(s, "ar cr "):
+				fmt.Println(s)
+				if err := w.ar(s); err != nil {
+					return 0, err
+				}
+			default:
+				continue
+			}
+
+			for i, v := range w.it.Arguments {
+				w.it.Arguments[i] = strings.TrimSpace(v)
+			}
+			s := "    "
+			if !w.first {
+				s = ",\n    "
+			}
+			if _, err := w.w.Write([]byte(s)); err != nil {
+				return 0, err
+			}
+
+			b, err := json.MarshalIndent(&w.it, "    ", "    ")
+			if err != nil {
+				return 0, err
+			}
+
+			if _, err := w.w.Write(b); err != nil {
+				return 0, err
+			}
+
+			w.first = false
+		case strings.HasPrefix(s, "make"):
+			const tag = "Entering directory '"
+			x := strings.Index(s, tag)
+			if x < 0 {
+				break
+			}
+
+			fmt.Println(s)
+			s = s[x+len(tag):]
+			w.dir = filepath.Clean(s[:len(s)-1])
+			continue
+		}
+	}
+	return len(b), nil
+}
+
+func (w *cdbMakeWriter) gcc(s string) error {
+	w.it = cdbItem{
+		Arguments: strings.Split(s, " "),
+		Directory: w.dir,
+	}
+	for i, v := range w.it.Arguments {
+		switch {
+		case v == "-o" && i < len(w.it.Arguments)-1:
+			w.it.Output = w.it.Arguments[i+1]
+		case strings.HasSuffix(v, ".c"):
+			if w.it.File != "" {
+				return fmt.Errorf("multiple .c files: %s", v)
+			}
+
+			w.it.File = v
+		case strings.HasSuffix(v, ".h"):
+			return fmt.Errorf("unexpected .h file: %s", v)
+		}
+	}
+	return nil
+}
+
+func (w *cdbMakeWriter) ar(s string) error {
+	w.it = cdbItem{
+		Arguments: strings.Split(s, " "),
+		Directory: w.dir,
+	}
+	for i, v := range w.it.Arguments {
+		switch {
+		case v == "cr" && i < len(w.it.Arguments)-1:
+			w.it.Output = w.it.Arguments[i+1]
+		}
+	}
+	return nil
+}
+
+func join(s string, a ...interface{}) string {
+	var b []string
+	for _, v := range a {
+		switch x := v.(type) {
+		case string:
+			b = append(b, x)
+		case []string:
+			b = append(b, x...)
+		default:
+			panic(todo("internal error: %T", x))
+		}
+	}
+	return strings.Join(b, s)
 }
 
 func inDir(dir string, f func() error) (err error) {

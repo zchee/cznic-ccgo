@@ -69,6 +69,32 @@
 //
 // Equals `#undef foo`.
 //
+// Generating JSON compilation database
+//
+// -compiledb name
+//
+// When this option appears anywhere, all preceding options are ignored and all
+// following command line arguments are interpreted as a command with arguments
+// that will be executed to produce the compilation database. For example:
+//
+//	ccgo -compiledb compile_commands.json make -DFOO -w
+//
+// This will execute `make -DFOO -w` and attempts to extract the compile and
+// archove commands. 
+//
+// Only POSIX operating systems are supported.
+//
+// The only build system supported is `make`.
+//
+// The only compiler supported is `gcc`.
+//
+// The only archiver supported is `ar`.
+//
+// Format specification: https://clang.llvm.org/docs/JSONCompilationDatabase.html
+//
+// Note: This option produces also information about libraries created with `ar
+// cr` and include it in the json file, which is above the specification.
+//
 // Setting C runtime library import path
 //
 // -crt-import-path path
@@ -88,7 +114,7 @@
 // Export C numeric/string defines as Go constants by prefixing the define's
 // name with `prefix`.
 //
-// Name conflicts are resolved by adding a numerical suffix.
+// Name conflicts are resolved by adding a numeric suffix.
 //
 // Exporting C enum constants
 //
@@ -102,7 +128,7 @@
 // Export C enum constants as Go constants by prefixing the enum constant name
 // with `prefix`.
 //
-// Name conflicts are resolved by adding a numerical suffix.
+// Name conflicts are resolved by adding a numeric suffix.
 //
 // Exporting C externs
 //
@@ -116,7 +142,7 @@
 // Export C extern definitions as Go definitions by prefixing the definition
 // name with `prefix`.
 //
-// Name conflicts are resolved by adding a numerical suffix.
+// Name conflicts are resolved by adding a numeric suffix.
 //
 // Exporting C struct fields
 //
@@ -130,7 +156,7 @@
 // Export C struct fields as Go fields by prefixing the field name with
 // `prefix`.
 //
-// Name conflicts are resolved by adding a numerical suffix.
+// Name conflicts are resolved by adding a numeric suffix.
 //
 // Exporting tagged C struct and union types
 //
@@ -144,7 +170,7 @@
 // Export tagged C struct/union types as Go types by prefixing the tag name
 // with `prefix`.
 //
-// Name conflicts are resolved by adding a numerical suffix.
+// Name conflicts are resolved by adding a numeric suffix.
 //
 // Exporting C typedefs
 //
@@ -158,7 +184,7 @@
 // Export C typedefs as as Go types by prefixing the typedef name with
 // `prefix`.
 //
-// Name conflicts are resolved by adding a numerical suffix.
+// Name conflicts are resolved by adding a numeric suffix.
 //
 // Selecting command for target configuration
 //
@@ -180,6 +206,8 @@
 // Set the resulting Go package name to 'name'. Defaults to `main`.
 //
 // Compiler scripts
+//
+// Deprecated, will be removed soon. Use the JSON compile DB instead.
 //
 // -script filename
 //
