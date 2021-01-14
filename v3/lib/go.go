@@ -2473,7 +2473,7 @@ package %s
 	for i, v := range p.task.asts {
 		var t0 time.Time
 		if p.task.traceTranslationUnits {
-			fmt.Printf("Go back end %v/%v: %s ... ", i+1, len(p.task.asts), p.task.sources[i].Name)
+			fmt.Printf("Go back end %v/%v: %s ... ", i+1, len(p.task.asts), filepath.Base(p.task.sources[i].Name))
 			t0 = time.Now()
 		}
 		p.oneAST(v)
@@ -2622,7 +2622,7 @@ func (p *project) initPatches() {
 	}
 
 	sort.Slice(tlds, func(i, j int) bool { return tlds[i].name < tlds[j].name })
-	p.w("\nfunc init() {")
+	p.w("\n\nfunc init() {")
 	for _, tld := range tlds {
 		for _, patch := range tld.patches {
 			var fld string
@@ -3956,6 +3956,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	p.pass1 = true
 	p.compoundStatement(f, n.CompoundStatement, "", false, false, 0)
 	p.pass1 = false
+	p.w("\n")
 	p.functionDefinitionSignature(f, tld)
 	p.w(" ")
 	comment := fmt.Sprintf("/* %v: */", p.pos(d))

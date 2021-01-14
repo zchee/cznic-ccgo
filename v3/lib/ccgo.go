@@ -24,17 +24,17 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/kballard/go-shellquote"
 	"golang.org/x/tools/go/packages"
 	"modernc.org/cc/v3"
 	_ "modernc.org/libc"
 	"modernc.org/opt"
 )
-
-//TODO parallel
 
 //TODO CPython
 //TODO Cython
@@ -281,6 +281,7 @@ type Task struct {
 	args                            []string
 	asts                            []*cc.AST
 	capif                           string
+	cdb                             string // foo.json, use compile DB
 	cfg                             *cc.Config
 	compiledb                       string // -compiledb
 	crt                             string
@@ -575,7 +576,9 @@ func (t *Task) Main() (err error) {
 		case ".c":
 			t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
 			t.sources = append(t.sources, cc.Source{Name: arg, DoNotCache: true})
-
+		case ".json":
+			t.cdb = arg
+			return opt.Skip(nil)
 		default:
 			return fmt.Errorf("unexpected file type: %s", arg)
 		}
@@ -584,13 +587,16 @@ func (t *Task) Main() (err error) {
 	}); err != nil {
 		switch x := err.(type) {
 		case opt.Skip:
-			if t.compiledbValid {
+			switch {
+			case t.compiledbValid: // -compiledb foo.json, create DB
 				cmd := []string(x)[1:]
 				if len(cmd) == 0 {
 					return fmt.Errorf("missing command after -compiledb <file>")
 				}
 
 				return t.createCompileDB(cmd)
+			case t.cdb != "": // foo.json ..., use DB
+				return t.useCompileDB(t.cdb, x)
 			}
 
 			return err
@@ -598,8 +604,9 @@ func (t *Task) Main() (err error) {
 			return err
 		}
 	}
+
 	if t.scriptFn != "" {
-		return t.script(t.scriptFn)
+		return t.scriptBuild(t.scriptFn)
 	}
 
 	if len(t.sources) == 0 {
@@ -773,7 +780,7 @@ func (t *Task) link() (err error) {
 	return p.main()
 }
 
-func (t *Task) script(fn string) error {
+func (t *Task) scriptBuild(fn string) error {
 	f, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -790,6 +797,11 @@ func (t *Task) script(fn string) error {
 		return err
 	}
 
+	return t.scriptBuild2(script)
+}
+
+func (t *Task) scriptBuild2(script [][]string) error {
+	var ldir string
 	ccgo := []string{t.args[0]}
 	for i, line := range script {
 		dir := line[0]
@@ -797,12 +809,17 @@ func (t *Task) script(fn string) error {
 		for _, v := range args {
 			if strings.HasSuffix(v, ".c") || strings.HasSuffix(v, ".h") {
 				v = filepath.Join(dir, v)
-				if t.traceTranslationUnits {
-					fmt.Printf("ccgo.script: translate %s\n", v)
-				}
 				t.symSearchOrder = append(t.symSearchOrder, len(t.sources))
 				t.sources = append(t.sources, cc.Source{Name: v})
 			}
+		}
+		cmd := append(ccgo, args...)
+		if t.traceTranslationUnits {
+			if dir != ldir {
+				fmt.Println(dir)
+				ldir = dir
+			}
+			fmt.Printf("%s\n", cmd)
 		}
 		t2 := NewTask(append(ccgo, args...), t.stdout, t.stderr)
 		t2.cfg.SharedFunctionDefinitions = t.cfg.SharedFunctionDefinitions
@@ -830,6 +847,92 @@ func (t *Task) script(fn string) error {
 		t.imported[len(t.imported)-1].used = true // crt is always imported
 	}
 	return t.link()
+}
+
+func (t *Task) useCompileDB(fn string, args []string) error {
+	f, err := os.Open(fn)
+	if err != nil {
+		return err
+	}
+
+	de := json.NewDecoder(f)
+	var items []cdbItem
+	err = de.Decode(&items)
+	f.Close()
+	if err != nil {
+		return err
+	}
+
+	cdb := map[string]*cdbItem{}
+	for i, v := range items {
+		if len(v.Arguments) == 0 {
+			if len(v.Command) == 0 {
+				return fmt.Errorf("either arguments or command is required: %+v", v)
+			}
+
+			if v.Arguments, err = shellquote.Split(v.Command); err != nil {
+				return err
+			}
+		}
+		if s := v.output(); s != "" {
+			if cdb[s] != nil {
+				return fmt.Errorf("multiple outputs: %s", s)
+			}
+
+			cdb[s] = &items[i]
+		}
+	}
+	obj := map[string]*cdbItem{}
+	for _, v := range args {
+		if err := findCdbItems(obj, cdb, v); err != nil {
+			return err
+		}
+	}
+
+	var a []string
+	for k := range obj {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	return t.cdbBuild(obj, a)
+}
+
+func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
+	var script [][]string
+	for _, nm := range list {
+		it := obj[nm]
+		if !strings.HasSuffix(it.Output, ".o") || it.Arguments[0] != "gcc" {
+			continue
+		}
+
+		args, err := it.ccgoArgs()
+		if err != nil {
+			return err
+		}
+
+		line := append([]string{it.Directory}, args...)
+		script = append(script, line)
+	}
+	return t.scriptBuild2(script)
+}
+
+func findCdbItems(obj, cdb map[string]*cdbItem, nm string) error {
+	if obj[nm] != nil {
+		return nil
+	}
+
+	it := cdb[nm]
+	if it == nil {
+		return fmt.Errorf("not found in compile database: %s", nm)
+	}
+
+	obj[nm] = it
+	for _, v := range it.sources() {
+		if err := findCdbItems(obj, cdb, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *Task) createCompileDB(command []string) (rerr error) {
@@ -886,9 +989,94 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 
 type cdbItem struct {
 	Arguments []string `json:"arguments"`
+	Command   string   `json:"command,omitempty"`
 	Directory string   `json:"directory"`
 	File      string   `json:"file"`
 	Output    string   `json:"output,omitempty"`
+}
+
+func (it *cdbItem) ccgoArgs() (r []string, err error) {
+	switch it.Arguments[0] {
+	case "gcc":
+		set := opt.NewSet()
+		set.Arg("D", true, func(opt, arg string) error { r = append(r, "-D"+arg); return nil })
+		set.Arg("I", true, func(opt, arg string) error { r = append(r, "-I"+arg); return nil })
+		set.Arg("MF", true, func(opt, arg string) error { return nil })
+		set.Arg("MT", true, func(opt, arg string) error { return nil })
+		set.Arg("O", true, func(opt, arg string) error { return nil })
+		set.Arg("o", true, func(opt, arg string) error { return nil })
+		set.Opt("MD", func(opt string) error { return nil })
+		set.Opt("MP", func(opt string) error { return nil })
+		set.Opt("c", func(opt string) error { return nil })
+		set.Opt("g", func(opt string) error { return nil })
+		if err := set.Parse(it.Arguments[1:], func(arg string) error {
+			switch {
+			case strings.HasSuffix(arg, ".c"):
+				r = append(r, arg)
+			case strings.HasPrefix(arg, "-f"):
+				// nop
+			default:
+				return fmt.Errorf("unknown/unsupported option: %s", arg)
+			}
+
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+
+		return r, nil
+	default:
+		return nil, fmt.Errorf("command not supported: %q", it.Arguments[0])
+	}
+}
+
+func (it *cdbItem) output() string {
+	if it.Output != "" {
+		return it.Output
+	}
+
+	if len(it.Arguments) == 0 {
+		return ""
+	}
+
+	switch it.Arguments[0] {
+	case "gcc":
+		for i, v := range it.Arguments {
+			if v == "-o" && i < len(it.Arguments)-1 {
+				it.Output = it.Arguments[i+1]
+				break
+			}
+		}
+	case "ar":
+		for i, v := range it.Arguments {
+			if v == "cr" && i < len(it.Arguments)-1 {
+				it.Output = it.Arguments[i+1]
+				break
+			}
+		}
+	}
+	return it.Output
+}
+
+func (it *cdbItem) sources() (r []string) {
+	if len(it.Arguments) == 0 {
+		return nil
+	}
+
+	switch it.Arguments[0] {
+	case
+		"ar",
+		"gcc":
+
+		for _, v := range it.Arguments[2:] { // skip ar cr foo.a
+			if strings.HasSuffix(v, ".o") {
+				r = append(r, v)
+			}
+		}
+		return r
+	default:
+		panic(todo("%+v", it))
+	}
 }
 
 type cdbMakeWriter struct {
@@ -972,14 +1160,19 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 }
 
 func (w *cdbMakeWriter) gcc(s string) error {
+	args, err := shellquote.Split(s)
+	if err != nil {
+		return err
+	}
+
 	w.it = cdbItem{
-		Arguments: strings.Split(s, " "),
+		Arguments: args,
 		Directory: w.dir,
 	}
-	for i, v := range w.it.Arguments {
+	for i, v := range args {
 		switch {
-		case v == "-o" && i < len(w.it.Arguments)-1:
-			w.it.Output = w.it.Arguments[i+1]
+		case v == "-o" && i < len(args)-1:
+			w.it.Output = args[i+1]
 		case strings.HasSuffix(v, ".c"):
 			if w.it.File != "" {
 				return fmt.Errorf("multiple .c files: %s", v)
@@ -994,14 +1187,19 @@ func (w *cdbMakeWriter) gcc(s string) error {
 }
 
 func (w *cdbMakeWriter) ar(s string) error {
+	args, err := shellquote.Split(s)
+	if err != nil {
+		return err
+	}
+
 	w.it = cdbItem{
-		Arguments: strings.Split(s, " "),
+		Arguments: args,
 		Directory: w.dir,
 	}
-	for i, v := range w.it.Arguments {
+	for i, v := range args {
 		switch {
-		case v == "cr" && i < len(w.it.Arguments)-1:
-			w.it.Output = w.it.Arguments[i+1]
+		case v == "cr" && i < len(args)-1:
+			w.it.Output = args[i+1]
 		}
 	}
 	return nil

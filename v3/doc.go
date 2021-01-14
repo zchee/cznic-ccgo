@@ -40,7 +40,12 @@
 //
 // Input files
 //
-// Only files with extension .c or .h are recognized as input files.
+// Only files with extension .c, .h or .json are recognized as input files.
+//
+// A .json file is interpreted as a compile database. All other command line
+// arguments following the .json file are interpreted as items that should be
+// found in the database and included in the output file. Each item should be
+// on object file (.o) or static archive (.a) or a command (no extension).
 //
 // Options with arguments
 //
@@ -80,7 +85,7 @@
 //	ccgo -compiledb compile_commands.json make -DFOO -w
 //
 // This will execute `make -DFOO -w` and attempts to extract the compile and
-// archove commands. 
+// archive commands. 
 //
 // Only POSIX operating systems are supported.
 //
@@ -207,8 +212,6 @@
 //
 // Compiler scripts
 //
-// Deprecated, will be removed soon. Use the JSON compile DB instead.
-//
 // -script filename
 //
 // Ccgo does not yet have a concept of object files. All C files that are
@@ -227,14 +230,14 @@
 //	r.FieldsPerRecord = -1
 //	r.TrimLeadingSpace = true
 //
-// The first field of every record in the CSV file is the formal command name
-// and is ignored. The remaining fields are the arguments of the ccgo command.
+// The first field of every record in the CSV file is the directory to use.
+// The remaining fields are the arguments of the ccgo command.
 //
 // This way different C files can be translated using different options. The
 // CSV file may look something like:
 //
-//	ccgo,-Dbar=42,foo.c
-//	ccgo,-Dbar=314,bar.c
+//	/home/user/foo,-Dbar=42,foo.c
+//	/home/user/bar,-Dbar=314,bar.c
 //
 // Boolean options
 //
