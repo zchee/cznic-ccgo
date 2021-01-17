@@ -32,7 +32,6 @@ import (
 	"github.com/kballard/go-shellquote"
 	"golang.org/x/tools/go/packages"
 	"modernc.org/cc/v3"
-	_ "modernc.org/libc"
 	"modernc.org/opt"
 )
 

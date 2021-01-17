@@ -10,6 +10,11 @@
 //
 //	ccgo { option | input-file }
 //
+// Libc
+//
+// To compile the resulting Go programs the package modernc.org/libc has to be
+// installed.
+//
 // Environment variables
 //
 // CCGO_CPP selects which command is used by the C front end to obtain target
