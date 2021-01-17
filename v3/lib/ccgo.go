@@ -36,6 +36,8 @@ import (
 	"modernc.org/opt"
 )
 
+const Version = "3.8.0"
+
 //TODO CPython
 //TODO Cython
 //TODO gmp
@@ -334,6 +336,7 @@ type Task struct {
 	nostdlib              bool // -nostdlib
 	traceTranslationUnits bool // -trace-translation-units
 	verifyStructs         bool // -verify-structs
+	version               bool // -version
 	watch                 bool // -watch-instrumentation
 	windows               bool // -windows
 }
@@ -530,6 +533,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
+	opts.Opt("version", func(opt string) error { t.version = true; return nil })
 	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Opt("windows", func(opt string) error { t.windows = true; return nil })
 
@@ -603,6 +607,11 @@ func (t *Task) Main() (err error) {
 		default:
 			return err
 		}
+	}
+
+	if t.version {
+		fmt.Fprintf(t.stdout, "%s\n", Version)
+		return nil
 	}
 
 	if t.scriptFn != "" {

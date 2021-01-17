@@ -277,6 +277,10 @@
 // This option disables importing of the runtime library by the resulting Go
 // code.
 //
+// -version
+//
+// Ignore all other options, print version and exit.
+//
 // Undocumented options
 //
 // There may exist other options not listed above. Those should be considered
