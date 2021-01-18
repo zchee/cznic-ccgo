@@ -1638,12 +1638,20 @@ func TestCSmith(t *testing.T) {
 	t0 := time.Now()
 	var files, ok int
 	var size int64
+	var re *regexp.Regexp
+	if s := *oRE; s != "" {
+		re = regexp.MustCompile(s)
+	}
 out:
 	for i := 0; ; i++ {
 		extra := ""
 		var args string
 		switch {
 		case i < len(fixedBugs):
+			if re != nil && !re.MatchString(fixedBugs[i]) {
+				continue
+			}
+
 			args += fixedBugs[i]
 			a := strings.Split(fixedBugs[i], " ")
 			extra = strings.Join(a[len(a)-2:], " ")
