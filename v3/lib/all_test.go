@@ -1737,7 +1737,7 @@ out:
 			ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 			defer cancel()
 
-			return exec.CommandContext(ctx, "go", "run", mainName).CombinedOutput()
+			return exec.CommandContext(ctx, "go", "run", "-tags=libc.memgrind", mainName).CombinedOutput()
 		}()
 		if err != nil {
 			t.Errorf("%s\n%s\n%s\nccgo: %v", extra, csOut, binOutB, err)
