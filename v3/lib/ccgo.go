@@ -131,8 +131,8 @@ typedef __WCHAR_TYPE__ wchar_t;
 #endif
 
 #ifdef __SIZEOF_INT128__
-typedef __INT64_TYPE__ __int128_t[2];	//TODO
-typedef __UINT64_TYPE__ __uint128_t[2];	//TODO
+typedef struct { __INT64_TYPE__ lo, hi; } __int128_t;   // must match modernc.org/mathutil.Int128
+typedef struct { __UINT64_TYPE__ lo, hi; } __uint128_t; // must match modernc.org/mathutil.Int128
 #endif;
 
 #define _FILE_OFFSET_BITS 64

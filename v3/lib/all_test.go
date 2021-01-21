@@ -512,7 +512,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20000722-1.c":                 {}, //TODO composite literal
 		"20000801-3.c":                 {}, //TODO designators
 		"20000917-1.c":                 {}, //TODO composite literal
-		"20001203-2.c":                 {}, //TODO statement expression
 		"20010123-1.c":                 {}, //TODO composite literal
 		"20010209-1.c":                 {}, //TODO
 		"20010518-2.c":                 {}, //TODO
@@ -607,7 +606,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"941014-1.c":                   {}, //TODO
 		"941202-1.c":                   {}, //TODO
 		"950628-1.c":                   {}, //TODO
-		"950906-1.c":                   {}, //TODO
 		"960312-1.c":                   {}, //TODO
 		"960416-1.c":                   {}, //TODO
 		"960512-1.c":                   {}, //TODO
@@ -697,7 +695,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"nestfunc-6.c":                 {}, //TODO
 		"nestfunc-7.c":                 {}, //TODO
 		"pr17377.c":                    {}, //TODO
-		"pr19449.c":                    {}, //TODO
 		"pr22061-1.c":                  {}, //TODO
 		"pr22061-3.c":                  {}, //TODO
 		"pr22061-4.c":                  {}, //TODO
@@ -740,7 +737,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr45695.c":                    {}, //TODO
 		"pr46309.c":                    {}, //TODO
 		"pr47237.c":                    {}, //TODO
-		"pr49218.c":                    {}, //TODO
 		"pr49279.c":                    {}, //TODO
 		"pr49390.c":                    {}, //TODO
 		"pr49644.c":                    {}, //TODO
@@ -751,7 +747,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr52286.c":                    {}, //TODO
 		"pr53645-2.c":                  {}, //TODO
 		"pr53645.c":                    {}, //TODO
-		"pr54471.c":                    {}, //TODO
 		"pr55750.c":                    {}, //TODO
 		"pr56205.c":                    {}, //TODO
 		"pr56837.c":                    {}, //TODO
@@ -764,14 +759,11 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr57344-4.c":                  {}, //TODO
 		"pr60003.c":                    {}, //TODO
 		"pr60960.c":                    {}, //TODO
-		"pr61375.c":                    {}, //TODO
 		"pr61725.c":                    {}, //TODO
-		"pr63302.c":                    {}, //TODO
 		"pr63641.c":                    {}, //TODO
 		"pr64006.c":                    {}, //TODO
 		"pr64242.c":                    {}, //TODO
 		"pr65053-2.c":                  {}, //TODO
-		"pr65170.c":                    {}, //TODO
 		"pr65427.c":                    {}, //TODO
 		"pr65648.c":                    {}, //TODO
 		"pr65956.c":                    {}, //TODO
@@ -802,15 +794,11 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr82210.c":                    {}, //TODO
 		"pr82524.c":                    {}, //TODO
 		"pr82954.c":                    {}, //TODO
-		"pr84169.c":                    {}, //TODO
 		"pr84478.c":                    {}, //TODO
 		"pr84524.c":                    {}, //TODO
-		"pr84748.c":                    {}, //TODO
 		"pr85156.c":                    {}, //TODO
 		"pr85169.c":                    {}, //TODO
 		"pr85331.c":                    {}, //TODO
-		"pr85582-2.c":                  {}, //TODO
-		"pr85582-3.c":                  {}, //TODO
 		"pr86528.c":                    {}, //TODO
 		"pr88739.c":                    {}, //TODO nested initailizer designator
 		"pr89369.c":                    {}, //TODO
