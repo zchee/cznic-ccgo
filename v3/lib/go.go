@@ -6035,7 +6035,7 @@ func (p *project) binaryExclusiveOrExpressionUint128(f *function, n *cc.Exclusiv
 	flags |= fOutermost
 	defer p.w("%s", p.artithmeticBinaryExpression(n, n.Operand, t, &mode, flags))
 	p.exclusiveOrExpression(f, n.ExclusiveOrExpression, n.Promote(), exprValue, flags)
-	p.w(".And(")
+	p.w(".Xor(")
 	p.andExpression(f, n.AndExpression, n.Promote(), exprValue, flags)
 	p.w(")")
 }
