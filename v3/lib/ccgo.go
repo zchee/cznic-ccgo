@@ -37,7 +37,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.6"
+const Version = "3.8.7"
 
 //TODO CPython
 //TODO Cython
@@ -933,7 +933,9 @@ func findCdbItems(obj, cdb map[string]*cdbItem, nm string) error {
 
 	it := cdb[nm]
 	if it == nil {
-		return fmt.Errorf("not found in compile database: %s", nm)
+		fmt.Fprintf(os.Stderr, "not found in compile database: %s\n", nm)
+		return nil
+		//TODO- return fmt.Errorf("not found in compile database: %s", nm)
 	}
 
 	obj[nm] = it
@@ -985,7 +987,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 		}
 	}()
 
-	argv := append([]string{"-f", "-s1000000", "-e", "trace=chdir,execve"}, command...)
+	argv := append([]string{"-f", "-s1000000", "-e", "trace=fchdir,chdir,execve"}, command...)
 	cmd := exec.Command(strace, argv...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	cmd.Stdout = newCdbMakeWriter(w, cwd)
@@ -1066,15 +1068,14 @@ func (it *cdbItem) output() string {
 			for _, v := range it.Arguments {
 				if v == "-c" {
 					bn := filepath.Base(it.File)
-					on := bn[:len(bn)-2] + ".o"
-					it.Output = filepath.Join(it.Directory, on)
+					it.Output = bn[:len(bn)-2] + ".o"
 					break
 				}
 			}
 		}
 	case "ar":
 		for i, v := range it.Arguments {
-			if v == "cr" && i < len(it.Arguments)-1 {
+			if strings.HasPrefix(v, "cr") && i < len(it.Arguments)-1 {
 				it.Output = it.Arguments[i+1]
 				break
 			}
@@ -1124,6 +1125,7 @@ func newCdbMakeWriter(w io.Writer, dir string) *cdbMakeWriter {
 
 func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 	w.b.Write(b)
+next:
 	for bytes.Contains(w.b.Bytes(), []byte{'\n'}) {
 		if !w.sc.Scan() {
 			panic(todo("internal error"))
@@ -1133,20 +1135,74 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 		if strings.HasPrefix(s, "[pid ") {
 			s = strings.TrimSpace(s[strings.IndexByte(s, ']')+1:])
 		}
-		switch {
-		case strings.HasPrefix(s, "chdir("):
-			s = s[len("chdir("):]
-			s = s[:strings.LastIndexByte(s, ')')]
+
+		switch edx := strings.Index(s, "Entering directory"); {
+		case edx >= 0:
+			if dmesgs {
+				dmesg("%v: %s", origin(1), s)
+			}
+			s = s[edx+len("Entering directory"):]
+			if dmesgs {
+				dmesg("%v: %s", origin(1), s)
+			}
+			s = strings.TrimSpace(s)
+			if dmesgs {
+				dmesg("%v: %s", origin(1), s)
+			}
+			if len(s) == 0 {
+				if dmesgs {
+					dmesg("%v: NO", origin(1))
+				}
+				break
+			}
+
+			if dmesgs {
+				dmesg("%v: %s", origin(1), s)
+			}
+			if s[0] == '\'' && s[len(s)-1] == '\'' {
+				s = s[1:]
+				if dmesgs {
+					dmesg("%v: %s", origin(1), s)
+				}
+				if len(s) == 0 {
+					if dmesgs {
+						dmesg("%v: NO", origin(1))
+					}
+					break
+				}
+
+				s = s[:len(s)-1]
+				if dmesgs {
+					dmesg("%v: %s", origin(1), s)
+				}
+			}
+			if dmesgs {
+				dmesg("%v: %s", origin(1), s)
+			}
+			s = `"` + s + `"`
+			if dmesgs {
+				dmesg("%v: %s", origin(1), s)
+			}
 			dir, err := strconv.Unquote(s)
+			if dmesgs {
+				dmesg("%v: %s %v", origin(1), dir, err)
+			}
 			if err != nil {
+				if dmesgs {
+					dmesg("%v: FAIL %s %v", origin(1), s, err)
+				}
 				return 0, err
 			}
 
+			dir = filepath.Clean(dir)
 			if dir == w.dir {
 				break
 			}
 
 			w.dir = dir
+			if dmesgs {
+				dmesg("%v: CD %s", origin(1), s)
+			}
 			fmt.Printf("cd %s\n", dir)
 		case strings.HasPrefix(s, "execve("):
 			s = s[len("execve("):]
@@ -1174,9 +1230,21 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 					return 0, err
 				}
 			case "ar":
-				fmt.Printf("%s\n", strings.Join(argv, " "))
-				if err := w.ar(argv); err != nil {
-					return 0, err
+				if len(argv) < 2 {
+					continue next
+				}
+
+				switch argv[1] {
+				case "cr", "cru":
+					fmt.Printf("%s\n", strings.Join(argv, " "))
+					if err := w.ar(argv); err != nil {
+						return 0, err
+					}
+				case "x", "t":
+					continue next
+				default:
+					fmt.Printf("FAIL %s\n", strings.Join(argv, " "))
+					continue next
 				}
 			default:
 				continue
@@ -1204,57 +1272,6 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 
 			w.first = false
 		}
-		// switch s := w.sc.Text(); {
-		// case strings.HasPrefix(s, "+ "):
-		// 	s = s[2:]
-		// 	switch {
-		// 	case strings.HasPrefix(s, "gcc "):
-		// 		fmt.Println(s)
-		// 		if err := w.gcc(s); err != nil {
-		// 			return 0, err
-		// 		}
-		// 	case strings.HasPrefix(s, "ar cr "):
-		// 		fmt.Println(s)
-		// 		if err := w.ar(s); err != nil {
-		// 			return 0, err
-		// 		}
-		// 	default:
-		// 		continue
-		// 	}
-
-		// 	for i, v := range w.it.Arguments {
-		// 		w.it.Arguments[i] = strings.TrimSpace(v)
-		// 	}
-		// 	s := "    "
-		// 	if !w.first {
-		// 		s = ",\n    "
-		// 	}
-		// 	if _, err := w.w.Write([]byte(s)); err != nil {
-		// 		return 0, err
-		// 	}
-
-		// 	b, err := json.MarshalIndent(&w.it, "    ", "    ")
-		// 	if err != nil {
-		// 		return 0, err
-		// 	}
-
-		// 	if _, err := w.w.Write(b); err != nil {
-		// 		return 0, err
-		// 	}
-
-		// 	w.first = false
-		// case strings.HasPrefix(s, "make"):
-		// 	const tag = "Entering directory '"
-		// 	x := strings.Index(s, tag)
-		// 	if x < 0 {
-		// 		break
-		// 	}
-
-		// 	fmt.Println(s)
-		// 	s = s[x+len(tag):]
-		// 	w.dir = filepath.Clean(s[:len(s)-1])
-		// 	continue
-		// }
 	}
 	return len(b), nil
 }
@@ -1273,7 +1290,7 @@ func (w *cdbMakeWriter) gcc(args []string) error {
 				return fmt.Errorf("multiple .c files: %s", v)
 			}
 
-			w.it.File = v
+			w.it.File = filepath.Clean(v)
 		case strings.HasSuffix(v, ".h"):
 			return fmt.Errorf("unexpected .h file: %s", v)
 		}

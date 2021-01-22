@@ -94,6 +94,9 @@
 //
 // Only POSIX operating systems are supported.
 //
+// The supported build system must output information about entering
+// directories that is compatible with GNU make.
+//
 // The only compiler supported is `gcc`.
 //
 // The only archiver supported is `ar`.
