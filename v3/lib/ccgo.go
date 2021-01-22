@@ -1017,11 +1017,16 @@ func (it *cdbItem) ccgoArgs() (r []string, err error) {
 		set.Opt("MP", func(opt string) error { return nil })
 		set.Opt("c", func(opt string) error { return nil })
 		set.Opt("g", func(opt string) error { return nil })
+		set.Opt("pipe", func(opt string) error { return nil })
 		if err := set.Parse(it.Arguments[1:], func(arg string) error {
 			switch {
 			case strings.HasSuffix(arg, ".c"):
 				r = append(r, arg)
-			case strings.HasPrefix(arg, "-f"):
+			case
+
+				strings.HasPrefix(arg, "-W"),
+				strings.HasPrefix(arg, "-f"):
+
 				// nop
 			default:
 				return fmt.Errorf("unknown/unsupported option: %s", arg)
@@ -1053,6 +1058,16 @@ func (it *cdbItem) output() string {
 			if v == "-o" && i < len(it.Arguments)-1 {
 				it.Output = it.Arguments[i+1]
 				break
+			}
+		}
+		if it.Output == "" && strings.HasSuffix(it.File, ".c") {
+			for _, v := range it.Arguments {
+				if v == "-c" {
+					bn := filepath.Base(it.File)
+					on := bn[:len(bn)-2] + ".o"
+					it.Output = filepath.Join(it.Directory, on)
+					break
+				}
 			}
 		}
 	case "ar":
@@ -1191,6 +1206,7 @@ func (w *cdbMakeWriter) gcc(s string) error {
 			return fmt.Errorf("unexpected .h file: %s", v)
 		}
 	}
+	w.it.output()
 	return nil
 }
 
