@@ -94,8 +94,6 @@
 //
 // Only POSIX operating systems are supported.
 //
-// The only build system supported is `make`.
-//
 // The only compiler supported is `gcc`.
 //
 // The only archiver supported is `ar`.
