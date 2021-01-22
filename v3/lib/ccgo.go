@@ -987,7 +987,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 		}
 	}()
 
-	argv := append([]string{"-f", "-s1000000", "-e", "trace=fchdir,chdir,execve"}, command...)
+	argv := append([]string{"-f", "-s1000000", "-e", "trace=execve"}, command...)
 	cmd := exec.Command(strace, argv...)
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	cmd.Stdout = newCdbMakeWriter(w, cwd)
@@ -1138,59 +1138,23 @@ next:
 
 		switch edx := strings.Index(s, "Entering directory"); {
 		case edx >= 0:
-			if dmesgs {
-				dmesg("%v: %s", origin(1), s)
-			}
 			s = s[edx+len("Entering directory"):]
-			if dmesgs {
-				dmesg("%v: %s", origin(1), s)
-			}
 			s = strings.TrimSpace(s)
-			if dmesgs {
-				dmesg("%v: %s", origin(1), s)
-			}
 			if len(s) == 0 {
-				if dmesgs {
-					dmesg("%v: NO", origin(1))
-				}
 				break
 			}
 
-			if dmesgs {
-				dmesg("%v: %s", origin(1), s)
-			}
 			if s[0] == '\'' && s[len(s)-1] == '\'' {
 				s = s[1:]
-				if dmesgs {
-					dmesg("%v: %s", origin(1), s)
-				}
 				if len(s) == 0 {
-					if dmesgs {
-						dmesg("%v: NO", origin(1))
-					}
 					break
 				}
 
 				s = s[:len(s)-1]
-				if dmesgs {
-					dmesg("%v: %s", origin(1), s)
-				}
-			}
-			if dmesgs {
-				dmesg("%v: %s", origin(1), s)
 			}
 			s = `"` + s + `"`
-			if dmesgs {
-				dmesg("%v: %s", origin(1), s)
-			}
 			dir, err := strconv.Unquote(s)
-			if dmesgs {
-				dmesg("%v: %s %v", origin(1), dir, err)
-			}
 			if err != nil {
-				if dmesgs {
-					dmesg("%v: FAIL %s %v", origin(1), s, err)
-				}
 				return 0, err
 			}
 
@@ -1200,9 +1164,6 @@ next:
 			}
 
 			w.dir = dir
-			if dmesgs {
-				dmesg("%v: CD %s", origin(1), s)
-			}
 			fmt.Printf("cd %s\n", dir)
 		case strings.HasPrefix(s, "execve("):
 			s = s[len("execve("):]
