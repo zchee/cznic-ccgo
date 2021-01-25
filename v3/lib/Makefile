@@ -94,8 +94,9 @@ cpu: clean
 	go tool pprof -lines *.test cpu.out
 
 edit:
-	touch log
-	gvim -p Makefile *.go &
+	@touch log
+	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile *.go & fi
+
 
 editor:
 	gofmt -l -s -w *.go
