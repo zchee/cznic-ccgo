@@ -2496,6 +2496,7 @@ package %s
 	p.o(`import (
 	"math"
 	"reflect"
+	"sync/atomic"
 	"unsafe"
 `)
 	if len(p.verifyStructs) != 0 {
@@ -2515,6 +2516,7 @@ package %s
 
 var _ = math.Pi
 var _ reflect.Kind
+var _ atomic.Value
 var _ unsafe.Pointer
 `)
 	if p.isMain {
@@ -3058,15 +3060,29 @@ func (p *project) declaratorValueUnion(n cc.Node, f *function, d *cc.Declarator,
 
 func (p *project) declaratorDefault(n cc.Node, d *cc.Declarator) {
 	if x := p.tlds[d]; x != nil && d.IsStatic() {
+		if d.Type().IsVolatile() {
+			p.atomicLoadNamedAddr(n, d.Type(), x.name)
+			return
+		}
+
 		p.w("%s", x.name)
 		return
 	}
 
 	switch x := p.symtab[d.Name().String()].(type) {
 	case *tld:
+		if d.Type().IsVolatile() {
+			p.atomicLoadNamedAddr(n, d.Type(), x.name)
+			return
+		}
+
 		p.w("%s", x.name)
 	case *imported:
 		x.used = true
+		if d.Type().IsVolatile() {
+			panic(todo("", n.Position(), d.Position()))
+		}
+
 		p.w("%sX%s", x.qualifier, d.Name())
 	default:
 		if d.IsExtern() {
@@ -3122,7 +3138,16 @@ func (p *project) declaratorValueNormal(n cc.Node, f *function, d *cc.Declarator
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
+				if d.Type().IsVolatile() {
+					panic(todo("", n.Position(), d.Position()))
+				}
+
 				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+				return
+			}
+
+			if d.Type().IsVolatile() {
+				p.atomicLoadNamedAddr(n, d.Type(), local.name)
 				return
 			}
 
@@ -3240,6 +3265,10 @@ func (p *project) declaratorLValueArray(n cc.Node, f *function, d *cc.Declarator
 }
 
 func (p *project) declaratorLValueNormal(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
+	if d.Type().IsVolatile() {
+		panic(todo("", n.Position(), d.Position()))
+	}
+
 	if d.Type().IsScalarType() {
 		defer p.w("%s", p.convertType(n, d.Type(), t, flags))
 	}
@@ -5000,6 +5029,7 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 	case cc.AssignmentExpressionCond: // ConditionalExpression
 		p.conditionalExpression(f, n.ConditionalExpression, t, mode, flags)
 	case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
+		d := n.UnaryExpression.Declarator()
 		lhs := n.UnaryExpression
 		lt := lhs.Operand.Type()
 		sv := f.condInitPrefix
@@ -5021,6 +5051,11 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 				p.assignmentExpression(f, n.AssignmentExpression, lt, exprCondInit, flags|fOutermost)
 				p.w(";")
 			default:
+				if d != nil && d.Type().IsVolatile() {
+					p.setVolatileDeclarator(d, f, n.AssignmentExpression, lt, mode, flags|fOutermost)
+					return
+				}
+
 				p.unaryExpression(f, lhs, lt, exprLValue, flags)
 				p.w(" = ")
 				p.assignmentExpression(f, n.AssignmentExpression, lt, mode, flags|fOutermost)
@@ -5063,6 +5098,79 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
+}
+
+func (p *project) setVolatileDeclarator(d *cc.Declarator, f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
+	sz := d.Type().Size()
+	switch sz {
+	case 4, 8:
+		// ok
+	default:
+		p.err(d, "unsupported volatile declarator size: %v", sz)
+		return
+	}
+
+	if local := f.locals[d]; local != nil {
+		if local.isPinned {
+			panic(todo(""))
+		}
+
+		p.atomicStoreNamedAddr(n, d.Type(), local.name, n, f, mode, flags)
+		return
+	}
+
+	if tld := p.tlds[d]; tld != nil {
+		p.atomicStoreNamedAddr(n, d.Type(), tld.name, n, f, mode, flags)
+		return
+	}
+
+	panic(todo(""))
+}
+
+func (p *project) atomicStoreNamedAddr(n cc.Node, t cc.Type, nm string, expr *cc.AssignmentExpression, f *function, mode exprMode, flags flags) {
+	sz := t.Size()
+	switch sz {
+	case 4, 8:
+		// ok
+	default:
+		p.err(n, "unsupported volatile declarator size: %v", sz)
+		return
+	}
+
+	var ht string
+	switch {
+	case t.IsIntegerType(), t.Kind() == cc.Ptr:
+		ht = p.helperType(n, t)
+	default:
+		p.err(n, "unsupported volatile declarator type: %v", t)
+		return
+	}
+
+	p.w("atomic.Store%s(&%s, %s(", ht, nm, p.typ(n, t))
+	p.assignmentExpression(f, expr, t, mode, flags)
+	p.w("))")
+}
+
+func (p *project) atomicLoadNamedAddr(n cc.Node, t cc.Type, nm string) {
+	sz := t.Size()
+	switch sz {
+	case 4, 8:
+		// ok
+	default:
+		p.err(n, "unsupported volatile declarator size: %v", sz)
+		return
+	}
+
+	var ht string
+	switch {
+	case t.IsIntegerType(), t.Kind() == cc.Ptr:
+		ht = p.helperType(n, t)
+	default:
+		p.err(n, "unsupported volatile declarator type: %v", t)
+		return
+	}
+
+	p.w("atomic.Load%s(&%s)", ht, nm)
 }
 
 func isRealType(op cc.Operand) bool {
@@ -8571,6 +8679,24 @@ func (p *project) unaryExpressionPreIncDecVoidArrayParameter(f *function, n *cc.
 func (p *project) unaryExpressionPreIncDecVoidNormal(f *function, n *cc.UnaryExpression, oper, oper2 string, t cc.Type, mode exprMode, flags flags) {
 	// "++" UnaryExpression etc.
 	ut := n.UnaryExpression.Operand.Type()
+	if d := n.UnaryExpression.Declarator(); d != nil && d.Type().IsVolatile() {
+		x := "Dec"
+		if oper == "++" {
+			x = "Inc"
+		}
+		p.w("%sPre%sAtomic%s(&", p.task.crt, x, p.helperType(n, d.Type()))
+		switch local, tld := f.locals[d], p.tlds[d]; {
+		case local != nil:
+			p.w("%s", local.name)
+		case tld != nil:
+			p.w("%s", tld.name)
+		default:
+			panic(todo(""))
+		}
+		p.w(", %d)", p.incDelta(n.PostfixExpression, ut))
+		return
+	}
+
 	p.unaryExpression(f, n.UnaryExpression, n.UnaryExpression.Operand.Type(), exprLValue, flags)
 	if ut.IsIntegerType() || ut.Kind() == cc.Ptr && p.incDelta(n, ut) == 1 {
 		p.w("%s", oper)
@@ -9993,6 +10119,18 @@ func (p *project) postfixExpressionIncDecValueNormal(f *function, n *cc.PostfixE
 	if oper == "++" {
 		x = "Inc"
 	}
+	if d := n.PostfixExpression.Declarator(); d != nil && d.Type().IsVolatile() {
+		p.w("%sPost%sAtomic%s(&", p.task.crt, x, p.helperType(n, pe))
+		switch local := f.locals[d]; {
+		case local != nil:
+			p.w("%s", local.name)
+		default:
+			panic(todo(""))
+		}
+		p.w(", %d)", p.incDelta(n.PostfixExpression, pe))
+		return
+	}
+
 	p.w("%sPost%s%s(&", p.task.crt, x, p.helperType(n, pe))
 	p.postfixExpression(f, n.PostfixExpression, pe, exprLValue, flags)
 	p.w(", %d)", p.incDelta(n.PostfixExpression, pe))
@@ -10029,6 +10167,55 @@ func (p *project) postfixExpressionIncDecVoid(f *function, n *cc.PostfixExpressi
 }
 
 func (p *project) postfixExpressionIncDecVoidNormal(f *function, n *cc.PostfixExpression, oper, oper2 string, t cc.Type, mode exprMode, flags flags) {
+	if d := n.PostfixExpression.Declarator(); d != nil && d.Type().IsVolatile() {
+		switch d.Type().Size() {
+		case 4, 8:
+			if !d.Type().IsIntegerType() {
+				p.err(n, "unsupported volatile declarator type: %v", d.Type())
+				return
+			}
+
+			if f != nil {
+				if local := f.locals[d]; local != nil {
+					if local.isPinned {
+						panic(todo(""))
+					}
+
+					p.w("atomic.Add%s(&%s, ", p.helperType(n, d.Type()), local.name)
+					switch oper {
+					case "++":
+						// ok
+					case "--":
+						p.w("-")
+					default:
+						p.err(n, "unsupported volatile declarator operation: %v", oper)
+					}
+					p.w("%d)", p.incDelta(n, d.Type()))
+					return
+				}
+			}
+
+			if tld := p.tlds[d]; tld != nil {
+				p.w("atomic.Add%s(&%s, ", p.helperType(n, d.Type()), tld.name)
+				switch oper {
+				case "++":
+					// ok
+				case "--":
+					p.w("-")
+				default:
+					p.err(n, "unsupported volatile declarator operation: %v", oper)
+				}
+				p.w("%d)", p.incDelta(n, d.Type()))
+				return
+			}
+
+			panic(todo("", n.Position(), d.Position()))
+		default:
+			p.err(n, "unsupported volatile declarator size: %v", d.Type().Size())
+			return
+		}
+	}
+
 	pe := n.PostfixExpression.Operand.Type().Decay()
 	p.postfixExpression(f, n.PostfixExpression, pe, exprLValue, flags)
 	if pe.IsIntegerType() || pe.Kind() == cc.Ptr && p.incDelta(n, pe) == 1 {
@@ -11523,6 +11710,38 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t 
 				p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
 			default:
 				panic(todo("", n.Position(), d.Type().Kind()))
+			}
+			return
+		}
+
+		if d.Type().IsVolatile() {
+			tld := p.tlds[d]
+			if tld == nil {
+				p.err(n, "internal error")
+				return
+			}
+
+			sz := d.Type().Size()
+			switch sz {
+			case 4, 8:
+				if !d.Type().IsIntegerType() {
+					p.err(n, "unsupported volatile declarator type: %v", d.Type())
+					break
+				}
+
+				ht := p.helperType(n, d.Type())
+				switch oper {
+				case "+":
+					p.w("atomic.Add%s(&%s, %s(", ht, tld.name, p.typ(n, d.Type()))
+					p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
+					p.w("))")
+				case "-":
+					panic(todo(""))
+				default:
+					p.err(n, "unsupported volatile declarator operation: %v", oper)
+				}
+			default:
+				p.err(n, "unsupported volatile declarator size: %v", sz)
 			}
 			return
 		}

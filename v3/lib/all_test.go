@@ -496,6 +496,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20010904-1.c": {}, // __attribute__((aligned(32)))
 		"20010904-2.c": {}, // __attribute__((aligned(32)))
 		"20021127-1.c": {}, // gcc specific optimization
+		"20030128-1.c": {}, // volatile short
 		"20030323-1.c": {}, // __builtin_return_address
 		"20101011-1.c": {}, // sigfpe
 		"960830-1.c":   {}, // assembler statements not supported
@@ -506,12 +507,17 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"fp-cmp-2.c":   {}, // sigfpe
 		"fp-cmp-3.c":   {}, // sigfpe
 		"pr15296.c":    {}, // union initializer designates non-first field (gcc extension)
+		"pr53160.c":    {}, // unsupported volatile declarator size: 1
+		"pr71631.c":    {}, // unsupported volatile declarator size: 1
+		"pr83269.c":    {}, // unsupported volatile declarator size: 1
+		"pr89195.c":    {}, // unsupported volatile declarator size: 1
 		"rbug.c":       {}, // cannot pass on 386
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
 		"20000722-1.c":                 {}, //TODO composite literal
 		"20000801-3.c":                 {}, //TODO designators
 		"20000917-1.c":                 {}, //TODO composite literal
+		"20001122-1.c":                 {}, //TODO volatile double
 		"20010123-1.c":                 {}, //TODO composite literal
 		"20010209-1.c":                 {}, //TODO
 		"20010518-2.c":                 {}, //TODO
@@ -530,6 +536,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20020810-1.c":                 {}, //TODO
 		"20021113-1.c":                 {}, //TODO
 		"20021118-1.c":                 {}, //TODO
+		"20021120-1.c":                 {}, //TODO 52:5: unsupported volatile declarator size: 256
 		"20030109-1.c":                 {}, //TODO
 		"20030222-1.c":                 {}, //TODO
 		"20030224-2.c":                 {}, //TODO
@@ -550,6 +557,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20040709-2.c":                 {}, //TODO
 		"20040709-3.c":                 {}, //TODO
 		"20040811-1.c":                 {}, //TODO
+		"20041011-1.c":                 {}, //TODO 48:1: unsupported volatile declarator size: 128
 		"20041124-1.c":                 {}, //TODO
 		"20041201-1.c":                 {}, //TODO
 		"20041214-1.c":                 {}, //TODO
@@ -611,6 +619,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"960512-1.c":                   {}, //TODO
 		"970217-1.c":                   {}, //TODO
 		"980526-1.c":                   {}, //TODO
+		"980709-1.c":                   {}, //TODO volatile double
 		"990130-1.c":                   {}, //TODO
 		"990208-1.c":                   {}, //TODO
 		"990413-2.c":                   {}, //TODO
@@ -631,6 +640,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"builtin-bitops-1.c":           {}, //TODO
 		"builtin-constant.c":           {}, //TODO
 		"builtin-nan-1.c":              {}, //TODO
+		"builtin-prefetch-3.c":         {}, //TODO volatile struct
 		"builtin-types-compatible-p.c": {}, //TODO
 		"call-trap-1.c":                {}, //TODO
 		"comp-goto-1.c":                {}, //TODO
@@ -649,6 +659,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"copysign2.c":                  {}, //TODO
 		"ffs-1.c":                      {}, //TODO
 		"ffs-2.c":                      {}, //TODO
+		"floatunsisf-1.c":              {}, // volatile float
 		"fp-cmp-4.c":                   {}, //TODO
 		"fp-cmp-4f.c":                  {}, //TODO
 		"fp-cmp-4l.c":                  {}, //TODO
@@ -737,6 +748,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr45695.c":                    {}, //TODO
 		"pr46309.c":                    {}, //TODO
 		"pr47237.c":                    {}, //TODO
+		"pr47925.c":                    {}, //TODO volatile struct
 		"pr49279.c":                    {}, //TODO
 		"pr49390.c":                    {}, //TODO
 		"pr49644.c":                    {}, //TODO
@@ -767,6 +779,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr65427.c":                    {}, //TODO
 		"pr65648.c":                    {}, //TODO
 		"pr65956.c":                    {}, //TODO
+		"pr66556.c":                    {}, //TODO unsupported volatile declarator size: 237
 		"pr67037.c":                    {}, //TODO
 		"pr67714.c":                    {}, //TODO
 		"pr68249.c":                    {}, //TODO
@@ -799,6 +812,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr85156.c":                    {}, //TODO
 		"pr85169.c":                    {}, //TODO
 		"pr85331.c":                    {}, //TODO
+		"pr85529-1.c":                  {}, //TODO :24:5: unsupported volatile declarator type: volatile struct S
 		"pr86528.c":                    {}, //TODO
 		"pr88739.c":                    {}, //TODO nested initailizer designator
 		"pr89369.c":                    {}, //TODO

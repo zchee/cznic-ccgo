@@ -10,6 +10,7 @@ require (
 	modernc.org/cc v1.0.0
 	modernc.org/cc/v3 v3.28.3-darwin
 	modernc.org/ccir v0.0.0-20181106174718-5753a3f77739
+	modernc.org/crt v1.0.0
 	modernc.org/golex v1.0.0 // indirect
 	modernc.org/internal v1.0.0
 	modernc.org/ir v1.0.0
@@ -18,7 +19,8 @@ require (
 	modernc.org/mathutil v1.1.1
 	modernc.org/memory v1.0.1
 	modernc.org/opt v0.1.1
-	modernc.org/sortutil v1.0.0 // indirect
+	modernc.org/sortutil v1.0.0
+	modernc.org/strutil v1.1.0
 	modernc.org/virtual v1.0.0
 	modernc.org/xc v1.0.0
 )

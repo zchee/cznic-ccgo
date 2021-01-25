@@ -3,6 +3,7 @@ github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25Kn
 github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712 h1:aaQcKT9WumO6JEJcRyTqFVq4XUZiUcKR2/GI31TOcz8=
 github.com/edsrzf/mmap-go v0.0.0-20170320065105-0bce6a688712/go.mod h1:YO35OhQPt3KJa3ryjFM5Bs14WD66h8eGKpfaBNrHW5M=
 github.com/google/go-cmp v0.5.2/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
+github.com/google/go-cmp v0.5.3/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/mattn/go-isatty v0.0.12 h1:wuysRhFDzyxgEmMf5xjvJ2M9dZoWAXNNr5LSBS7uHXY=
 github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
 github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446 h1:/NRJ5vAYoqz+7sG51ubIDHXeWO8DlTSrToPu6q11ziA=
@@ -48,6 +49,7 @@ modernc.org/cc v1.0.0 h1:nPibNuDEx6tvYrUAtvDTTw98rx5juGsa5zuDnKwEEQQ=
 modernc.org/cc v1.0.0/go.mod h1:1Sk4//wdnYJiUIxnW8ddKpaOJCF37yAdqYnkxUpaYxw=
 modernc.org/cc/v3 v3.27.0 h1:7jSyIxf2e392e0t8ZBLgtaSJ5Ys5nOvVOX2X5OHprvY=
 modernc.org/cc/v3 v3.27.0/go.mod h1:h8OMI4KyEYZA64vqFcjg/bMLcaax0jEjh32L9drJrak=
+modernc.org/cc/v3 v3.28.3-darwin/go.mod h1:5gkTEO77Q4qzRkKOoygzQb5GPfXR9qNnvsB8uL5MITA=
 modernc.org/ccir v0.0.0-20181106174718-5753a3f77739 h1:dvht06TTsFccOHpM04clqmw6ODscwo0nGNNZpAAgtY0=
 modernc.org/ccir v0.0.0-20181106174718-5753a3f77739/go.mod h1:U3yOB9KfPrYtLPFWiELNPrwE7GsBs/GR/vC77J8yQYU=
 modernc.org/crt v1.0.0 h1:avY0RResvfWYzwlZTAO31E5B1mUr0JF6n6gaLJHeO+I=
