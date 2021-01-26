@@ -37,7 +37,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.7"
+const Version = "3.8.9"
 
 //TODO CPython
 //TODO Cython
@@ -313,7 +313,8 @@ type Task struct {
 	sources                         []cc.Source
 	stderr                          io.Writer
 	stdout                          io.Writer
-	symSearchOrder                  []int // >= 0: asts[i], < 0 : imported[-i-1]
+	symSearchOrder                  []int                    // >= 0: asts[i], < 0 : imported[-i-1]
+	volatiles                       map[cc.StringID]struct{} // -volatile
 
 	E                     bool // -E
 	allErrors             bool // -all-errors
@@ -366,6 +367,7 @@ func NewTask(args []string, stdout, stderr io.Writer) *Task {
 		pkgName:       "main",
 		stderr:        stderr,
 		stdout:        stdout,
+		volatiles:     map[cc.StringID]struct{}{},
 	}
 }
 
@@ -537,6 +539,13 @@ func (t *Task) Main() (err error) {
 	opts.Opt("version", func(opt string) error { t.version = true; return nil })
 	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Opt("windows", func(opt string) error { t.windows = true; return nil })
+
+	opts.Arg("volatile", false, func(arg, value string) error {
+		for _, v := range strings.Split(strings.TrimSpace(value), ",") {
+			t.volatiles[cc.String(v)] = struct{}{}
+		}
+		return nil
+	})
 
 	opts.Opt("nostdlib", func(opt string) error {
 		t.nostdlib = true

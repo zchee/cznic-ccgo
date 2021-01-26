@@ -245,6 +245,16 @@
 //	/home/user/foo,-Dbar=42,foo.c
 //	/home/user/bar,-Dbar=314,bar.c
 //
+// Forcing atomic access
+//
+// -volatile comma-separated-list
+//
+// The separated items of the list are added to the list of file scope extern
+// variables the will be access atomically, like if their C declarator used the
+// 'volatile' type specifier. Currently only C scalar types of size 4 and 8
+// bytes are supported. Other types/sizes will ignore both the volatile
+// specifier and the -volatile option.
+//
 // Boolean options
 //
 // Command line options not allowing arguments.

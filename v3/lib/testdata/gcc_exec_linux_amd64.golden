@@ -579,6 +579,7 @@
 980618-1.c
 980701-1.c
 980707-1.c
+980709-1.c
 980716-1.c
 980929-1.c
 981001-1.c
@@ -676,11 +677,13 @@ enum-2.c
 enum-3.c
 extzvsi.c
 float-floor.c
+floatunsisf-1.c
 fprintf-1.c
 fprintf-chk-1.c
 func-ptr-1.c
 gofast.c
 20000320-1.c
+20001122-1.c
 20010114-2.c
 20010226-1.c
 20011123-1.c
@@ -935,6 +938,7 @@ pr47155.c
 pr47299.c
 pr47337.c
 pr47538.c
+pr47925.c
 pr48197.c
 pr48571-1.c
 pr48717.c

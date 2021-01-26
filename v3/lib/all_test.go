@@ -517,7 +517,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20000722-1.c":                 {}, //TODO composite literal
 		"20000801-3.c":                 {}, //TODO designators
 		"20000917-1.c":                 {}, //TODO composite literal
-		"20001122-1.c":                 {}, //TODO volatile double
 		"20010123-1.c":                 {}, //TODO composite literal
 		"20010209-1.c":                 {}, //TODO
 		"20010518-2.c":                 {}, //TODO
@@ -619,7 +618,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"960512-1.c":                   {}, //TODO
 		"970217-1.c":                   {}, //TODO
 		"980526-1.c":                   {}, //TODO
-		"980709-1.c":                   {}, //TODO volatile double
 		"990130-1.c":                   {}, //TODO
 		"990208-1.c":                   {}, //TODO
 		"990413-2.c":                   {}, //TODO
@@ -659,7 +657,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"copysign2.c":                  {}, //TODO
 		"ffs-1.c":                      {}, //TODO
 		"ffs-2.c":                      {}, //TODO
-		"floatunsisf-1.c":              {}, // volatile float
 		"fp-cmp-4.c":                   {}, //TODO
 		"fp-cmp-4f.c":                  {}, //TODO
 		"fp-cmp-4l.c":                  {}, //TODO
@@ -748,7 +745,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr45695.c":                    {}, //TODO
 		"pr46309.c":                    {}, //TODO
 		"pr47237.c":                    {}, //TODO
-		"pr47925.c":                    {}, //TODO volatile struct
 		"pr49279.c":                    {}, //TODO
 		"pr49390.c":                    {}, //TODO
 		"pr49644.c":                    {}, //TODO
