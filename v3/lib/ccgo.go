@@ -884,6 +884,9 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 
 	cdb := map[string]*cdbItem{}
 	for i, v := range items {
+		if dmesgs {
+			dmesg("item %q", v)
+		}
 		if len(v.Arguments) == 0 {
 			if len(v.Command) == 0 {
 				return fmt.Errorf("either arguments or command is required: %+v", v)
@@ -895,9 +898,15 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 		}
 		if s := v.output(); s != "" {
 			if cdb[s] != nil {
+				if dmesgs {
+					dmesg("multiples outputs: %s", s)
+				}
 				return fmt.Errorf("multiple outputs: %s", s)
 			}
 
+			if dmesgs {
+				dmesg("adding output: %s", s)
+			}
 			cdb[s] = &items[i]
 		}
 	}
@@ -1038,7 +1047,8 @@ func (it *cdbItem) ccgoArgs() (r []string, err error) {
 			case
 
 				strings.HasPrefix(arg, "-W"),
-				strings.HasPrefix(arg, "-f"):
+				strings.HasPrefix(arg, "-f"),
+				strings.HasPrefix(arg, "-m"):
 
 				// nop
 			default:
@@ -1084,7 +1094,7 @@ func (it *cdbItem) output() string {
 		}
 	case "ar":
 		for i, v := range it.Arguments {
-			if strings.HasPrefix(v, "cr") && i < len(it.Arguments)-1 {
+			if (strings.HasPrefix(v, "cr") || strings.HasPrefix(v, "rc")) && i < len(it.Arguments)-1 {
 				it.Output = it.Arguments[i+1]
 				break
 			}
@@ -1174,7 +1184,7 @@ next:
 
 			w.dir = dir
 			fmt.Printf("cd %s\n", dir)
-		case strings.HasPrefix(s, "execve("):
+		case strings.HasPrefix(s, "execve(") && strings.HasSuffix(s, ") = 0"):
 			s = s[len("execve("):]
 			a := strings.SplitN(s, ", [", 2)
 			args := a[1]
@@ -1205,7 +1215,7 @@ next:
 				}
 
 				switch argv[1] {
-				case "cr", "cru":
+				case "cr", "cru", "rc":
 					fmt.Printf("%s\n", strings.Join(argv, " "))
 					if err := w.ar(argv); err != nil {
 						return 0, err
