@@ -968,11 +968,6 @@ func findCdbItems(obj, cdb map[string]*cdbItem, nm string) error {
 }
 
 func (t *Task) createCompileDB(command []string) (rerr error) {
-	strace, err := exec.LookPath("strace")
-	if err != nil {
-		return err
-	}
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -1007,10 +1002,31 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 		}
 	}()
 
-	argv := append([]string{"-f", "-s1000000", "-e", "trace=execve"}, command...)
-	cmd := exec.Command(strace, argv...)
+	var cmd *exec.Cmd
+	switch {
+	case t.goos == "darwin":
+		if command[0] != "make" {
+			return fmt.Errorf("usupported build command: %s", command[0])
+		}
+
+		sh, err := exec.LookPath("sh")
+		if err != nil {
+			return err
+		}
+
+		command = append([]string{sh, "-c"}, join(" ", command[0], "SHELL='sh -x'", command[1:]))
+		cmd = exec.Command(command[0], command[1:]...)
+	default:
+		strace, err := exec.LookPath("strace")
+		if err != nil {
+			return err
+		}
+
+		argv := append([]string{"-f", "-s1000000", "-e", "trace=execve"}, command...)
+		cmd = exec.Command(strace, argv...)
+	}
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	cmd.Stdout = newCdbMakeWriter(w, cwd)
+	cmd.Stdout = newCdbMakeWriter(w, cwd, t.goos == "darwin")
 	cmd.Stderr = cmd.Stdout
 	if err := cmd.Run(); err != nil {
 		return err
@@ -1133,12 +1149,13 @@ type cdbMakeWriter struct {
 	w   io.Writer
 	it  cdbItem
 
-	first bool
+	darwin bool
+	first  bool
 }
 
-func newCdbMakeWriter(w io.Writer, dir string) *cdbMakeWriter {
+func newCdbMakeWriter(w io.Writer, dir string, darwin bool) *cdbMakeWriter {
 	const sz = 1 << 16
-	r := &cdbMakeWriter{w: w, dir: dir, first: true}
+	r := &cdbMakeWriter{w: w, dir: dir, first: true, darwin: darwin}
 	r.sc = bufio.NewScanner(&r.b)
 	r.sc.Buffer(make([]byte, sz), sz)
 	return r
@@ -1153,7 +1170,7 @@ next:
 		}
 
 		s := strings.TrimSpace(w.sc.Text())
-		if strings.HasPrefix(s, "[pid ") {
+		if !w.darwin && strings.HasPrefix(s, "[pid ") {
 			s = strings.TrimSpace(s[strings.IndexByte(s, ']')+1:])
 		}
 
@@ -1162,13 +1179,13 @@ next:
 			s = s[edx+len("Entering directory"):]
 			s = strings.TrimSpace(s)
 			if len(s) == 0 {
-				break
+				continue
 			}
 
 			if s[0] == '\'' && s[len(s)-1] == '\'' {
 				s = s[1:]
 				if len(s) == 0 {
-					break
+					continue
 				}
 
 				s = s[:len(s)-1]
@@ -1181,12 +1198,13 @@ next:
 
 			dir = filepath.Clean(dir)
 			if dir == w.dir {
-				break
+				continue
 			}
 
 			w.dir = dir
 			fmt.Printf("cd %s\n", dir)
-		case strings.HasPrefix(s, "execve(") && strings.HasSuffix(s, ") = 0"):
+			continue
+		case !w.darwin && strings.HasPrefix(s, "execve(") && strings.HasSuffix(s, ") = 0"):
 			s = s[len("execve("):]
 			a := strings.SplitN(s, ", [", 2)
 			args := a[1]
@@ -1208,7 +1226,7 @@ next:
 			switch argv[0] {
 			case "gcc":
 				fmt.Printf("%s\n", strings.Join(argv, " "))
-				if err := w.gcc(argv); err != nil {
+				if err := w.gccStrace(argv); err != nil {
 					return 0, err
 				}
 			case "ar":
@@ -1219,7 +1237,7 @@ next:
 				switch argv[1] {
 				case "cr", "cru", "rc":
 					fmt.Printf("%s\n", strings.Join(argv, " "))
-					if err := w.ar(argv); err != nil {
+					if err := w.arStrace(argv); err != nil {
 						return 0, err
 					}
 				case "x", "t":
@@ -1231,34 +1249,99 @@ next:
 			default:
 				continue
 			}
-
-			for i, v := range w.it.Arguments {
-				w.it.Arguments[i] = strings.TrimSpace(v)
+		case w.darwin && strings.HasPrefix(s, "+ "):
+			s = s[2:]
+			switch {
+			case strings.HasPrefix(s, "gcc "):
+				fmt.Println(s)
+				if err := w.gccMake(s); err != nil {
+					return 0, err
+				}
+			case strings.HasPrefix(s, "ar cr "):
+				fmt.Println(s)
+				if err := w.arMake(s); err != nil {
+					return 0, err
+				}
+			default:
+				continue
 			}
-			s := "    "
-			if !w.first {
-				s = ",\n    "
-			}
-			if _, err := w.w.Write([]byte(s)); err != nil {
-				return 0, err
-			}
-
-			b, err := json.MarshalIndent(&w.it, "    ", "    ")
-			if err != nil {
-				return 0, err
-			}
-
-			if _, err := w.w.Write(b); err != nil {
-				return 0, err
-			}
-
-			w.first = false
+		default:
+			continue
 		}
+
+		for i, v := range w.it.Arguments {
+			w.it.Arguments[i] = strings.TrimSpace(v)
+		}
+		s = "    "
+		if !w.first {
+			s = ",\n    "
+		}
+		if _, err := w.w.Write([]byte(s)); err != nil {
+			return 0, err
+		}
+
+		b, err := json.MarshalIndent(&w.it, "    ", "    ")
+		if err != nil {
+			return 0, err
+		}
+
+		if _, err := w.w.Write(b); err != nil {
+			return 0, err
+		}
+
+		w.first = false
 	}
 	return len(b), nil
 }
 
-func (w *cdbMakeWriter) gcc(args []string) error {
+func (w *cdbMakeWriter) gccMake(s string) error {
+	args, err := shellquote.Split(s)
+	if err != nil {
+		return err
+	}
+
+	w.it = cdbItem{
+		Arguments: args,
+		Directory: w.dir,
+	}
+	for i, v := range args {
+		switch {
+		case v == "-o" && i < len(args)-1:
+			w.it.Output = args[i+1]
+		case strings.HasSuffix(v, ".c"):
+			if w.it.File != "" {
+				return fmt.Errorf("multiple .c files: %s", v)
+			}
+
+			w.it.File = v
+		case strings.HasSuffix(v, ".h"):
+			return fmt.Errorf("unexpected .h file: %s", v)
+		}
+	}
+	w.it.output()
+	return nil
+}
+
+func (w *cdbMakeWriter) arMake(s string) error {
+	args, err := shellquote.Split(s)
+	if err != nil {
+		return err
+	}
+
+	w.it = cdbItem{
+		Arguments: args,
+		Directory: w.dir,
+	}
+	for i, v := range args {
+		switch {
+		case v == "cr" && i < len(args)-1:
+			w.it.Output = args[i+1]
+		}
+	}
+	return nil
+}
+
+func (w *cdbMakeWriter) gccStrace(args []string) error {
 	w.it = cdbItem{
 		Arguments: args,
 		Directory: w.dir,
@@ -1281,7 +1364,7 @@ func (w *cdbMakeWriter) gcc(args []string) error {
 	return nil
 }
 
-func (w *cdbMakeWriter) ar(args []string) error {
+func (w *cdbMakeWriter) arStrace(args []string) error {
 	w.it = cdbItem{
 		Arguments: args,
 		Directory: w.dir,
