@@ -1129,6 +1129,7 @@ func (it *cdbItem) sources() (r []string) {
 	switch it.Arguments[0] {
 	case
 		"ar",
+		"libtool",
 		"gcc":
 
 		for _, v := range it.Arguments {
@@ -1257,9 +1258,14 @@ next:
 				if err := w.gccMake(s); err != nil {
 					return 0, err
 				}
-			case strings.HasPrefix(s, "ar cr "):
+			case strings.HasPrefix(s, "ar ") && (strings.HasPrefix(s[3:], "cr") || strings.HasPrefix(s[3:], "rc")):
 				fmt.Println(s)
 				if err := w.arMake(s); err != nil {
+					return 0, err
+				}
+			case strings.HasPrefix(s, "libtool "):
+				fmt.Println(s)
+				if err := w.libtoolMake(s); err != nil {
 					return 0, err
 				}
 			default:
@@ -1316,6 +1322,26 @@ func (w *cdbMakeWriter) gccMake(s string) error {
 			w.it.File = v
 		case strings.HasSuffix(v, ".h"):
 			return fmt.Errorf("unexpected .h file: %s", v)
+		}
+	}
+	w.it.output()
+	return nil
+}
+
+func (w *cdbMakeWriter) libtoolMake(s string) error {
+	args, err := shellquote.Split(s)
+	if err != nil {
+		return err
+	}
+
+	w.it = cdbItem{
+		Arguments: args,
+		Directory: w.dir,
+	}
+	for i, v := range args {
+		switch {
+		case v == "-o" && i < len(args)-1:
+			w.it.Output = args[i+1]
 		}
 	}
 	w.it.output()
