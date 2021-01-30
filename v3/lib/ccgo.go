@@ -286,6 +286,7 @@ type Task struct {
 	args                            []string
 	asts                            []*cc.AST
 	capif                           string
+	cc                              string // $CC, default "gcc"
 	cdb                             string // foo.json, use compile DB
 	cfg                             *cc.Config
 	compiledb                       string // -compiledb
@@ -360,6 +361,7 @@ func NewTask(args []string, stdout, stderr io.Writer) *Task {
 			LongDoubleIsDouble:        true,
 			SharedFunctionDefinitions: &cc.SharedFunctionDefinitions{},
 		},
+		cc:            env("CC", "gcc"),
 		crt:           "libc.",
 		crtImportPath: defaultCrt,
 		goarch:        env("TARGET_GOARCH", env("GOARCH", runtime.GOARCH)),
@@ -898,7 +900,7 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 				return err
 			}
 		}
-		if s := v.output(); s != "" {
+		if s := v.output(t.cc); s != "" {
 			if cdb[s] != nil {
 				if dmesgs {
 					dmesg("multiples outputs: %s", s)
@@ -931,11 +933,11 @@ func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
 	var script [][]string
 	for _, nm := range list {
 		it := obj[nm]
-		if !strings.HasSuffix(it.Output, ".o") || it.Arguments[0] != "gcc" {
+		if !strings.HasSuffix(it.Output, ".o") || it.Arguments[0] != t.cc {
 			continue
 		}
 
-		args, err := it.ccgoArgs()
+		args, err := it.ccgoArgs(t.cc)
 		if err != nil {
 			return err
 		}
@@ -1026,7 +1028,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 		cmd = exec.Command(strace, argv...)
 	}
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	cmd.Stdout = newCdbMakeWriter(w, cwd, t.goos == "darwin")
+	cmd.Stdout = t.newCdbMakeWriter(w, cwd)
 	cmd.Stderr = cmd.Stdout
 	if err := cmd.Run(); err != nil {
 		return err
@@ -1043,9 +1045,9 @@ type cdbItem struct {
 	Output    string   `json:"output,omitempty"`
 }
 
-func (it *cdbItem) ccgoArgs() (r []string, err error) {
+func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 	switch it.Arguments[0] {
-	case "gcc":
+	case cc:
 		set := opt.NewSet()
 		set.Arg("D", true, func(opt, arg string) error { r = append(r, "-D"+arg); return nil })
 		set.Arg("I", true, func(opt, arg string) error { r = append(r, "-I"+arg); return nil })
@@ -1084,7 +1086,7 @@ func (it *cdbItem) ccgoArgs() (r []string, err error) {
 	}
 }
 
-func (it *cdbItem) output() string {
+func (it *cdbItem) output(cc string) string {
 	if it.Output != "" {
 		return it.Output
 	}
@@ -1094,7 +1096,7 @@ func (it *cdbItem) output() string {
 	}
 
 	switch it.Arguments[0] {
-	case "gcc":
+	case cc:
 		for i, v := range it.Arguments {
 			if v == "-o" && i < len(it.Arguments)-1 {
 				it.Output = it.Arguments[i+1]
@@ -1115,6 +1117,12 @@ func (it *cdbItem) output() string {
 			if (strings.HasPrefix(v, "cr") || strings.HasPrefix(v, "rc")) && i < len(it.Arguments)-1 {
 				it.Output = it.Arguments[i+1]
 				break
+			}
+		}
+	case "libtool":
+		for i, v := range it.Arguments {
+			if v == "-o" && i < len(it.Arguments)-1 {
+				it.Output = it.Arguments[i+1]
 			}
 		}
 	}
@@ -1145,18 +1153,27 @@ func (it *cdbItem) sources() (r []string) {
 
 type cdbMakeWriter struct {
 	b   bytes.Buffer
-	sc  *bufio.Scanner
+	cc  string
+	cc2 string // cc + " "
 	dir string
-	w   io.Writer
 	it  cdbItem
+	sc  *bufio.Scanner
+	w   io.Writer
 
 	darwin bool
 	first  bool
 }
 
-func newCdbMakeWriter(w io.Writer, dir string, darwin bool) *cdbMakeWriter {
+func (t *Task) newCdbMakeWriter(w io.Writer, dir string) *cdbMakeWriter {
 	const sz = 1 << 16
-	r := &cdbMakeWriter{w: w, dir: dir, first: true, darwin: darwin}
+	r := &cdbMakeWriter{
+		cc:     t.cc,
+		cc2:    t.cc + " ",
+		darwin: t.goos == "darwin",
+		dir:    dir,
+		first:  true,
+		w:      w,
+	}
 	r.sc = bufio.NewScanner(&r.b)
 	r.sc.Buffer(make([]byte, sz), sz)
 	return r
@@ -1225,7 +1242,7 @@ next:
 				argv[i] = v
 			}
 			switch argv[0] {
-			case "gcc":
+			case w.cc:
 				fmt.Printf("%s\n", strings.Join(argv, " "))
 				if err := w.gccStrace(argv); err != nil {
 					return 0, err
@@ -1253,7 +1270,7 @@ next:
 		case w.darwin && strings.HasPrefix(s, "+ "):
 			s = s[2:]
 			switch {
-			case strings.HasPrefix(s, "gcc "):
+			case strings.HasPrefix(s, w.cc2):
 				fmt.Println(s)
 				if err := w.gccMake(s); err != nil {
 					return 0, err
@@ -1324,7 +1341,7 @@ func (w *cdbMakeWriter) gccMake(s string) error {
 			return fmt.Errorf("unexpected .h file: %s", v)
 		}
 	}
-	w.it.output()
+	w.it.output(w.cc)
 	return nil
 }
 
@@ -1344,7 +1361,7 @@ func (w *cdbMakeWriter) libtoolMake(s string) error {
 			w.it.Output = args[i+1]
 		}
 	}
-	w.it.output()
+	w.it.output(w.cc)
 	return nil
 }
 
@@ -1386,7 +1403,7 @@ func (w *cdbMakeWriter) gccStrace(args []string) error {
 			return fmt.Errorf("unexpected .h file: %s", v)
 		}
 	}
-	w.it.output()
+	w.it.output(w.cc)
 	return nil
 }
 
