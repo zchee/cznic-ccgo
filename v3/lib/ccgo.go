@@ -37,7 +37,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.9"
+const Version = "3.8.10"
 
 //TODO CPython
 //TODO Cython
@@ -385,14 +385,26 @@ func env(name, deflt string) (r string) {
 
 // Get exported symbols from package having import path 'path'.
 func (t *Task) capi(path string) (pkgName string, exports map[string]struct{}, err error) {
+	var errModule, errGopath error
 	defer func() {
 		if err != nil {
+			a := []string{err.Error()}
+			if errModule != nil {
+				a = append(a, fmt.Sprintf("module mode error: %s", errModule))
+			}
+			if errGopath != nil {
+				a = append(a, fmt.Sprintf("gopath mode error: %s", errGopath))
+			}
 			wd, err2 := os.Getwd()
-			err = fmt.Errorf("(wd %q, %v): loading C exports from %s (GOPATH=%v GO111MODULE=%v): %v", wd, err2, path, os.Getenv("GOPATH"), os.Getenv("GO111MODULE"), err)
+			err = fmt.Errorf(
+				"(wd %q, %v): loading C exports from %s (GOPATH=%v GO111MODULE=%v): %v",
+				wd, err2, path, os.Getenv("GOPATH"), os.Getenv("GO111MODULE"), strings.Join(a, "\n\t"),
+			)
 		}
 	}()
 
-	pkgs, err := packages.Load(
+	var pkgs []*packages.Package
+	pkgs, errModule = packages.Load(
 		&packages.Config{
 			Mode: packages.NeedFiles,
 			Env:  append(os.Environ(), fmt.Sprintf("GOOS=%s", t.goos), fmt.Sprintf("GOARCH=%s", t.goarch)),
@@ -400,9 +412,9 @@ func (t *Task) capi(path string) (pkgName string, exports map[string]struct{}, e
 		path,
 	)
 	switch {
-	case err == nil:
+	case errModule == nil:
 		if len(pkgs) != 1 {
-			err = fmt.Errorf("expected one package, loaded %d", len(pkgs))
+			errModule = fmt.Errorf("expected one package, loaded %d", len(pkgs))
 			break
 		}
 
@@ -412,34 +424,38 @@ func (t *Task) capi(path string) (pkgName string, exports map[string]struct{}, e
 			for _, v := range pkg.Errors {
 				a = append(a, v.Error())
 			}
-			err = fmt.Errorf("%s", strings.Join(a, "\n"))
+			errModule = fmt.Errorf("%s", strings.Join(a, "\n"))
 			break
 		}
 
 		return t.capi2(pkg.GoFiles)
 	}
 
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" || !filepath.IsAbs(gopath) {
-		return "", nil, err
-	}
+	gopath0 := os.Getenv("GOPATH")
+	for _, gopath := range strings.Split(gopath0, string(os.PathListSeparator)) {
+		if gopath == "" || !filepath.IsAbs(gopath) {
+			continue
+		}
 
-	ctx := build.Context{
-		GOARCH:   t.goarch,
-		GOOS:     t.goos,
-		GOPATH:   gopath,
-		Compiler: "gc",
-	}
-	arg := filepath.Join(gopath, "src", path)
-	pkg, err2 := ctx.ImportDir(arg, 0)
-	if err2 != nil {
-		return "", nil, fmt.Errorf("%v (ImportDir %q: %v)", err, arg, err2)
-	}
+		ctx := build.Context{
+			GOARCH:   t.goarch,
+			GOOS:     t.goos,
+			GOPATH:   gopath,
+			Compiler: "gc",
+		}
+		arg := filepath.Join(gopath, "src", path)
+		pkg, err := ctx.ImportDir(arg, 0)
+		if err != nil {
+			errGopath = err
+			continue
+		}
 
-	for i, v := range pkg.GoFiles {
-		pkg.GoFiles[i] = filepath.Join(gopath, "src", path, v)
+		for i, v := range pkg.GoFiles {
+			pkg.GoFiles[i] = filepath.Join(gopath, "src", path, v)
+		}
+		return t.capi2(pkg.GoFiles)
 	}
-	return t.capi2(pkg.GoFiles)
+	return "", nil, fmt.Errorf("cannot load CAPI")
 }
 
 func (t *Task) capi2(files []string) (pkgName string, exports map[string]struct{}, err error) {
@@ -765,6 +781,10 @@ func (t *Task) Main() (err error) {
 }
 
 func (t *Task) link() (err error) {
+	if len(t.asts) == 0 {
+		return fmt.Errorf("no objects to link")
+	}
+
 	if t.o == "" {
 		t.o = fmt.Sprintf("a_%s_%s.go", t.goos, t.goarch)
 	}
@@ -957,7 +977,6 @@ func findCdbItems(obj, cdb map[string]*cdbItem, nm string) error {
 	if it == nil {
 		fmt.Fprintf(os.Stderr, "not found in compile database: %s\n", nm)
 		return nil
-		//TODO- return fmt.Errorf("not found in compile database: %s", nm)
 	}
 
 	obj[nm] = it
@@ -1005,6 +1024,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 	}()
 
 	var cmd *exec.Cmd
+	var parser func(w *cdbMakeWriter, s string) (bool, error)
 	switch {
 	case t.goos == "darwin":
 		if command[0] != "make" {
@@ -1018,6 +1038,16 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 
 		command = append([]string{sh, "-c"}, join(" ", command[0], "SHELL='sh -x'", command[1:]))
 		cmd = exec.Command(command[0], command[1:]...)
+		parser = makeXParser
+	case t.goos == "windows":
+		if command[0] != "make" {
+			return fmt.Errorf("usupported build command: %s", command[0])
+		}
+
+		argv := append([]string{"-d"}, command[1:]...)
+		command[0] += ".exe"
+		cmd = exec.Command(command[0], argv...)
+		parser = makeDParser
 	default:
 		strace, err := exec.LookPath("strace")
 		if err != nil {
@@ -1026,15 +1056,100 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 
 		argv := append([]string{"-f", "-s1000000", "-e", "trace=execve"}, command...)
 		cmd = exec.Command(strace, argv...)
+		parser = straceParser
 	}
+	// trc("%q", cmd.Args) //TODO-
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	cmd.Stdout = t.newCdbMakeWriter(w, cwd)
+	cmd.Stdout = t.newCdbMakeWriter(w, cwd, parser)
 	cmd.Stderr = cmd.Stdout
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func makeDParser(w *cdbMakeWriter, s string) (bool, error) {
+	if !strings.HasPrefix(s, "CreateProcess(") {
+		return false, nil
+	}
+
+	x := strings.IndexByte(s, ',')
+	if x < 0 {
+		return false, nil
+	}
+
+	s = s[x+1:]
+	if x = strings.LastIndexByte(s, ','); x < 0 {
+		return false, nil
+	}
+
+	s = strings.TrimSpace(s[:x])
+	return makeParser(w, s)
+}
+
+func makeParser(w *cdbMakeWriter, s string) (bool, error) {
+	switch {
+	case strings.HasPrefix(s, w.cc2):
+		fmt.Println(s)
+		return true, w.gccMakeX(s)
+	case strings.HasPrefix(s, "ar ") && (strings.HasPrefix(s[3:], "cr") || strings.HasPrefix(s[3:], "rc")):
+		fmt.Println(s)
+		return true, w.arMakeX(s)
+	case strings.HasPrefix(s, "libtool "):
+		fmt.Println(s)
+		return true, w.libtoolMakeX(s)
+	}
+	return false, nil
+}
+
+func makeXParser(w *cdbMakeWriter, s string) (bool, error) {
+	if !strings.HasPrefix(s, "+ ") {
+		return false, nil
+	}
+
+	return makeParser(w, s[2:])
+}
+
+func straceParser(w *cdbMakeWriter, s string) (bool, error) {
+	if strings.HasPrefix(s, "[pid ") {
+		s = strings.TrimSpace(s[strings.IndexByte(s, ']')+1:])
+	}
+	if !strings.HasPrefix(s, "execve(") || !strings.HasSuffix(s, ") = 0") {
+		return false, nil
+	}
+
+	s = s[len("execve("):]
+	a := strings.SplitN(s, ", [", 2)
+	args := a[1]
+	args = args[:strings.LastIndex(args, "], ")]
+	argv, err := shellquote.Split(args)
+	if err != nil {
+		return false, err
+	}
+
+	for i, v := range argv {
+		if strings.HasSuffix(v, ",") {
+			v = v[:len(v)-1]
+		}
+		if v2, err := strconv.Unquote(`"` + v + `"`); err == nil {
+			v = v2
+		}
+		argv[i] = v
+	}
+	switch argv[0] {
+	case w.cc:
+		fmt.Printf("%s\n", strings.Join(argv, " "))
+		return true, w.gccStrace(argv)
+	case "ar":
+		if len(argv) > 2 {
+			if strings.Contains(argv[1], "c") {
+				fmt.Printf("%s\n", strings.Join(argv, " "))
+				return true, w.arStrace(argv)
+			}
+		}
+	}
+	return false, nil
 }
 
 type cdbItem struct {
@@ -1152,27 +1267,27 @@ func (it *cdbItem) sources() (r []string) {
 }
 
 type cdbMakeWriter struct {
-	b   bytes.Buffer
-	cc  string
-	cc2 string // cc + " "
-	dir string
-	it  cdbItem
-	sc  *bufio.Scanner
-	w   io.Writer
+	b     bytes.Buffer
+	cc    string
+	cc2   string // cc + " "
+	dir   string
+	it    cdbItem
+	parse func(w *cdbMakeWriter, s string) (bool, error)
+	sc    *bufio.Scanner
+	w     io.Writer
 
-	darwin bool
-	first  bool
+	first bool
 }
 
-func (t *Task) newCdbMakeWriter(w io.Writer, dir string) *cdbMakeWriter {
+func (t *Task) newCdbMakeWriter(w io.Writer, dir string, parse func(w *cdbMakeWriter, s string) (bool, error)) *cdbMakeWriter {
 	const sz = 1 << 16
 	r := &cdbMakeWriter{
-		cc:     t.cc,
-		cc2:    t.cc + " ",
-		darwin: t.goos == "darwin",
-		dir:    dir,
-		first:  true,
-		w:      w,
+		cc2:   t.cc + " ",
+		cc:    t.cc,
+		dir:   dir,
+		first: true,
+		parse: parse,
+		w:     w,
 	}
 	r.sc = bufio.NewScanner(&r.b)
 	r.sc.Buffer(make([]byte, sz), sz)
@@ -1181,19 +1296,13 @@ func (t *Task) newCdbMakeWriter(w io.Writer, dir string) *cdbMakeWriter {
 
 func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 	w.b.Write(b)
-next:
 	for bytes.Contains(w.b.Bytes(), []byte{'\n'}) {
 		if !w.sc.Scan() {
 			panic(todo("internal error"))
 		}
 
 		s := strings.TrimSpace(w.sc.Text())
-		if !w.darwin && strings.HasPrefix(s, "[pid ") {
-			s = strings.TrimSpace(s[strings.IndexByte(s, ']')+1:])
-		}
-
-		switch edx := strings.Index(s, "Entering directory"); {
-		case edx >= 0:
+		if edx := strings.Index(s, "Entering directory"); edx >= 0 {
 			s = s[edx+len("Entering directory"):]
 			s = strings.TrimSpace(s)
 			if len(s) == 0 {
@@ -1222,73 +1331,14 @@ next:
 			w.dir = dir
 			fmt.Printf("cd %s\n", dir)
 			continue
-		case !w.darwin && strings.HasPrefix(s, "execve(") && strings.HasSuffix(s, ") = 0"):
-			s = s[len("execve("):]
-			a := strings.SplitN(s, ", [", 2)
-			args := a[1]
-			args = args[:strings.LastIndex(args, "], ")]
-			argv, err := shellquote.Split(args)
-			if err != nil {
-				return 0, err
-			}
+		}
 
-			for i, v := range argv {
-				if strings.HasSuffix(v, ",") {
-					v = v[:len(v)-1]
-				}
-				if v2, err := strconv.Unquote(`"` + v + `"`); err == nil {
-					v = v2
-				}
-				argv[i] = v
-			}
-			switch argv[0] {
-			case w.cc:
-				fmt.Printf("%s\n", strings.Join(argv, " "))
-				if err := w.gccStrace(argv); err != nil {
-					return 0, err
-				}
-			case "ar":
-				if len(argv) < 2 {
-					continue next
-				}
+		ok, err := w.parse(w, s)
+		if err != nil {
+			return 0, err
+		}
 
-				switch argv[1] {
-				case "cr", "cru", "rc":
-					fmt.Printf("%s\n", strings.Join(argv, " "))
-					if err := w.arStrace(argv); err != nil {
-						return 0, err
-					}
-				case "x", "t":
-					continue next
-				default:
-					fmt.Printf("FAIL %s\n", strings.Join(argv, " "))
-					continue next
-				}
-			default:
-				continue
-			}
-		case w.darwin && strings.HasPrefix(s, "+ "):
-			s = s[2:]
-			switch {
-			case strings.HasPrefix(s, w.cc2):
-				fmt.Println(s)
-				if err := w.gccMake(s); err != nil {
-					return 0, err
-				}
-			case strings.HasPrefix(s, "ar ") && (strings.HasPrefix(s[3:], "cr") || strings.HasPrefix(s[3:], "rc")):
-				fmt.Println(s)
-				if err := w.arMake(s); err != nil {
-					return 0, err
-				}
-			case strings.HasPrefix(s, "libtool "):
-				fmt.Println(s)
-				if err := w.libtoolMake(s); err != nil {
-					return 0, err
-				}
-			default:
-				continue
-			}
-		default:
+		if !ok {
 			continue
 		}
 
@@ -1317,7 +1367,7 @@ next:
 	return len(b), nil
 }
 
-func (w *cdbMakeWriter) gccMake(s string) error {
+func (w *cdbMakeWriter) gccMakeX(s string) error {
 	args, err := shellquote.Split(s)
 	if err != nil {
 		return err
@@ -1345,7 +1395,7 @@ func (w *cdbMakeWriter) gccMake(s string) error {
 	return nil
 }
 
-func (w *cdbMakeWriter) libtoolMake(s string) error {
+func (w *cdbMakeWriter) libtoolMakeX(s string) error {
 	args, err := shellquote.Split(s)
 	if err != nil {
 		return err
@@ -1365,7 +1415,7 @@ func (w *cdbMakeWriter) libtoolMake(s string) error {
 	return nil
 }
 
-func (w *cdbMakeWriter) arMake(s string) error {
+func (w *cdbMakeWriter) arMakeX(s string) error {
 	args, err := shellquote.Split(s)
 	if err != nil {
 		return err
