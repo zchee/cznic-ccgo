@@ -1065,6 +1065,7 @@ pr66233.c
 pr66757.c
 pr66940.c
 pr67226.c
+pr67714.c
 pr67781.c
 pr67929_1.c
 pr68143_1.c
@@ -1075,6 +1076,7 @@ pr68376-1.c
 pr68376-2.c
 pr68390.c
 pr68506.c
+pr68532.c
 pr68624.c
 pr68648.c
 pr68841.c
@@ -1115,6 +1117,7 @@ pr78791.c
 pr78856.c
 pr79043.c
 pr79121.c
+pr79286.c
 pr79327.c
 pr79388.c
 pr79450.c
@@ -1166,6 +1169,7 @@ regstack-1.c
 scope-1.c
 shiftdi.c
 shiftopt-1.c
+ssad-run.c
 stdarg-1.c
 stdarg-2.c
 stdarg-4.c
@@ -1195,6 +1199,7 @@ struct-ret-2.c
 switch-1.c
 tstdi-1.c
 unroll-1.c
+usad-run.c
 usmul.c
 va-arg-1.c
 va-arg-10.c

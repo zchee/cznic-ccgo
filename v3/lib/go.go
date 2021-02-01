@@ -11987,11 +11987,32 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		}
 		p.statement(f, n.Statement, true, false, false, 0)
 	case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
-		if true || f.block.isFlat() {
+		if f.hasJumps {
 			panic(todo("", p.pos(n)))
 		}
 
-		panic(todo("", p.pos(n)))
+		var ids []*cc.InitDeclarator
+		for list := n.Declaration.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
+			ids = append(ids, list.InitDeclarator)
+		}
+		if len(ids) != 1 {
+			panic(todo(""))
+		}
+
+		id := ids[0]
+		d := id.Declarator
+		local := f.locals[d]
+		p.w("for %s := ", local.name)
+		p.assignmentExpression(f, id.Initializer.AssignmentExpression, d.Type(), exprValue, 0)
+		p.w(";")
+		if n.Expression != nil {
+			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
+		}
+		p.w("; ")
+		if n.Expression2 != nil {
+			p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
+		}
+		p.statement(f, n.Statement, true, false, false, 0)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}

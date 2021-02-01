@@ -777,11 +777,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr65956.c":                    {}, //TODO
 		"pr66556.c":                    {}, //TODO unsupported volatile declarator size: 237
 		"pr67037.c":                    {}, //TODO
-		"pr67714.c":                    {}, //TODO
 		"pr68249.c":                    {}, //TODO
 		"pr68328.c":                    {}, //TODO
 		"pr68381.c":                    {}, //TODO
-		"pr68532.c":                    {}, //TODO
 		"pr69320-2.c":                  {}, //TODO
 		"pr70460.c":                    {}, //TODO
 		"pr70903.c":                    {}, //TODO
@@ -794,7 +792,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr78438.c":                    {}, //TODO
 		"pr78559.c":                    {}, //TODO
 		"pr78726.c":                    {}, //TODO
-		"pr79286.c":                    {}, //TODO
 		"pr79354.c":                    {}, //TODO
 		"pr79737-2.c":                  {}, //TODO
 		"pr80421.c":                    {}, //TODO
@@ -824,7 +821,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"simd-4.c":                     {}, //TODO
 		"simd-5.c":                     {}, //TODO
 		"simd-6.c":                     {}, //TODO
-		"ssad-run.c":                   {}, //TODO
 		"stdarg-3.c":                   {}, //TODO
 		"stkalign.c":                   {}, //TODO
 		"strct-stdarg-1.c":             {}, //TODO
@@ -832,7 +828,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"string-opt-18.c":              {}, //TODO
 		"string-opt-5.c":               {}, //TODO
 		"struct-ini-1.c":               {}, //TODO
-		"usad-run.c":                   {}, //TODO
 		"user-printf.c":                {}, //TODO
 		"va-arg-2.c":                   {}, //TODO
 		"va-arg-22.c":                  {}, //TODO
