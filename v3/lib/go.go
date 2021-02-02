@@ -10703,7 +10703,11 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 		}
 		switch {
 		case i < len(params):
-			p.assignmentExpression(f, arg, arg.Promote(), mode, fOutermost)
+			t := arg.Promote()
+			if t.Kind() == cc.Union && t.UnionCommon() == cc.Ptr {
+				t = t.FieldByIndex([]int{0}).Type()
+			}
+			p.assignmentExpression(f, arg, t, mode, fOutermost)
 		case va && i == len(params):
 			p.w("%sVaList(%s%s, ", p.task.crt, f.bpName, nonZeroUintptr(bpOff))
 			paren = ")"
@@ -10734,11 +10738,12 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 func (p *project) uintptr(n cc.Node, f func(), op cc.Operand) {
 	if op.Type().IsIntegerType() {
 		switch {
-		case isNegativeInt(op):
+		case op.Value() != nil:
 			p.w(" %sUintptrFrom%s(", p.task.crt, p.helperType(n, op.Type()))
 		default:
 			p.w(" uintptr(")
 		}
+
 		f()
 		p.w(")")
 		return
@@ -12003,7 +12008,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		d := id.Declarator
 		local := f.locals[d]
 		p.w("for %s := ", local.name)
-		p.assignmentExpression(f, id.Initializer.AssignmentExpression, d.Type(), exprValue, 0)
+		p.assignmentExpression(f, id.Initializer.AssignmentExpression, d.Type(), exprValue, fForceConv)
 		p.w(";")
 		if n.Expression != nil {
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
@@ -12304,7 +12309,7 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 }
 
 func (p *project) paramTyp(t cc.Type) string {
-	if t.Kind() == cc.Array {
+	if t.Kind() == cc.Array || t.Kind() == cc.Union && t.UnionCommon() == cc.Ptr {
 		return "uintptr"
 	}
 
