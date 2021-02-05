@@ -47,6 +47,7 @@ var (
 	idVaEnd                = cc.String("__ccgo_va_end")
 	idVaList               = cc.String("va_list")
 	idVaStart              = cc.String("__ccgo_va_start")
+	idWcharT               = cc.String("wchar_t")
 	idWtext                = cc.String("wtext")
 
 	bytesBufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
@@ -2868,7 +2869,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 					p.assignmentExpression(f, n.Initializer.AssignmentExpression, d.Type(), exprCondInit, 0)
 				default:
 					f.condInitPrefix()
-					p.initializer(f, n.Initializer, d.Type(), nil, nil)
+					p.initializer(f, n.Initializer, d.Type(), d.StorageClass, nil)
 				}
 				f.condInitPrefix = sv
 				p.w(";")
@@ -2890,7 +2891,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 				p.assignmentExpression(f, n.Initializer.AssignmentExpression, d.Type(), exprCondInit, 0)
 			default:
 				f.condInitPrefix()
-				p.initializer(f, n.Initializer, d.Type(), nil, nil)
+				p.initializer(f, n.Initializer, d.Type(), d.StorageClass, nil)
 				p.w(";")
 			}
 			f.condInitPrefix = sv
@@ -2902,7 +2903,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 				semi = ""
 			default:
 				p.w("var %s ", local.name)
-				if !isAggregateType(d.Type()) {
+				if !isAggregateTypeOrUnion(d.Type()) {
 					p.w("%s ", p.typ(n, d.Type()))
 				}
 				semi = ";"
@@ -2919,7 +2920,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 					p.w("%s", local.name)
 				}
 				p.w(" = ")
-				p.initializer(f, n.Initializer, d.Type(), nil, nil)
+				p.initializer(f, n.Initializer, d.Type(), d.StorageClass, nil)
 			}
 			p.w(";")
 		}
@@ -4161,11 +4162,11 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 		}
 
 		p.w("%svar %s ", sep, tld.name)
-		if !isAggregateType(d.Type()) {
+		if !isAggregateTypeOrUnion(d.Type()) {
 			p.w("%s ", p.typ(n, d.Type()))
 		}
 		p.w("= ")
-		p.initializer(f, n.Initializer, d.Type(), tld, nil)
+		p.initializer(f, n.Initializer, d.Type(), d.StorageClass, tld)
 		p.w("; /* %v */", p.pos(d))
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
@@ -11413,7 +11414,7 @@ func (p *project) intConst(n cc.Node, src string, op cc.Operand, to cc.Type, fla
 		defer p.w(")")
 		// ok
 	default:
-		panic(todo("%v -> %v", op.Type(), to))
+		panic(todo("%v: %v -> %v", pos(n), op.Type(), to))
 	}
 
 	src = strings.TrimRight(src, "luLU")

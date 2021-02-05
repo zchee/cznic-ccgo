@@ -28,6 +28,7 @@ import (
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
+	"modernc.org/cc/v3"
 )
 
 func caller(s string, va ...interface{}) {
@@ -213,8 +214,6 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		"99_fastcall.c":               {}, // 386 only
 
 		"40_stdio.c":                {}, //TODO
-		"42_function_pointer.c":     {}, //TODO
-		"46_grep.c":                 {}, //TODO
 		"73_arm64.c":                {}, //TODO struct varargs
 		"75_array_in_struct_init.c": {}, //TODO flat struct initializer
 		"78_vla_label.c":            {}, //TODO VLA
@@ -513,6 +512,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr89195.c":    {}, // unsupported volatile declarator size: 1
 		"rbug.c":       {}, // cannot pass on 386
 
+		"20010924-1.c": {}, //TODO hangs
+		"pr33382.c":    {}, //TODO hangs
+
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
 		"20000722-1.c":                 {}, //TODO composite literal
 		"20000801-3.c":                 {}, //TODO designators
@@ -522,7 +524,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20010518-2.c":                 {}, //TODO
 		"20010605-1.c":                 {}, //TODO
 		"20010605-2.c":                 {}, //TODO
-		"20010924-1.c":                 {}, //TODO
 		"20020107-1.c":                 {}, //TODO
 		"20020206-1.c":                 {}, //TODO
 		"20020206-2.c":                 {}, //TODO
@@ -536,7 +537,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20021113-1.c":                 {}, //TODO
 		"20021118-1.c":                 {}, //TODO
 		"20021120-1.c":                 {}, //TODO 52:5: unsupported volatile declarator size: 256
-		"20030109-1.c":                 {}, //TODO
 		"20030222-1.c":                 {}, //TODO
 		"20030224-2.c":                 {}, //TODO
 		"20030501-1.c":                 {}, //TODO
@@ -567,7 +567,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20050316-3.c":                 {}, //TODO
 		"20050604-1.c":                 {}, //TODO
 		"20050607-1.c":                 {}, //TODO
-		"20050613-1.c":                 {}, //TODO nested initailizer designator
 		"20050929-1.c":                 {}, //TODO
 		"20051012-1.c":                 {}, //TODO
 		"20061220-1.c":                 {}, //TODO
@@ -718,7 +717,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr28289.c":                    {}, //TODO
 		"pr28865.c":                    {}, //TODO
 		"pr30185.c":                    {}, //TODO
-		"pr33382.c":                    {}, //TODO
 		"pr34154.c":                    {}, //TODO
 		"pr34768-1.c":                  {}, //TODO
 		"pr34768-2.c":                  {}, //TODO
@@ -807,7 +805,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr85331.c":                    {}, //TODO
 		"pr85529-1.c":                  {}, //TODO :24:5: unsupported volatile declarator type: volatile struct S
 		"pr86528.c":                    {}, //TODO
-		"pr88739.c":                    {}, //TODO nested initailizer designator
 		"pr89369.c":                    {}, //TODO
 		"pr89434.c":                    {}, //TODO
 		"printf-2.c":                   {}, //TODO
@@ -1778,4 +1775,19 @@ func multiWriter(w ...io.Writer) io.Writer {
 	default:
 		return io.MultiWriter(a...)
 	}
+}
+
+func dumpInitializer(s []*cc.Initializer) string {
+	if len(s) == 0 {
+		return "<empty>"
+	}
+	var a []string
+	for _, v := range s {
+		var s string
+		if f := v.Field; f != nil {
+			s = fmt.Sprintf("fld %q bitfield %v bitoff %2d", f.Name(), f.IsBitField(), f.BitFieldOffset())
+		}
+		a = append(a, fmt.Sprintf("%v: off %#04x val %v %s", v.Position(), v.Offset, v.AssignmentExpression.Operand.Value(), s))
+	}
+	return strings.Join(a, "\n")
 }
