@@ -215,7 +215,6 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 
 		"40_stdio.c":                {}, //TODO
 		"73_arm64.c":                {}, //TODO struct varargs
-		"75_array_in_struct_init.c": {}, //TODO flat struct initializer
 		"78_vla_label.c":            {}, //TODO VLA
 		"79_vla_continue.c":         {}, //TODO VLA
 		"80_flexarray.c":            {}, //TODO Flexible array member
@@ -512,33 +511,29 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr89195.c":    {}, // unsupported volatile declarator size: 1
 		"rbug.c":       {}, // cannot pass on 386
 
-		"20010924-1.c": {}, //TODO hangs
-		"pr33382.c":    {}, //TODO hangs
+		"20010924-1.c":    {}, //TODO hangs
+		"20041124-1.c":    {}, //TODO crash stack overflow
+		"20041201-1.c":    {}, //TODO crash stack overflow
+		"pr33382.c":       {}, //TODO hangs
+		"zero-struct-2.c": {}, //TODO hangs
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
 		"20000722-1.c":                 {}, //TODO composite literal
 		"20000801-3.c":                 {}, //TODO designators
-		"20000917-1.c":                 {}, //TODO composite literal
 		"20010123-1.c":                 {}, //TODO composite literal
 		"20010209-1.c":                 {}, //TODO
-		"20010518-2.c":                 {}, //TODO
 		"20010605-1.c":                 {}, //TODO
 		"20010605-2.c":                 {}, //TODO
 		"20020107-1.c":                 {}, //TODO
-		"20020206-1.c":                 {}, //TODO
 		"20020206-2.c":                 {}, //TODO
-		"20020215-1.c":                 {}, //TODO
 		"20020227-1.c":                 {}, //TODO
 		"20020314-1.c":                 {}, //TODO
 		"20020320-1.c":                 {}, //TODO
 		"20020411-1.c":                 {}, //TODO
 		"20020412-1.c":                 {}, //TODO
-		"20020810-1.c":                 {}, //TODO
 		"20021113-1.c":                 {}, //TODO
-		"20021118-1.c":                 {}, //TODO
 		"20021120-1.c":                 {}, //TODO 52:5: unsupported volatile declarator size: 256
 		"20030222-1.c":                 {}, //TODO
-		"20030224-2.c":                 {}, //TODO
 		"20030501-1.c":                 {}, //TODO
 		"20030910-1.c":                 {}, //TODO
 		"20031003-1.c":                 {}, //TODO
@@ -557,8 +552,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20040709-3.c":                 {}, //TODO
 		"20040811-1.c":                 {}, //TODO
 		"20041011-1.c":                 {}, //TODO 48:1: unsupported volatile declarator size: 128
-		"20041124-1.c":                 {}, //TODO
-		"20041201-1.c":                 {}, //TODO
 		"20041214-1.c":                 {}, //TODO
 		"20041218-2.c":                 {}, //TODO
 		"20050121-1.c":                 {}, //TODO
@@ -574,7 +567,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20070824-1.c":                 {}, //TODO
 		"20070919-1.c":                 {}, //TODO
 		"20071029-1.c":                 {}, //TODO
-		"20071202-1.c":                 {}, //TODO
 		"20071210-1.c":                 {}, //TODO
 		"20071211-1.c":                 {}, //TODO
 		"20071220-1.c":                 {}, //TODO
@@ -622,7 +614,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"990413-2.c":                   {}, //TODO
 		"990524-1.c":                   {}, //TODO
 		"991112-1.c":                   {}, //TODO
-		"991201-1.c":                   {}, //TODO
 		"991227-1.c":                   {}, //TODO
 		"alias-2.c":                    {}, //TODO
 		"alias-3.c":                    {}, //TODO
@@ -632,7 +623,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"anon-1.c":                     {}, //TODO nested field access
 		"bcp-1.c":                      {}, //TODO
 		"bitfld-3.c":                   {}, //TODO
-		"bswap-2.c":                    {}, //TODO
 		"built-in-setjmp.c":            {}, //TODO
 		"builtin-bitops-1.c":           {}, //TODO
 		"builtin-constant.c":           {}, //TODO
@@ -651,7 +641,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"complex-5.c":                  {}, //TODO
 		"complex-6.c":                  {}, //TODO
 		"complex-7.c":                  {}, //TODO
-		"compndlit-1.c":                {}, //TODO
 		"copysign1.c":                  {}, //TODO
 		"copysign2.c":                  {}, //TODO
 		"ffs-1.c":                      {}, //TODO
@@ -708,8 +697,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr22098-1.c":                  {}, //TODO
 		"pr22098-2.c":                  {}, //TODO
 		"pr22098-3.c":                  {}, //TODO
-		"pr22141-1.c":                  {}, //TODO
-		"pr22141-2.c":                  {}, //TODO
 		"pr23135.c":                    {}, //TODO
 		"pr23324.c":                    {}, //TODO
 		"pr23467.c":                    {}, //TODO
@@ -738,7 +725,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr43220.c":                    {}, //TODO
 		"pr43385.c":                    {}, //TODO
 		"pr43560.c":                    {}, //TODO
-		"pr44164.c":                    {}, //TODO
 		"pr44575.c":                    {}, //TODO
 		"pr45695.c":                    {}, //TODO
 		"pr46309.c":                    {}, //TODO
@@ -758,7 +744,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr56837.c":                    {}, //TODO
 		"pr56866.c":                    {}, //TODO
 		"pr56982.c":                    {}, //TODO
-		"pr57130.c":                    {}, //TODO
 		"pr57344-1.c":                  {}, //TODO
 		"pr57344-2.c":                  {}, //TODO
 		"pr57344-3.c":                  {}, //TODO
@@ -796,7 +781,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr80692.c":                    {}, //TODO
 		"pr81588.c":                    {}, //TODO
 		"pr82210.c":                    {}, //TODO
-		"pr82524.c":                    {}, //TODO
 		"pr82954.c":                    {}, //TODO
 		"pr84478.c":                    {}, //TODO
 		"pr84524.c":                    {}, //TODO
@@ -805,11 +789,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr85331.c":                    {}, //TODO
 		"pr85529-1.c":                  {}, //TODO :24:5: unsupported volatile declarator type: volatile struct S
 		"pr86528.c":                    {}, //TODO
-		"pr89369.c":                    {}, //TODO
 		"pr89434.c":                    {}, //TODO
 		"printf-2.c":                   {}, //TODO
 		"pushpop_macro.c":              {}, //TODO #pragma push_macro("_")
-		"restrict-1.c":                 {}, //TODO
 		"scal-to-vec1.c":               {}, //TODO
 		"scal-to-vec2.c":               {}, //TODO
 		"scal-to-vec3.c":               {}, //TODO
@@ -824,7 +806,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"strct-varg-1.c":               {}, //TODO
 		"string-opt-18.c":              {}, //TODO
 		"string-opt-5.c":               {}, //TODO
-		"struct-ini-1.c":               {}, //TODO
 		"user-printf.c":                {}, //TODO
 		"va-arg-2.c":                   {}, //TODO
 		"va-arg-22.c":                  {}, //TODO
@@ -832,8 +813,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"vla-dealloc-1.c":              {}, //TODO
 		"widechar-1.c":                 {}, //TODO
 		"widechar-3.c":                 {}, //TODO
-		"zero-struct-1.c":              {}, //TODO
-		"zero-struct-2.c":              {}, //TODO
 
 	}
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {

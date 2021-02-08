@@ -144,7 +144,7 @@ typedef struct { __UINT64_TYPE__ lo, hi; } __uint128_t; // must match modernc.or
 #define __attribute__(...)
 #define __builtin_constant_p(x) __builtin_constant_p_impl(0, x)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
-#define __builtin_va_arg(ap, type) (type)__ccgo_va_arg(ap)
+#define __builtin_va_arg(ap, type) ((type)__ccgo_va_arg(ap))
 #define __builtin_va_copy(dst, src) dst = src
 #define __builtin_va_end(ap) __ccgo_va_end(ap)
 #define __builtin_va_start(ap, v) __ccgo_va_start(ap)
@@ -357,9 +357,10 @@ func NewTask(args []string, stdout, stderr io.Writer) *Task {
 	return &Task{
 		args: args,
 		cfg: &cc.Config{
-			DoNotTypecheckAsm:         true,
-			LongDoubleIsDouble:        true,
-			SharedFunctionDefinitions: &cc.SharedFunctionDefinitions{},
+			DoNotTypecheckAsm:                     true,
+			EnableAssignmentCompatibilityChecking: true,
+			LongDoubleIsDouble:                    true,
+			SharedFunctionDefinitions:             &cc.SharedFunctionDefinitions{},
 		},
 		cc:            env("CC", "gcc"),
 		crt:           "libc.",

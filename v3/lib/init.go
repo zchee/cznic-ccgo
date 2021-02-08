@@ -36,8 +36,8 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, sc cc.S
 			return false
 		}
 
-		if !a.Field.IsBitField() || !b.Field.IsBitField() {
-			panic(todo("%v: internal error", a.Position()))
+		if a.Field == nil || b.Field == nil || !a.Field.IsBitField() || !b.Field.IsBitField() {
+			panic(todo("%v: internal error: %#x, %v: %#x", a.Position(), a.Offset, b.Position(), b.Offset))
 		}
 
 		return a.Field.BitFieldOffset() < b.Field.BitFieldOffset()
@@ -52,7 +52,6 @@ func (p *project) initializerInner(off uintptr, f *function, s []*cc.Initializer
 	// for simple assignment apply, taking the type of the scalar to be the
 	// unqualified version of its declared type.
 	if t.IsScalarType() && len(s) == 1 {
-
 		switch {
 		case tld != nil && t.Kind() == cc.Ptr && s[0].AssignmentExpression.Operand.Value() == nil:
 			tld.patches = append(tld.patches, initPatch{t, s[0], fld})
@@ -145,6 +144,163 @@ func (p *project) initializerInner(off uintptr, f *function, s []*cc.Initializer
 	}
 }
 
+func (p *project) initializerArray(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
+	if len(s) == 0 {
+		p.w("%s{}", p.typ(nil, t))
+		return
+	}
+
+	et := t.Elem()
+	esz := et.Size()
+	var nl string
+	if len(s) > 1 {
+		nl = "\n"
+	}
+	s0 := s[0]
+	p.w("%s{%s", p.typ(s0, t), nl)
+	mustIndex := !et.IsScalarType() || uintptr(len(s)) != t.Len()
+	var parts []*cc.Initializer
+	var isZero bool
+	for len(s) != 0 {
+		s, parts, isZero = p.initializerArrayElement(off, s, esz)
+		if isZero {
+			mustIndex = true
+			continue
+		}
+
+		elemOff := parts[0].Offset - off
+		if mustIndex {
+			p.w("%d:", elemOff/esz)
+		}
+
+		p.initializerInner(off+elemOff, f, parts, et, sc, tld, nil)
+		p.w(",%s", nl)
+	}
+	p.w("}")
+}
+
+func (p *project) initializerArrayElement(off uintptr, s []*cc.Initializer, elemSize uintptr) (r []*cc.Initializer, parts []*cc.Initializer, isZero bool) {
+	r = s
+	isZero = true
+	valueOff := s[0].Offset - off
+	elemOff := valueOff - valueOff%elemSize
+	nextOff := elemOff + elemSize
+	for len(s) != 0 {
+		if v := s[0]; v.Offset-off < nextOff {
+			s = s[1:]
+			parts = append(parts, v)
+			if !v.AssignmentExpression.Operand.IsZero() {
+				isZero = false
+			}
+			continue
+		}
+
+		break
+	}
+	return r[len(parts):], parts, isZero
+}
+
+func (p *project) initializerStruct(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
+	if len(s) == 0 {
+		p.w("%s{}", p.typ(nil, t))
+		return
+	}
+
+	s0 := s[0]
+	p.w("%s%s{", listCommentPrefix(s0, ""), p.typ(s[0], t))
+	var parts []*cc.Initializer
+	var isZero bool
+	var fld cc.Field
+	for len(s) != 0 {
+		s, fld, parts, isZero = p.initializerStructField(off, s, t)
+		if isZero {
+			continue
+		}
+
+		p.w("%s%s:", p.initializerSep("\n", parts[0]), p.fieldName2(parts[0], fld))
+		ft := fld.Type()
+		switch {
+		case fld.IsBitField():
+			first := true
+			for _, v := range parts {
+				if v.AssignmentExpression.Operand.IsZero() {
+					continue
+				}
+
+				if !first {
+					p.w("|")
+				}
+				first = false
+				bitFld := v.Field
+				bft := p.bitFileType(bitFld.BitFieldBlockWidth())
+				p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
+				p.w("&%#x", uint64(1)<<uint64(bitFld.BitFieldWidth())-1)
+				if o := bitFld.BitFieldOffset(); o != 0 {
+					p.w("<<%d", o)
+				}
+			}
+		default:
+			p.initializerInner(off+fld.Offset(), f, parts, ft, sc, tld, fld)
+		}
+		p.w(",")
+	}
+	p.w("%s}", listCommentSuffix(s0, ""))
+}
+
+func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.Type) (r []*cc.Initializer, fld cc.Field, parts []*cc.Initializer, isZero bool) {
+	r = s
+	isZero = true
+	valueOff := s[0].Offset
+	nf := t.NumField()
+	nextOff := t.Size() + off
+	bits := false
+	for i := []int{0}; i[0] < nf; i[0]++ {
+		fld2 := t.FieldByIndex(i)
+		if fld2.Name() == 0 {
+			continue
+		}
+
+		if fld == nil {
+			fld = fld2
+		}
+		if fld2.Offset()+off > valueOff {
+			nextOff = fld2.Offset() + off
+			break
+		}
+
+		if !fld2.IsBitField() {
+			fld = fld2
+			continue
+		}
+
+		fld = fld2.BitFieldBlockFirst()
+	}
+	for len(s) != 0 {
+		if v := s[0]; v.Offset < nextOff {
+			if v.Field != nil && v.Field.IsBitField() {
+				bits = true
+			}
+			s = s[1:]
+			parts = append(parts, v)
+			if !v.AssignmentExpression.Operand.IsZero() {
+				isZero = false
+			}
+			continue
+		}
+
+		break
+	}
+	if bits && fld.Name() == 0 {
+		for _, v := range parts {
+			if v.Field != nil && v.Field.Name() != 0 {
+				fld = v.Field
+				break
+			}
+		}
+	}
+	return r[len(parts):], fld, parts, isZero
+}
+
 func (p *project) initializerUnion(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
 	if len(s) == 0 {
 		p.w("%s{}", p.typ(nil, t))
@@ -190,21 +346,6 @@ func (p *project) initializerUnion(off uintptr, f *function, s []*cc.Initializer
 	p.w("%s}", listCommentSuffix(s0, ""))
 }
 
-func (p *project) initializerSep(dflt string, n *cc.Initializer) string {
-	if n := n.Parent(); n != nil {
-		switch n.Case {
-		case cc.InitializerExpr: // AssignmentExpression
-			return dflt //TODO
-		case cc.InitializerInitList: // '{' InitializerList ',' '}'
-			return tidyComment(dflt, &n.Token)
-		default:
-			panic(todo("%v: internal error: %v", n.Position(), n.Case))
-		}
-	}
-
-	return dflt
-}
-
 func (p *project) initializerUnionField(off uintptr, s []*cc.Initializer, t cc.Type) (r []*cc.Initializer, fld cc.Field, parts []*cc.Initializer, isZero bool) {
 	r = s
 	isZero = true
@@ -223,6 +364,21 @@ func (p *project) initializerUnionField(off uintptr, s []*cc.Initializer, t cc.T
 		break
 	}
 	return r[len(parts):], fld, parts, isZero
+}
+
+func (p *project) initializerSep(dflt string, n *cc.Initializer) string {
+	if n := n.Parent(); n != nil {
+		switch n.Case {
+		case cc.InitializerExpr: // AssignmentExpression
+			return dflt //TODO
+		case cc.InitializerInitList: // '{' InitializerList ',' '}'
+			return tidyComment(dflt, &n.Token)
+		default:
+			panic(todo("%v: internal error: %v", n.Position(), n.Case))
+		}
+	}
+
+	return dflt
 }
 
 func compatibleStructOrUnion(t1, t2 cc.Type) bool {
@@ -290,37 +446,6 @@ func compatibleType(t1, t2 cc.Type) bool {
 	return true
 }
 
-func (p *project) initializerArray(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
-	if len(s) == 0 {
-		p.w("%s{}", p.typ(nil, t))
-		return
-	}
-
-	et := t.Elem()
-	esz := et.Size()
-	s0 := s[0]
-	p.w("%s%s{", listCommentPrefix(s0, ""), p.typ(s0, t))
-	mustIndex := !et.IsScalarType() || uintptr(len(s)) != t.Len()
-	var parts []*cc.Initializer
-	var isZero bool
-	for len(s) != 0 {
-		s, parts, isZero = p.initializerArrayElement(off, s, esz)
-		if isZero {
-			mustIndex = true
-			continue
-		}
-
-		elemOff := parts[0].Offset - off
-		if mustIndex {
-			p.w("%d:", elemOff/esz)
-		}
-
-		p.initializerInner(off+elemOff, f, parts, et, sc, tld, nil)
-		p.w(",")
-	}
-	p.w("%s}", listCommentSuffix(s0, ""))
-}
-
 func listCommentPrefix(n *cc.Initializer, dflt string) string {
 	if parent := n.Parent(); parent != nil {
 		if parent.Case == cc.InitializerInitList {
@@ -339,53 +464,6 @@ func listCommentSuffix(n *cc.Initializer, dflt string) string {
 	return dflt
 }
 
-func (p *project) initializerStruct(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
-	if len(s) == 0 {
-		p.w("%s{}", p.typ(nil, t))
-		return
-	}
-
-	s0 := s[0]
-	p.w("%s%s{", listCommentPrefix(s0, ""), p.typ(s[0], t))
-	var parts []*cc.Initializer
-	var isZero bool
-	var fld cc.Field
-	for len(s) != 0 {
-		s, fld, parts, isZero = p.initializerStructField(off, s, t)
-		if isZero {
-			continue
-		}
-
-		p.w("%s%s:", p.initializerSep("\n", parts[0]), p.fieldName2(parts[0], fld))
-		ft := fld.Type()
-		switch {
-		case fld.IsBitField():
-			first := true
-			for _, v := range parts {
-				if v.AssignmentExpression.Operand.IsZero() {
-					continue
-				}
-
-				if !first {
-					p.w("|")
-				}
-				first = false
-				bitFld := v.Field
-				bft := p.bitFileType(bitFld.BitFieldBlockWidth())
-				p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
-				p.w("&%#x", uint64(1)<<uint64(bitFld.BitFieldWidth())-1)
-				if o := bitFld.BitFieldOffset(); o != 0 {
-					p.w("<<%d", o)
-				}
-			}
-		default:
-			p.initializerInner(off+fld.Offset(), f, parts, ft, sc, tld, fld)
-		}
-		p.w(",")
-	}
-	p.w("%s}", listCommentSuffix(s0, ""))
-}
-
 func (p *project) bitFileType(bits int) cc.Type {
 	switch bits {
 	case 8:
@@ -399,81 +477,6 @@ func (p *project) bitFileType(bits int) cc.Type {
 	default:
 		panic(todo("%v: internal error: %v", bits))
 	}
-}
-
-func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.Type) (r []*cc.Initializer, fld cc.Field, parts []*cc.Initializer, isZero bool) {
-	r = s
-	isZero = true
-	valueOff := s[0].Offset
-	nf := t.NumField()
-	nextOff := t.Size() + off
-	bits := false
-	for i := []int{0}; i[0] < nf; i[0]++ {
-		fld2 := t.FieldByIndex(i)
-		if fld2.Name() == 0 {
-			continue
-		}
-
-		if fld == nil {
-			fld = fld2
-		}
-		if fld2.Offset()+off > valueOff {
-			nextOff = fld2.Offset() + off
-			break
-		}
-
-		if !fld2.IsBitField() {
-			fld = fld2
-			continue
-		}
-
-		fld = fld2.BitFieldBlockFirst()
-	}
-	for len(s) != 0 {
-		if v := s[0]; v.Offset < nextOff {
-			if v.Field != nil && v.Field.IsBitField() {
-				bits = true
-			}
-			s = s[1:]
-			parts = append(parts, v)
-			if !v.AssignmentExpression.Operand.IsZero() {
-				isZero = false
-			}
-			continue
-		}
-
-		break
-	}
-	if bits && fld.Name() == 0 {
-		for _, v := range parts {
-			if v.Field != nil && v.Field.Name() != 0 {
-				fld = v.Field
-				break
-			}
-		}
-	}
-	return r[len(parts):], fld, parts, isZero
-}
-
-func (p *project) initializerArrayElement(off uintptr, s []*cc.Initializer, elemSize uintptr) (r []*cc.Initializer, parts []*cc.Initializer, isZero bool) {
-	r = s
-	isZero = true
-	valueOff := s[0].Offset - off
-	elemOff := valueOff - valueOff%elemSize
-	nextOff := elemOff + elemSize
-	for len(s) != 0 {
-		if v := s[0]; v.Offset-off < nextOff {
-			s = s[1:]
-			parts = append(parts, v)
-			if !v.AssignmentExpression.Operand.IsZero() {
-				isZero = false
-			}
-			continue
-		}
-
-		break
-	}
-	return r[len(parts):], parts, isZero
 }
 
 func (p *project) isWCharType(t cc.Type) bool {

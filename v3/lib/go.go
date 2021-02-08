@@ -8905,7 +8905,6 @@ func (p *project) postfixExpressionDecay(f *function, n *cc.PostfixExpression, t
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		panic(todo("", p.pos(n)))
-		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionChooseExpr:
@@ -9553,7 +9552,14 @@ func (p *project) postfixExpressionValue(f *function, n *cc.PostfixExpression, t
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
 		p.postfixExpressionIncDec(f, n, "--", "-=", t, mode, flags)
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
-		panic(todo("", p.pos(n), n.TypeName.Type(), n.TypeName.Type().Alias()))
+		tn := n.TypeName.Type()
+		switch tn.Decay().Kind() {
+		case cc.Ptr:
+			panic(todo(""))
+		default:
+			defer p.w("%s", p.convertType(n, tn, t, flags))
+			p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
+		}
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		// Built-in Function: int __builtin_types_compatible_p (type1, type2) You can
 		// use the built-in function __builtin_types_compatible_p to determine whether
