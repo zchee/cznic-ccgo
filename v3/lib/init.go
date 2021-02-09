@@ -149,40 +149,6 @@ func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc
 }
 
 func (p *project) initializerArray(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, lm, tm map[*cc.Initializer][]cc.StringID) {
-	//TODO- if len(s) == 0 {
-	//TODO- 	p.w("%s{}", p.typ(nil, t))
-	//TODO- 	return
-	//TODO- }
-
-	//TODO- et := t.Elem()
-	//TODO- esz := et.Size()
-	//TODO- s0 := s[0]
-	//TODO- p.w("%s%s%s{", initComment(s0, lm), tag, p.typ(s0, t))
-	//TODO- mustIndex := !et.IsScalarType() || uintptr(len(s)) != t.Len()
-	//TODO- var parts []*cc.Initializer
-	//TODO- var isZero bool
-	//TODO- for len(s) != 0 {
-	//TODO- 	var comma *cc.Token
-	//TODO- 	s, parts, isZero = p.initializerArrayElement(off, s, esz)
-	//TODO- 	if isZero {
-	//TODO- 		mustIndex = true
-	//TODO- 		continue
-	//TODO- 	}
-
-	//TODO- 	comma = parts[len(parts)-1].TrailingComma()
-	//TODO- 	elemOff := parts[0].Offset - off
-	//TODO- 	tag = ""
-	//TODO- 	if mustIndex {
-	//TODO- 		tag = fmt.Sprintf("%d:", elemOff/esz)
-	//TODO- 	}
-	//TODO- 	p.initializerInner(tag, off+elemOff, f, parts, et, sc, tld, nil, lm, tm)
-	//TODO- 	p.preCommaSep(comma)
-	//TODO- 	p.w(",")
-	//TODO- }
-	//TODO- p.w("%s}", initComment(parts[len(parts)-1], tm))
-
-	//---------------------------------------------------------------------
-
 	if len(s) == 0 {
 		p.w("%s{}", p.typ(nil, t))
 		return
