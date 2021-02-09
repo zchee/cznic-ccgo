@@ -518,9 +518,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"zero-struct-2.c": {}, //TODO hangs
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
-		"20000722-1.c":                 {}, //TODO composite literal
 		"20000801-3.c":                 {}, //TODO designators
-		"20010123-1.c":                 {}, //TODO composite literal
 		"20010209-1.c":                 {}, //TODO
 		"20010605-1.c":                 {}, //TODO
 		"20010605-2.c":                 {}, //TODO
@@ -566,7 +564,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20070614-1.c":                 {}, //TODO
 		"20070824-1.c":                 {}, //TODO
 		"20070919-1.c":                 {}, //TODO
-		"20071029-1.c":                 {}, //TODO
 		"20071210-1.c":                 {}, //TODO
 		"20071211-1.c":                 {}, //TODO
 		"20071220-1.c":                 {}, //TODO
@@ -694,9 +691,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr22061-1.c":                  {}, //TODO
 		"pr22061-3.c":                  {}, //TODO
 		"pr22061-4.c":                  {}, //TODO
-		"pr22098-1.c":                  {}, //TODO
-		"pr22098-2.c":                  {}, //TODO
-		"pr22098-3.c":                  {}, //TODO
 		"pr23135.c":                    {}, //TODO
 		"pr23324.c":                    {}, //TODO
 		"pr23467.c":                    {}, //TODO

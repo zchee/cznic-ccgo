@@ -3486,9 +3486,11 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 			}
 
 			if flags&fAddrOfFuncPtrOk != 0 {
-				if d.Type().Kind() == cc.Ptr && d.Type().Elem().Kind() == cc.Function {
-					p.w("&%s", local.name)
-					return
+				if dt := d.Type(); dt.Kind() == cc.Ptr {
+					if elem := dt.Elem(); elem.Kind() == cc.Function || elem.Kind() == cc.Ptr && elem.Elem().Kind() == cc.Function {
+						p.w("&%s", local.name)
+						return
+					}
 				}
 			}
 
@@ -9338,7 +9340,38 @@ func (p *project) postfixExpressionAddrOf(f *function, n *cc.PostfixExpression, 
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
-		panic(todo("", p.pos(n)))
+		tn := n.TypeName.Type()
+		switch tn.Decay().Kind() {
+		case cc.Ptr:
+			switch tn.Kind() {
+			case cc.Array:
+				switch {
+				case p.pass1:
+					off := roundup(f.off, uintptr(tn.Elem().Align()))
+					f.complits[n] = off
+					f.off += tn.Size()
+				default:
+					off := f.complits[n]
+					p.w(" func() uintptr { *(*%s)(unsafe.Pointer(%s%s)) = ", p.typ(n, tn), f.bpName, nonZeroUintptr(off))
+					p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
+					p.w("; return %s%s }()", f.bpName, nonZeroUintptr(off))
+				}
+			default:
+				panic(todo("%v: %v", n.Position(), tn))
+			}
+		default:
+			switch {
+			case p.pass1:
+				off := roundup(f.off, uintptr(tn.Align()))
+				f.complits[n] = off
+				f.off += tn.Size()
+			default:
+				off := f.complits[n]
+				p.w(" func() uintptr { *(*%s)(unsafe.Pointer(%s%s)) = ", p.typ(n, tn), f.bpName, nonZeroUintptr(off))
+				p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
+				p.w("; return %s%s }()", f.bpName, nonZeroUintptr(off))
+			}
+		}
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionChooseExpr:
@@ -10233,6 +10266,8 @@ func (p *project) postfixExpressionIncDecVoid(f *function, n *cc.PostfixExpressi
 	switch k := p.opKind(f, n, n.Operand.Type()); k {
 	case opNormal:
 		p.postfixExpressionIncDecVoidNormal(f, n, oper, oper2, t, mode, flags)
+	case opBitfield:
+		p.postfixExpressionIncDec(f, n, oper, oper2, t, exprValue, flags)
 	default:
 		panic(todo("", n.Position(), k))
 	}
