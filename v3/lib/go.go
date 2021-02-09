@@ -379,6 +379,10 @@ func commentForm3(b *bytes.Buffer, a []string) bool {
 // Return the preceding white space, including any comments, of the first token
 // of n.
 func tokenSeparator(n cc.Node) (r string) {
+	if n == nil {
+		return ""
+	}
+
 	var tok cc.Token
 	cc.Inspect(n, func(n cc.Node, _ bool) bool {
 		if x, ok := n.(*cc.Token); ok {
@@ -424,11 +428,6 @@ func newBlock(parent *block, n *cc.CompoundStatement, decls []*cc.Declaration, p
 	}
 }
 
-func (b *block) isFlat() bool {
-	//TODO return b.block.IsJumpTarget()
-	return true
-}
-
 type local struct {
 	name string
 	off  uintptr // If isPinned: bp+off
@@ -452,6 +451,7 @@ type function struct {
 	blocks           map[*cc.CompoundStatement]*block
 	bpName           string
 	breakCtx         int //TODO merge with continueCtx
+	complits         map[*cc.PostfixExpression]uintptr
 	condInitPrefix   func()
 	continueCtx      int
 	flatLabels       int
@@ -506,6 +506,7 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 	}
 	f := &function{
 		blocks:              map[*cc.CompoundStatement]*block{},
+		complits:            map[*cc.PostfixExpression]uintptr{},
 		fndef:               n,
 		gen:                 p,
 		hasJumps:            n.CompoundStatement.IsJumpTarget(),
@@ -591,6 +592,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		}
 	}
 
+	//TODO use pass1 for this
 	cc.Inspect(n, func(n cc.Node, entry bool) bool {
 		if !entry {
 			return true
@@ -8887,10 +8889,11 @@ func (p *project) postfixExpressionDecay(f *function, n *cc.PostfixExpression, t
 		default:
 			panic(todo("", p.pos(n)))
 		}
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 		p.w(")")
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
@@ -9075,10 +9078,11 @@ func (p *project) postfixExpressionPSelectIndexNormal(f *function, n *cc.Postfix
 		}
 		p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Decay().Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Decay().Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 		p.w(")))")
 	default:
@@ -9088,10 +9092,11 @@ func (p *project) postfixExpressionPSelectIndexNormal(f *function, n *cc.Postfix
 		}
 		p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Decay().Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Decay().Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 		p.w(")))")
 	}
@@ -9259,10 +9264,11 @@ func (p *project) postfixExpressionSelectIndexArrayParamater(f *function, n *cc.
 	default:
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Decay().Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Decay().Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 		p.w("))")
 	}
@@ -9279,19 +9285,21 @@ func (p *project) postfixExpressionSelectIndexNormal(f *function, n *cc.PostfixE
 	case pe.Kind() != cc.Ptr:
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags&^fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Decay().Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Decay().Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 		p.w("))")
 	default:
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Decay().Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Decay().Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 		p.w("))")
 	}
@@ -9381,10 +9389,11 @@ func (p *project) postfixExpressionAddrOfIndex(f *function, n *cc.PostfixExpress
 		default:
 			p.postfixExpression(f, n.PostfixExpression, pe, mode, flags)
 		}
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags) }, n.Expression.Operand)
-		if sz := pe.Decay().Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags) }, n.Expression.Operand)
+			if sz := pe.Decay().Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 	}
 }
@@ -9555,11 +9564,27 @@ func (p *project) postfixExpressionValue(f *function, n *cc.PostfixExpression, t
 		tn := n.TypeName.Type()
 		switch tn.Decay().Kind() {
 		case cc.Ptr:
-			panic(todo(""))
-		default:
-			defer p.w("%s", p.convertType(n, tn, t, flags))
-			p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
+			switch tn.Kind() {
+			case cc.Array:
+				switch {
+				case p.pass1:
+					off := roundup(f.off, uintptr(tn.Elem().Align()))
+					f.complits[n] = off
+					f.off += tn.Size()
+				default:
+					off := f.complits[n]
+					p.w(" func() uintptr { *(*%s)(unsafe.Pointer(%s%s)) = ", p.typ(n, tn), f.bpName, nonZeroUintptr(off))
+					p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
+					p.w("; return %s%s }()", f.bpName, nonZeroUintptr(off))
+				}
+				return
+			default:
+				panic(todo("%v: %v", n.Position(), tn))
+			}
 		}
+
+		defer p.w("%s", p.convertType(n, tn, t, flags))
+		p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		// Built-in Function: int __builtin_types_compatible_p (type1, type2) You can
 		// use the built-in function __builtin_types_compatible_p to determine whether
@@ -9719,19 +9744,21 @@ func (p *project) postfixExpressionValueIndexArrayParameter(f *function, n *cc.P
 			defer p.w(")")
 		}
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 	default:
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 		p.w("))")
 	}
@@ -9748,10 +9775,11 @@ func (p *project) postfixExpressionValueIndexNormal(f *function, n *cc.PostfixEx
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 	default:
 		switch pe := n.PostfixExpression.Operand.Type(); pe.Kind() {
@@ -9759,20 +9787,22 @@ func (p *project) postfixExpressionValueIndexNormal(f *function, n *cc.PostfixEx
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
-			p.w(" + ")
-			p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-			if sz := pe.Elem().Size(); sz != 1 {
-				p.w("*%d", sz)
+			if !n.Expression.Operand.IsZero() {
+				p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+				if sz := pe.Elem().Size(); sz != 1 {
+					p.w("*%d", sz)
+				}
 			}
 			p.w("))")
 		case cc.Array:
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags&^fOutermost)
-			p.w(" + ")
-			p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-			if sz := pe.Elem().Size(); sz != 1 {
-				p.w("*%d", sz)
+			if !n.Expression.Operand.IsZero() {
+				p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+				if sz := pe.Elem().Size(); sz != 1 {
+					p.w("*%d", sz)
+				}
 			}
 			p.w("))")
 		default:
@@ -9792,10 +9822,11 @@ func (p *project) postfixExpressionValueIndexArray(f *function, n *cc.PostfixExp
 			defer p.w(")")
 		}
 		p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags|fOutermost)
-		p.w(" + ")
-		p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-		if sz := pe.Elem().Size(); sz != 1 {
-			p.w("*%d", sz)
+		if !n.Expression.Operand.IsZero() {
+			p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+			if sz := pe.Elem().Size(); sz != 1 {
+				p.w("*%d", sz)
+			}
 		}
 	default:
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
@@ -9977,10 +10008,11 @@ func (p *project) postfixExpressionLValueIndexArrayParameter(f *function, n *cc.
 	pe := n.PostfixExpression.Operand.Type()
 	p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 	p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
-	p.w(" + ")
-	p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-	if sz := pe.Elem().Size(); sz != 1 {
-		p.w("*%d", sz)
+	if !n.Expression.Operand.IsZero() {
+		p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+		if sz := pe.Elem().Size(); sz != 1 {
+			p.w("*%d", sz)
+		}
 	}
 	p.w("))")
 }
@@ -9996,20 +10028,22 @@ func (p *project) postfixExpressionLValueIndexNormal(f *function, n *cc.PostfixE
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
-			p.w(" + ")
-			p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-			if sz := pe.Elem().Size(); sz != 1 {
-				p.w("*%d", sz)
+			if !n.Expression.Operand.IsZero() {
+				p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+				if sz := pe.Elem().Size(); sz != 1 {
+					p.w("*%d", sz)
+				}
 			}
 			p.w("))")
 		case cc.Array:
 			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags&^fOutermost)
-			p.w(" + ")
-			p.uintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
-			if sz := pe.Elem().Size(); sz != 1 {
-				p.w("*%d", sz)
+			if !n.Expression.Operand.IsZero() {
+				p.nzUintptr(n, func() { p.expression(f, n.Expression, n.Expression.Operand.Type(), exprValue, flags|fOutermost) }, n.Expression.Operand)
+				if sz := pe.Elem().Size(); sz != 1 {
+					p.w("*%d", sz)
+				}
 			}
 			p.w("))")
 		default:
@@ -10443,7 +10477,6 @@ func (p *project) mulOverflow(f *function, n *cc.PostfixExpression, t cc.Type, m
 	}
 
 	p.err(n, "invalid arguments of __builtin_mul_overflow: (%v, %v, %v)", args[0].Operand.Type(), args[1].Operand.Type(), args[2].Operand.Type())
-	return
 }
 
 // bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
@@ -10481,7 +10514,6 @@ func (p *project) subOverflow(f *function, n *cc.PostfixExpression, t cc.Type, m
 	}
 
 	p.err(n, "invalid arguments of __builtin_sub_overflow: (%v, %v, %v)", args[0].Operand.Type(), args[1].Operand.Type(), args[2].Operand.Type())
-	return
 }
 
 // bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
@@ -10519,7 +10551,6 @@ func (p *project) addOverflow(f *function, n *cc.PostfixExpression, t cc.Type, m
 	}
 
 	p.err(n, "invalid arguments of __builtin_add_overflow: (%v, %v, %v)", args[0].Operand.Type(), args[1].Operand.Type(), args[2].Operand.Type())
-	return
 }
 
 // type __atomic_load_n (type *ptr, int memorder)
@@ -10568,7 +10599,6 @@ func (p *project) atomicLoadN(f *function, n *cc.PostfixExpression, t cc.Type, m
 	}
 
 	p.err(n, "invalid first argument of __atomic_load_n: %v, elem kind %v", pt, vt.Kind())
-	return
 }
 
 func (p *project) postfixExpressionCallVoid(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
@@ -10659,7 +10689,6 @@ func (p *project) atomicStoreN(f *function, n *cc.PostfixExpression, t cc.Type, 
 	}
 
 	p.err(n, "invalid arguments of __atomic_store_n: (%v, %v), element kind %v", pt, vt, vt.Kind())
-	return
 }
 
 func (p *project) argList(n *cc.ArgumentExpressionList) (r []*cc.AssignmentExpression) {
@@ -10742,13 +10771,27 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 	p.w("%s)", paren)
 }
 
-func (p *project) uintptr(n cc.Node, f func(), op cc.Operand) {
+func (p *project) nzUintptr(n cc.Node, f func(), op cc.Operand) {
 	if op.Type().IsIntegerType() {
 		switch {
+		case op.IsZero():
+			return
 		case op.Value() != nil:
-			p.w(" %sUintptrFrom%s(", p.task.crt, p.helperType(n, op.Type()))
+			switch x := op.Value().(type) {
+			case cc.Int64Value:
+				if x > 0 {
+					p.w("+%d", x)
+					return
+				}
+			case cc.Uint64Value:
+				if x > 0 {
+					p.w("+%d", x)
+					return
+				}
+			}
+			p.w(" +%sUintptrFrom%s(", p.task.crt, p.helperType(n, op.Type()))
 		default:
-			p.w(" uintptr(")
+			p.w(" +uintptr(")
 		}
 
 		f()
@@ -11880,7 +11923,7 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t 
 func (p *project) warn(n cc.Node, s string, args ...interface{}) {
 	s = fmt.Sprintf(s, args...)
 	s = strings.TrimRight(s, "\t\n\r")
-	fmt.Fprintln(os.Stderr, fmt.Sprintf("%v: warning: %s", n.Position(), s))
+	fmt.Fprintf(os.Stderr, "%v: warning: %s\n", n.Position(), s)
 }
 
 func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {

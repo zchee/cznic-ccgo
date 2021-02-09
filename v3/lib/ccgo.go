@@ -515,13 +515,6 @@ func (t *Task) capi2(files []string) (pkgName string, exports map[string]struct{
 	return file.Name.String(), exports, err
 }
 
-func main() {
-	if err := NewTask(os.Args, os.Stdout, os.Stderr).Main(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-
 // Main executes task.
 func (t *Task) Main() (err error) {
 	opts := opt.NewSet()

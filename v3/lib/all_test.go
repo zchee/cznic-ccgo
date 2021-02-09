@@ -1391,7 +1391,6 @@ func TestBug(t *testing.T) {
 	defer g.close()
 
 	var files, ok int
-	const dir = "tests/tests2"
 	f, o := testBugExec(g.w, t, filepath.Join(testWD, filepath.FromSlash("testdata/bug")))
 	files += f
 	ok += o
@@ -1730,30 +1729,6 @@ out:
 	}
 	d := time.Since(t0)
 	t.Logf("files %v, bytes %v, ok %v in %v", h(files), h(size), h(ok), d)
-}
-
-func newCmd(stdout, stderr io.Writer, bin string, args ...string) *exec.Cmd {
-	r := exec.Command(bin, args...)
-	r.Stdout = multiWriter(os.Stdout, stdout)
-	r.Stderr = multiWriter(os.Stderr, stderr)
-	return r
-}
-
-func multiWriter(w ...io.Writer) io.Writer {
-	var a []io.Writer
-	for _, v := range w {
-		if v != nil {
-			a = append(a, v)
-		}
-	}
-	switch len(a) {
-	case 0:
-		panic("internal error")
-	case 1:
-		return a[0]
-	default:
-		return io.MultiWriter(a...)
-	}
 }
 
 func dumpInitializer(s []*cc.Initializer) string {

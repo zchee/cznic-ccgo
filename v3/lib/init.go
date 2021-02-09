@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//TODO 75_ TCC (cc/v3)
-
 package ccgo // import "modernc.org/ccgo/v3/lib"
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -24,7 +23,9 @@ func isAggregateTypeOrUnion(t cc.Type) bool {
 
 // 6.7.8 Initialization
 func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
-	s := p.initializerFlatten(n)
+	lm := map[*cc.Initializer][]cc.StringID{}
+	tm := map[*cc.Initializer][]cc.StringID{}
+	s := p.initializerFlatten(n, lm, tm)
 	sort.Slice(s, func(i, j int) bool {
 		a := s[i]
 		b := s[j]
@@ -42,16 +43,17 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, sc cc.S
 
 		return a.Field.BitFieldOffset() < b.Field.BitFieldOffset()
 	})
-	p.initializerInner(0, f, s, t, sc, tld, nil)
+	p.initializerInner("", 0, f, s, t, sc, tld, nil, lm, tm)
 }
 
-func (p *project) initializerInner(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, fld cc.Field) {
+func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, fld cc.Field, lm, tm map[*cc.Initializer][]cc.StringID) {
 	// 11: The initializer for a scalar shall be a single expression, optionally
 	// enclosed in braces. The initial value of the object is that of the
 	// expression (after conversion); the same type constraints and conversions as
 	// for simple assignment apply, taking the type of the scalar to be the
 	// unqualified version of its declared type.
 	if t.IsScalarType() && len(s) == 1 {
+		p.w("%s%s", tidyComment("", s[0]), tag)
 		switch {
 		case tld != nil && t.Kind() == cc.Ptr && s[0].AssignmentExpression.Operand.Value() == nil:
 			tld.patches = append(tld.patches, initPatch{t, s[0], fld})
@@ -76,7 +78,7 @@ func (p *project) initializerInner(off uintptr, f *function, s []*cc.Initializer
 		switch k {
 		case cc.Struct, cc.Union:
 			if compatibleStructOrUnion(t, s[0].AssignmentExpression.Operand.Type()) {
-				p.w("%s", tidyComment("", s[0].AssignmentExpression))
+				p.w("%s%s", tidyComment("", s[0]), tag)
 				p.assignmentExpression(f, s[0].AssignmentExpression, t, exprValue, fOutermost)
 				return
 			}
@@ -93,6 +95,7 @@ func (p *project) initializerInner(off uintptr, f *function, s []*cc.Initializer
 			// is room or if the array is of unknown size) initialize the elements of the
 			// array.
 			if x, ok := s[0].AssignmentExpression.Operand.Value().(cc.StringValue); ok {
+				p.w("%s%s", tidyComment("", s[0]), tag)
 				str := cc.StringID(x).String()
 				slen := uintptr(len(str)) + 1
 				alen := t.Len()
@@ -113,6 +116,7 @@ func (p *project) initializerInner(off uintptr, f *function, s []*cc.Initializer
 			// character if there is room or if the array is of unknown size) initialize
 			// the elements of the array.
 			if x, ok := s[0].AssignmentExpression.Operand.Value().(cc.WideStringValue); ok {
+				p.w("%s%s", tidyComment("", s[0]), tag)
 				str := []rune(cc.StringID(x).String())
 				slen := uintptr(len(str)) + 1
 				alen := t.Len()
@@ -134,17 +138,51 @@ func (p *project) initializerInner(off uintptr, f *function, s []*cc.Initializer
 	// named members.
 	switch k {
 	case cc.Array:
-		p.initializerArray(off, f, s, t, sc, tld)
+		p.initializerArray(tag, off, f, s, t, sc, tld, lm, tm)
 	case cc.Struct:
-		p.initializerStruct(off, f, s, t, sc, tld)
+		p.initializerStruct(tag, off, f, s, t, sc, tld, lm, tm)
 	case cc.Union:
-		p.initializerUnion(off, f, s, t, sc, tld)
+		p.initializerUnion(tag, off, f, s, t, sc, tld, lm, tm)
 	default:
 		panic(todo("%v: internal error: %v %v", s[0].Position(), t, len(s)))
 	}
 }
 
-func (p *project) initializerArray(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
+func (p *project) initializerArray(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, lm, tm map[*cc.Initializer][]cc.StringID) {
+	//TODO- if len(s) == 0 {
+	//TODO- 	p.w("%s{}", p.typ(nil, t))
+	//TODO- 	return
+	//TODO- }
+
+	//TODO- et := t.Elem()
+	//TODO- esz := et.Size()
+	//TODO- s0 := s[0]
+	//TODO- p.w("%s%s%s{", initComment(s0, lm), tag, p.typ(s0, t))
+	//TODO- mustIndex := !et.IsScalarType() || uintptr(len(s)) != t.Len()
+	//TODO- var parts []*cc.Initializer
+	//TODO- var isZero bool
+	//TODO- for len(s) != 0 {
+	//TODO- 	var comma *cc.Token
+	//TODO- 	s, parts, isZero = p.initializerArrayElement(off, s, esz)
+	//TODO- 	if isZero {
+	//TODO- 		mustIndex = true
+	//TODO- 		continue
+	//TODO- 	}
+
+	//TODO- 	comma = parts[len(parts)-1].TrailingComma()
+	//TODO- 	elemOff := parts[0].Offset - off
+	//TODO- 	tag = ""
+	//TODO- 	if mustIndex {
+	//TODO- 		tag = fmt.Sprintf("%d:", elemOff/esz)
+	//TODO- 	}
+	//TODO- 	p.initializerInner(tag, off+elemOff, f, parts, et, sc, tld, nil, lm, tm)
+	//TODO- 	p.preCommaSep(comma)
+	//TODO- 	p.w(",")
+	//TODO- }
+	//TODO- p.w("%s}", initComment(parts[len(parts)-1], tm))
+
+	//---------------------------------------------------------------------
+
 	if len(s) == 0 {
 		p.w("%s{}", p.typ(nil, t))
 		return
@@ -152,31 +190,39 @@ func (p *project) initializerArray(off uintptr, f *function, s []*cc.Initializer
 
 	et := t.Elem()
 	esz := et.Size()
-	var nl string
-	if len(s) > 1 {
-		nl = "\n"
-	}
 	s0 := s[0]
-	p.w("%s{%s", p.typ(s0, t), nl)
-	mustIndex := !et.IsScalarType() || uintptr(len(s)) != t.Len()
-	var parts []*cc.Initializer
-	var isZero bool
+	p.w("%s%s%s{", initComment(s0, lm), tag, p.typ(s0, t))
+	var a [][]*cc.Initializer
 	for len(s) != 0 {
-		s, parts, isZero = p.initializerArrayElement(off, s, esz)
-		if isZero {
-			mustIndex = true
-			continue
-		}
-
-		elemOff := parts[0].Offset - off
-		if mustIndex {
-			p.w("%d:", elemOff/esz)
-		}
-
-		p.initializerInner(off+elemOff, f, parts, et, sc, tld, nil)
-		p.w(",%s", nl)
+		s2, parts, _ := p.initializerArrayElement(off, s, esz)
+		s = s2
+		a = append(a, parts)
 	}
-	p.w("}")
+	mustIndex := uintptr(len(a)) != t.Len()
+	var parts []*cc.Initializer
+	for _, parts = range a {
+		var comma *cc.Token
+		comma = parts[len(parts)-1].TrailingComma()
+		elemOff := parts[0].Offset - off
+		tag = ""
+		if mustIndex {
+			tag = fmt.Sprintf("%d:", elemOff/esz)
+		}
+		p.initializerInner(tag, off+elemOff, f, parts, et, sc, tld, nil, lm, tm)
+		p.preCommaSep(comma)
+		p.w(",")
+	}
+	p.w("%s}", initComment(parts[len(parts)-1], tm))
+}
+
+func initComment(n *cc.Initializer, m map[*cc.Initializer][]cc.StringID) string {
+	a := m[n]
+	if len(a) == 0 {
+		return ""
+	}
+
+	m[n] = a[1:]
+	return tidyCommentString(a[0].String())
 }
 
 func (p *project) initializerArrayElement(off uintptr, s []*cc.Initializer, elemSize uintptr) (r []*cc.Initializer, parts []*cc.Initializer, isZero bool) {
@@ -200,24 +246,25 @@ func (p *project) initializerArrayElement(off uintptr, s []*cc.Initializer, elem
 	return r[len(parts):], parts, isZero
 }
 
-func (p *project) initializerStruct(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
+func (p *project) initializerStruct(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, lm, tm map[*cc.Initializer][]cc.StringID) {
 	if len(s) == 0 {
 		p.w("%s{}", p.typ(nil, t))
 		return
 	}
 
-	s0 := s[0]
-	p.w("%s%s{", listCommentPrefix(s0, ""), p.typ(s[0], t))
+	p.w("%s%s%s{", initComment(s[0], lm), tag, p.typ(s[0], t))
 	var parts []*cc.Initializer
 	var isZero bool
 	var fld cc.Field
 	for len(s) != 0 {
+		var comma *cc.Token
 		s, fld, parts, isZero = p.initializerStructField(off, s, t)
 		if isZero {
 			continue
 		}
 
-		p.w("%s%s:", p.initializerSep("\n", parts[0]), p.fieldName2(parts[0], fld))
+		comma = parts[len(parts)-1].TrailingComma()
+		tag = fmt.Sprintf("%s:", p.fieldName2(parts[0], fld))
 		ft := fld.Type()
 		switch {
 		case fld.IsBitField():
@@ -233,6 +280,8 @@ func (p *project) initializerStruct(off uintptr, f *function, s []*cc.Initialize
 				first = false
 				bitFld := v.Field
 				bft := p.bitFileType(bitFld.BitFieldBlockWidth())
+				p.w("%s%s", tidyComment("", v.AssignmentExpression), tag)
+				tag = ""
 				p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
 				p.w("&%#x", uint64(1)<<uint64(bitFld.BitFieldWidth())-1)
 				if o := bitFld.BitFieldOffset(); o != 0 {
@@ -240,11 +289,20 @@ func (p *project) initializerStruct(off uintptr, f *function, s []*cc.Initialize
 				}
 			}
 		default:
-			p.initializerInner(off+fld.Offset(), f, parts, ft, sc, tld, fld)
+			p.initializerInner(tag, off+fld.Offset(), f, parts, ft, sc, tld, fld, lm, tm)
 		}
+		p.preCommaSep(comma)
 		p.w(",")
 	}
-	p.w("%s}", listCommentSuffix(s0, ""))
+	p.w("%s}", initComment(parts[len(parts)-1], tm))
+}
+
+func (p *project) preCommaSep(comma *cc.Token) {
+	if comma == nil {
+		return
+	}
+
+	p.w("%s", strings.TrimSpace(comma.Sep.String()))
 }
 
 func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.Type) (r []*cc.Initializer, fld cc.Field, parts []*cc.Initializer, isZero bool) {
@@ -301,14 +359,14 @@ func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.
 	return r[len(parts):], fld, parts, isZero
 }
 
-func (p *project) initializerUnion(off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld) {
+func (p *project) initializerUnion(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, lm, tm map[*cc.Initializer][]cc.StringID) {
 	if len(s) == 0 {
 		p.w("%s{}", p.typ(nil, t))
 		return
 	}
 
 	s0 := s[0]
-	p.w("%s%s{", listCommentPrefix(s0, ""), p.typ(s[0], t))
+	p.w("%s%s%s{", initComment(s0, lm), tag, p.typ(s[0], t))
 	var parts []*cc.Initializer
 	var isZero bool
 	var fld cc.Field
@@ -318,7 +376,7 @@ func (p *project) initializerUnion(off uintptr, f *function, s []*cc.Initializer
 	}
 	if !isZero {
 		ft := fld.Type()
-		p.w("%s%s:", p.initializerSep("\n", parts[0]), p.fieldName2(parts[0], fld))
+		tag = fmt.Sprintf("%s:", p.fieldName2(parts[0], fld))
 		switch {
 		case fld.IsBitField():
 			first := true
@@ -333,6 +391,8 @@ func (p *project) initializerUnion(off uintptr, f *function, s []*cc.Initializer
 				first = false
 				bitFld := v.Field
 				bft := p.bitFileType(bitFld.BitFieldBlockWidth())
+				p.w("%s%s", tidyComment("", v.AssignmentExpression), tag)
+				tag = ""
 				p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
 				p.w("&%#x", uint64(1)<<uint64(bitFld.BitFieldWidth())-1)
 				if o := bitFld.BitFieldOffset(); o != 0 {
@@ -340,10 +400,10 @@ func (p *project) initializerUnion(off uintptr, f *function, s []*cc.Initializer
 				}
 			}
 		default:
-			p.initializerInner(off+fld.Offset(), f, parts, ft, sc, tld, fld)
+			p.initializerInner(tag, off+fld.Offset(), f, parts, ft, sc, tld, fld, lm, tm)
 		}
 	}
-	p.w("%s}", listCommentSuffix(s0, ""))
+	p.w("%s}", initComment(parts[len(parts)-1], tm))
 }
 
 func (p *project) initializerUnionField(off uintptr, s []*cc.Initializer, t cc.Type) (r []*cc.Initializer, fld cc.Field, parts []*cc.Initializer, isZero bool) {
@@ -364,21 +424,6 @@ func (p *project) initializerUnionField(off uintptr, s []*cc.Initializer, t cc.T
 		break
 	}
 	return r[len(parts):], fld, parts, isZero
-}
-
-func (p *project) initializerSep(dflt string, n *cc.Initializer) string {
-	if n := n.Parent(); n != nil {
-		switch n.Case {
-		case cc.InitializerExpr: // AssignmentExpression
-			return dflt //TODO
-		case cc.InitializerInitList: // '{' InitializerList ',' '}'
-			return tidyComment(dflt, &n.Token)
-		default:
-			panic(todo("%v: internal error: %v", n.Position(), n.Case))
-		}
-	}
-
-	return dflt
 }
 
 func compatibleStructOrUnion(t1, t2 cc.Type) bool {
@@ -446,24 +491,6 @@ func compatibleType(t1, t2 cc.Type) bool {
 	return true
 }
 
-func listCommentPrefix(n *cc.Initializer, dflt string) string {
-	if parent := n.Parent(); parent != nil {
-		if parent.Case == cc.InitializerInitList {
-			return tidyComment(dflt, &parent.Token)
-		}
-	}
-	return dflt
-}
-
-func listCommentSuffix(n *cc.Initializer, dflt string) string {
-	if parent := n.Parent(); parent != nil {
-		if parent.Case == cc.InitializerInitList {
-			return tidyComment(dflt, &parent.Token3)
-		}
-	}
-	return dflt
-}
-
 func (p *project) bitFileType(bits int) cc.Type {
 	switch bits {
 	case 8:
@@ -492,13 +519,33 @@ func isCharType(t cc.Type) bool {
 	return false
 }
 
-func (p *project) initializerFlatten(n *cc.Initializer) (s []*cc.Initializer) {
+func (p *project) initializerFlatten(n *cc.Initializer, lm, tm map[*cc.Initializer][]cc.StringID) (s []*cc.Initializer) {
 	switch n.Case {
 	case cc.InitializerExpr: // AssignmentExpression
 		return append(s, n)
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
+		first := true
 		for list := n.InitializerList; list != nil; list = list.InitializerList {
-			s = append(s, p.initializerFlatten(list.Initializer)...)
+			in := list.Initializer
+			k := in
+			if in.Case != cc.InitializerExpr {
+				k = nil
+			}
+			if first {
+				lm[k] = append(lm[k], append(lm[nil], n.Token.Sep)...)
+				if k != nil {
+					delete(lm, nil)
+				}
+				first = false
+			}
+			if list.InitializerList == nil {
+				tm[k] = append([]cc.StringID{n.Token3.Sep}, append(tm[nil], tm[k]...)...)
+				tm[k] = append(tm[k], append(tm[nil], n.Token3.Sep)...)
+				if k != nil {
+					delete(tm, nil)
+				}
+			}
+			s = append(s, p.initializerFlatten(in, lm, tm)...)
 		}
 		return s
 	default:

@@ -110,28 +110,6 @@ func (s scope) take(t cc.StringID) string {
 	}
 }
 
-func parseScopeKey(t cc.StringID) (cc.StringID, int32) {
-	d := 0
-	s := t.String()
-	var n, mul int32 = 0, 1
-loop:
-	for {
-		switch c := s[len(s)-d-1]; {
-		case c < '0' || c > '9':
-			break loop
-		default:
-			n = n + mul*(int32(c)-'0')
-			mul *= 10
-			d++
-		}
-	}
-	if d == 0 {
-		return t, 0
-	}
-
-	return cc.String(s[:len(s)-d]), n
-}
-
 func dumpLayout(t cc.Type, info *structInfo) string {
 	switch t.Kind() {
 	case cc.Struct, cc.Union:
