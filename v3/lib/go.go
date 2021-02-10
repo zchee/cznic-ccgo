@@ -2069,7 +2069,6 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 
 	b := bytesBufferPool.Get().(*bytes.Buffer)
 	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
-	t = unionDecay(t)
 	if t.IsIntegerType() {
 		switch t.Kind() {
 		case cc.Int128:
@@ -2125,21 +2124,6 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 	}
 
 	panic(todo("", p.pos(nd), t.Kind(), t))
-}
-
-func unionDecay(t cc.Type) cc.Type {
-	if t.Kind() != cc.Union || !isScalarKind(t.UnionCommon()) {
-		return t
-	}
-
-	if nf := t.NumField(); nf > 1 {
-		for i := []int{0}; i[0] < nf; i[0]++ {
-			if f := t.FieldByIndex(i); f.IsBitField() {
-				return t
-			}
-		}
-	}
-	return t.FieldByIndex([]int{0}).Type()
 }
 
 func isScalarKind(k cc.Kind) bool {
@@ -3915,14 +3899,8 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 		}
 
 		panic(todo("%v: %q -> %q", p.pos(n), from, to))
-	case cc.Function, cc.Struct:
+	case cc.Function, cc.Struct, cc.Union:
 		if !force && from.Kind() == to.Kind() {
-			return ""
-		}
-
-		panic(todo("%q -> %q", from, to))
-	case cc.Union:
-		if !force && from.Kind() == to.Kind() || unionDecay(from).Kind() == to.Kind() {
 			return ""
 		}
 
@@ -10902,7 +10880,7 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 		}
 		switch {
 		case i < len(params):
-			t := unionDecay(arg.Promote())
+			t := arg.Promote()
 			p.assignmentExpression(f, arg, t, mode, fOutermost)
 		case va && i == len(params):
 			p.w("%sVaList(%s%s, ", p.task.crt, f.bpName, nonZeroUintptr(bpOff))

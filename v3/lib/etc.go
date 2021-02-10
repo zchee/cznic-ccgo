@@ -52,6 +52,7 @@ var (
 		"switch":      true,  // keyword
 		"true":        false, // ccgo can use
 		"type":        true,  // keyword
+		"types":       false, // package name
 		"uint16":      false, // ccgo can use
 		"uint32":      false, // ccgo can use
 		"uint64":      false, // ccgo can use

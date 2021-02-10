@@ -47,13 +47,6 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, sc cc.S
 }
 
 func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, fld cc.Field, lm, tm map[*cc.Initializer][]cc.StringID) {
-	if t.Kind() == cc.Union {
-		if u := unionDecay(t); u != t {
-			p.w("%s(", p.typ(nil, u))
-			defer p.w(")")
-			t = u
-		}
-	}
 	// 11: The initializer for a scalar shall be a single expression, optionally
 	// enclosed in braces. The initial value of the object is that of the
 	// expression (after conversion); the same type constraints and conversions as
