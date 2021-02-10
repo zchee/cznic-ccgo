@@ -1164,6 +1164,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 		set.Arg("MT", true, func(opt, arg string) error { return nil })
 		set.Arg("O", true, func(opt, arg string) error { return nil })
 		set.Arg("o", true, func(opt, arg string) error { return nil })
+		set.Arg("std", true, func(opt, arg string) error { return nil })
 		set.Opt("MD", func(opt string) error { return nil })
 		set.Opt("MP", func(opt string) error { return nil })
 		set.Opt("c", func(opt string) error { return nil })

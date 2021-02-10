@@ -475,6 +475,7 @@ type function struct {
 	vaLists          map[*cc.PostfixExpression]uintptr
 	vaName           string
 	vaType           cc.Type
+	vlas             map[*cc.Declarator]struct{}
 
 	hasJumps            bool
 	mainSignatureForced bool
@@ -519,6 +520,7 @@ func newFunction(p *project, n *cc.FunctionDefinition) *function {
 		scope:               p.newScope(),
 		unusedLabels:        map[cc.StringID]struct{}{},
 		vaLists:             map[*cc.PostfixExpression]uintptr{},
+		vlas:                map[*cc.Declarator]struct{}{},
 	}
 	f.tlsName = f.scope.take(idTls)
 	if t.IsVariadic() {
@@ -588,6 +590,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 	for _, v := range f.params {
 		switch {
 		case v.Type().Kind() == cc.Array && v.Type().IsVLA():
+			// trc("VLA")
 			f.project.err(f.fndef, "variable length arrays not supported")
 		}
 	}
@@ -599,10 +602,6 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		}
 
 		switch x := n.(type) {
-		case *cc.Declarator:
-			if x.Type().Kind() == cc.Array && x.Type().IsVLA() {
-				f.project.err(x, "variable length arrays not supported")
-			}
 		case *cc.CastExpression:
 			switch x.Case {
 			case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
@@ -684,7 +683,6 @@ type declarator interface {
 func (p *project) isArrayParameterDeclarator(d *cc.Declarator) bool {
 	if d.Type().Kind() == cc.Array {
 		if d.Type().IsVLA() {
-			p.err(d, "variable length arrays not supported")
 			return false
 		}
 
@@ -697,7 +695,6 @@ func (p *project) isArrayParameterDeclarator(d *cc.Declarator) bool {
 func (p *project) isArrayDeclarator(d *cc.Declarator) bool {
 	if d.Type().Kind() == cc.Array {
 		if d.Type().IsVLA() {
-			p.err(d, "variable length arrays not supported")
 			return false
 		}
 
@@ -713,7 +710,6 @@ func (p *project) isArrayParameter(n declarator, t cc.Type) bool {
 	}
 
 	if t.IsVLA() {
-		p.err(n, "variable length arrays not supported")
 		return false
 	}
 
@@ -730,7 +726,6 @@ func (p *project) isArrayOrPinnedArray(f *function, n declarator, t cc.Type) (r 
 	}
 
 	if t.IsVLA() {
-		p.err(n, "variable length arrays not supported")
 		return false
 	}
 
@@ -960,7 +955,6 @@ func (p *project) isArray(f *function, n declarator, t cc.Type) (r bool) {
 	}
 
 	if t.IsVLA() {
-		p.err(n, "variable length arrays not supported")
 		return false
 	}
 
@@ -1166,6 +1160,7 @@ type project struct {
 	intType            cc.Type
 	localTaggedStructs []func()
 	mainName           string
+	ptrSize            uintptr
 	scope              scope
 	sharedFns          map[*cc.FunctionDefinition]struct{}
 	sharedFnsEmitted   map[*cc.FunctionDefinition]struct{}
@@ -1175,13 +1170,13 @@ type project struct {
 	task               *Task
 	tlds               map[*cc.Declarator]*tld
 	ts                 bytes.Buffer // Text segment
-	tsW                []rune       // Text segment, wcha_t
-	tsWName            string
-	tsWNameP           string
-	tsWOffs            map[cc.StringID]uintptr
 	tsName             string
 	tsNameP            string
 	tsOffs             map[cc.StringID]uintptr
+	tsW                []rune // Text segment, wchar_t
+	tsWName            string
+	tsWNameP           string
+	tsWOffs            map[cc.StringID]uintptr
 	typeSigHash        maphash.Hash
 	typedefTypes       map[cc.StringID]*typedef
 	typedefsEmited     map[string]struct{}
@@ -1222,6 +1217,7 @@ func newProject(t *Task) (*project, error) {
 		externs:          map[cc.StringID]*tld{},
 		imports:          map[string]*imported{},
 		intType:          intType,
+		ptrSize:          t.cfg.ABI.Types[cc.Ptr].Size,
 		scope:            newScope(),
 		sharedFns:        t.cfg.SharedFunctionDefinitions.M,
 		sharedFnsEmitted: map[*cc.FunctionDefinition]struct{}{},
@@ -1776,7 +1772,8 @@ func (p *project) typeSignature2(n cc.Node, b *maphash.Hash, t cc.Type) {
 		fmt.Fprintf(b, "*%s", t.Elem())
 	case cc.Array:
 		if t.IsVLA() {
-			p.err(n, "unsupported C type: %v", t)
+			// trc("VLA")
+			p.err(n, "variable length arrays not supported: %v", t)
 		}
 
 		fmt.Fprintf(b, "[%d]%s", t.Len(), t.Elem())
@@ -2072,6 +2069,7 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 
 	b := bytesBufferPool.Get().(*bytes.Buffer)
 	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
+	t = unionDecay(t)
 	if t.IsIntegerType() {
 		switch t.Kind() {
 		case cc.Int128:
@@ -2101,10 +2099,12 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 		return "float32"
 	case cc.Array:
 		n := t.Len()
-		if t.IsVLA() {
-			p.err(nd, "unsupported C type: %v", t)
+		switch {
+		case t.IsVLA():
+			fmt.Fprintf(b, "uintptr")
+		default:
+			fmt.Fprintf(b, "[%d]%s", n, p.typ(nd, t.Elem()))
 		}
-		fmt.Fprintf(b, "[%d]%s", n, p.typ(nd, t.Elem()))
 		return b.String()
 	case cc.Vector:
 		n := t.Len()
@@ -2125,6 +2125,38 @@ func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 	}
 
 	panic(todo("", p.pos(nd), t.Kind(), t))
+}
+
+func unionDecay(t cc.Type) cc.Type {
+	if t.Kind() != cc.Union || !isScalarKind(t.UnionCommon()) {
+		return t
+	}
+
+	if nf := t.NumField(); nf > 1 {
+		for i := []int{0}; i[0] < nf; i[0]++ {
+			if f := t.FieldByIndex(i); f.IsBitField() {
+				return t
+			}
+		}
+	}
+	return t.FieldByIndex([]int{0}).Type()
+}
+
+func isScalarKind(k cc.Kind) bool {
+	switch k {
+	case
+		cc.Char, cc.SChar, cc.UChar,
+		cc.Short, cc.UShort,
+		cc.Int, cc.UInt,
+		cc.Long, cc.ULong,
+		cc.LongLong, cc.ULongLong,
+		cc.Float, cc.Double,
+		cc.Ptr:
+
+		return true
+	}
+
+	return false
 }
 
 func (p *project) layoutTLDs() error {
@@ -2516,6 +2548,9 @@ package %s
 			p.o("\t%q\n", v.path)
 		}
 	}
+	if p.task.crtImportPath != "" {
+		p.o("\t%q\n", p.task.crtImportPath+"/sys/types")
+	}
 	p.o(`)
 
 var _ = math.Pi
@@ -2523,6 +2558,9 @@ var _ reflect.Kind
 var _ atomic.Value
 var _ unsafe.Pointer
 `)
+	if p.task.crtImportPath != "" {
+		p.o("var _ types.Size_t\n")
+	}
 	if p.isMain {
 		p.o(`
 func main() { %sStart(%s) }`, p.task.crt, p.mainName)
@@ -2845,14 +2883,30 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 	}
 
 	block := f.block
+	t := d.Type()
+	vla := t.Kind() == cc.Array && t.IsVLA()
+	if vla && p.pass1 {
+		f.vlas[d] = struct{}{}
+		return
+	}
+
 	switch n.Case {
 	case cc.InitDeclaratorDecl: // Declarator AttributeSpecifierList
 		if block.noDecl || block.topDecl && !topDecl {
 			return
 		}
 
-		p.initDeclaratorDecl(f, n, sep)
+		switch {
+		case vla:
+			p.initDeclaratorDeclVLA(f, n, sep)
+		default:
+			p.initDeclaratorDecl(f, n, sep)
+		}
 	case cc.InitDeclaratorInit: // Declarator AttributeSpecifierList '=' Initializer
+		if vla {
+			panic(todo(""))
+		}
+
 		if f.block.topDecl {
 			switch {
 			case topDecl:
@@ -2943,6 +2997,27 @@ func (p *project) isConditionalAssignmentExpr(n *cc.AssignmentExpression) bool {
 		n.ConditionalExpression.Case == cc.ConditionalExpressionCond
 }
 
+func (p *project) initDeclaratorDeclVLA(f *function, n *cc.InitDeclarator, sep string) {
+	d := n.Declarator
+	local := f.locals[d]
+	if strings.TrimSpace(sep) == "" {
+		sep = "\n"
+	}
+	if local.isPinned {
+		panic(todo(""))
+		p.w("%s// var %s %s at %s%s, %d\n", sep, local.name, p.typ(n, d.Type()), f.bpName, nonZeroUintptr(local.off), d.Type().Size())
+		return
+	}
+
+	p.w("%s%s = %sXrealloc(%s, %s, types.Size_t(", sep, local.name, p.task.crt, f.tlsName, local.name)
+	e := d.Type().LenExpr()
+	p.assignmentExpression(f, e, e.Operand.Type(), exprValue, fOutermost)
+	if sz := d.Type().Elem().Size(); sz != 1 {
+		p.w("*%d", sz)
+	}
+	p.w("));")
+}
+
 func (p *project) initDeclaratorDecl(f *function, n *cc.InitDeclarator, sep string) {
 	d := n.Declarator
 	local := f.locals[d]
@@ -2983,13 +3058,25 @@ func (p *project) declaratorDecay(n cc.Node, f *function, d *cc.Declarator, t cc
 
 	if f != nil {
 		if local := f.locals[d]; local != nil {
+			if d.Type().IsVLA() {
+				switch {
+				case local.isPinned:
+					panic(todo(""))
+				default:
+					p.w("%s", local.name)
+					return
+				}
+			}
+
 			if d.IsParameter {
 				p.w("%s", local.name)
 				return
 			}
 
 			if p.pass1 {
-				f.pin(d)
+				if !d.Type().IsVLA() {
+					f.pin(d)
+				}
 				return
 			}
 
@@ -3404,6 +3491,7 @@ func (p *project) declaratorAddrOf(n cc.Node, f *function, d *cc.Declarator, t c
 
 func (p *project) declaratorAddrOfArrayParameter(n cc.Node, f *function, d *cc.Declarator) {
 	if p.pass1 {
+		// trc("PIN %v", d.Position())
 		f.pin(d)
 		return
 	}
@@ -3443,6 +3531,7 @@ func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if p.pass1 {
+				// trc("PIN %v", d.Position())
 				f.pin(d)
 				return
 			}
@@ -3476,6 +3565,7 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if p.pass1 && flags&fAddrOfFuncPtrOk == 0 {
+				// trc("PIN %v", d.Position())
 				f.pin(d)
 				return
 			}
@@ -3518,6 +3608,7 @@ func (p *project) declaratorAddrOfArray(n cc.Node, f *function, d *cc.Declarator
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if p.pass1 {
+				// trc("PIN %v", d.Position())
 				f.pin(d)
 				return
 			}
@@ -3824,8 +3915,14 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 		}
 
 		panic(todo("%v: %q -> %q", p.pos(n), from, to))
-	case cc.Function, cc.Struct, cc.Union:
+	case cc.Function, cc.Struct:
 		if !force && from.Kind() == to.Kind() {
+			return ""
+		}
+
+		panic(todo("%q -> %q", from, to))
+	case cc.Union:
+		if !force && from.Kind() == to.Kind() || unionDecay(from).Kind() == to.Kind() {
 			return ""
 		}
 
@@ -4240,6 +4337,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	p.functionDefinitionSignature(f, tld)
 	p.w(" ")
 	comment := fmt.Sprintf("/* %v: */", p.pos(d))
+	brace := "{"
 	if need := f.off; need != 0 {
 		scope := f.blocks[n.CompoundStatement].scope
 		f.bpName = scope.take(idBp)
@@ -4251,6 +4349,36 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 			}
 		}
 		comment = ""
+		brace = ""
+	}
+	if len(f.vlas) != 0 {
+		p.w("%s%s\n", brace, comment)
+		var vlas []*cc.Declarator
+		for k := range f.vlas {
+			vlas = append(vlas, k)
+		}
+		sort.Slice(vlas, func(i, j int) bool {
+			return vlas[i].NameTok().Seq() < vlas[j].NameTok().Seq()
+		})
+		for _, v := range vlas {
+			local := f.locals[v]
+			switch {
+			case local.isPinned:
+				panic(todo("", v.Position()))
+			default:
+				p.w("var %s uintptr // %v: %v\n", local.name, p.pos(v), v.Type())
+			}
+		}
+		switch {
+		case len(vlas) == 1:
+			p.w("defer %sXfree(%s, %s)\n", p.task.crt, f.tlsName, f.locals[vlas[0]].name)
+		default:
+			p.w("defer func() {\n")
+			for _, v := range vlas {
+				p.w("%sXfree(%s, %s)\n", p.task.crt, f.tlsName, f.locals[v].name)
+			}
+			p.w("\n}()\n")
+		}
 	}
 	p.compoundStatement(f, n.CompoundStatement, comment, false, true, 0)
 	p.w(";")
@@ -4275,7 +4403,7 @@ func (p *project) flushStaticTLDs() {
 func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomment string, forceNoBraces, fnBody bool, mode exprMode) {
 	// '{' BlockItemList '}'
 	brace := (!n.IsJumpTarget() || n.Parent() == nil) && !forceNoBraces
-	if brace && (n.Parent() != nil || f.off == 0) {
+	if brace && len(f.vlas) == 0 && (n.Parent() != nil || f.off == 0) {
 		p.w("{%s", scomment)
 	}
 	if fnBody {
@@ -9839,7 +9967,7 @@ func (p *project) postfixExpressionValueIndexNormal(f *function, n *cc.PostfixEx
 			}
 			p.w("))")
 		default:
-			panic(todo("", p.pos(n), pe))
+			panic(todo("", p.pos(n), pe, pe.Kind()))
 		}
 	}
 }
@@ -10774,10 +10902,7 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 		}
 		switch {
 		case i < len(params):
-			t := arg.Promote()
-			if t.Kind() == cc.Union && t.UnionCommon() == cc.Ptr {
-				t = t.FieldByIndex([]int{0}).Type()
-			}
+			t := unionDecay(arg.Promote())
 			p.assignmentExpression(f, arg, t, mode, fOutermost)
 		case va && i == len(params):
 			p.w("%sVaList(%s%s, ", p.task.crt, f.bpName, nonZeroUintptr(bpOff))
@@ -10814,16 +10939,17 @@ func (p *project) nzUintptr(n cc.Node, f func(), op cc.Operand) {
 		case op.Value() != nil:
 			switch x := op.Value().(type) {
 			case cc.Int64Value:
-				if x > 0 {
+				if x > 0 && uint64(x) <= 1<<(8*p.ptrSize)-1 {
 					p.w("+%d", x)
 					return
 				}
 			case cc.Uint64Value:
-				if x > 0 {
+				if uint64(x) <= 1<<(8*p.ptrSize)-1 {
 					p.w("+%d", x)
 					return
 				}
 			}
+
 			p.w(" +%sUintptrFrom%s(", p.task.crt, p.helperType(n, op.Type()))
 		default:
 			p.w(" +uintptr(")
@@ -11594,10 +11720,10 @@ func (p *project) assignOp(f *function, n *cc.AssignmentExpression, t cc.Type, m
 	switch mode {
 	case exprVoid:
 		p.assignOpVoid(f, n, t, mode, oper, oper2, flags)
-	case exprValue:
+	case exprValue, exprCondReturn:
 		p.assignOpValue(f, n, t, mode, oper, oper2, flags)
 	default:
-		panic(todo("", mode))
+		panic(todo("", n.Position(), mode))
 	}
 }
 
@@ -12394,7 +12520,7 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 }
 
 func (p *project) paramTyp(t cc.Type) string {
-	if t.Kind() == cc.Array || t.Kind() == cc.Union && t.UnionCommon() == cc.Ptr {
+	if t.Kind() == cc.Array {
 		return "uintptr"
 	}
 

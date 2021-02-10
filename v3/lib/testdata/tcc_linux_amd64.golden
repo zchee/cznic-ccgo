@@ -57,6 +57,8 @@
 71_macro_empty_arg.c
 72_long_long_constant.c
 75_array_in_struct_init.c
+78_vla_label.c
+79_vla_continue.c
 82_attribs_position.c
 83_utf8_in_identifiers.c
 84_hex-float.c

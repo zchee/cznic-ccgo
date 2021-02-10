@@ -215,8 +215,6 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 
 		"40_stdio.c":                {}, //TODO
 		"73_arm64.c":                {}, //TODO struct varargs
-		"78_vla_label.c":            {}, //TODO VLA
-		"79_vla_continue.c":         {}, //TODO VLA
 		"80_flexarray.c":            {}, //TODO Flexible array member
 		"85_asm-outside-function.c": {}, //TODO
 		"87_dead_code.c":            {}, //TODO expression statement
@@ -548,7 +546,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20040709-1.c":                 {}, //TODO
 		"20040709-2.c":                 {}, //TODO
 		"20040709-3.c":                 {}, //TODO
-		"20040811-1.c":                 {}, //TODO
 		"20041011-1.c":                 {}, //TODO 48:1: unsupported volatile declarator size: 128
 		"20041214-1.c":                 {}, //TODO
 		"20041218-2.c":                 {}, //TODO
@@ -581,10 +578,8 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"920501-7.c":                   {}, //TODO
 		"920612-2.c":                   {}, //TODO
 		"920625-1.c":                   {}, //TODO
-		"920721-2.c":                   {}, //TODO
 		"920721-4.c":                   {}, //TODO
 		"920908-1.c":                   {}, //TODO
-		"920929-1.c":                   {}, //TODO
 		"921017-1.c":                   {}, //TODO
 		"921202-1.c":                   {}, //TODO
 		"921208-2.c":                   {}, //TODO
@@ -604,7 +599,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"960312-1.c":                   {}, //TODO
 		"960416-1.c":                   {}, //TODO
 		"960512-1.c":                   {}, //TODO
-		"970217-1.c":                   {}, //TODO
+		"970217-1.c":                   {}, //TODO VLA paramater
 		"980526-1.c":                   {}, //TODO
 		"990130-1.c":                   {}, //TODO
 		"990208-1.c":                   {}, //TODO
@@ -716,7 +711,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr41935.c":                    {}, //TODO
 		"pr42248.c":                    {}, //TODO
 		"pr42570":                      {}, //TODO uint8_t foo[1][0];
-		"pr43220.c":                    {}, //TODO
 		"pr43385.c":                    {}, //TODO
 		"pr43560.c":                    {}, //TODO
 		"pr44575.c":                    {}, //TODO
@@ -765,7 +759,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr71626-1.c":                  {}, //TODO
 		"pr71626-2.c":                  {}, //TODO
 		"pr72824-2.c":                  {}, //TODO
-		"pr77767.c":                    {}, //TODO
+		"pr77767.c":                    {}, //TODO VLA parameter
 		"pr78438.c":                    {}, //TODO
 		"pr78559.c":                    {}, //TODO
 		"pr78726.c":                    {}, //TODO
@@ -804,7 +798,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"va-arg-2.c":                   {}, //TODO
 		"va-arg-22.c":                  {}, //TODO
 		"va-arg-pack-1.c":              {}, //TODO
-		"vla-dealloc-1.c":              {}, //TODO
 		"widechar-1.c":                 {}, //TODO
 		"widechar-3.c":                 {}, //TODO
 
