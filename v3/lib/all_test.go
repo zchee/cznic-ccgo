@@ -557,6 +557,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20050607-1.c":                 {}, //TODO
 		"20050929-1.c":                 {}, //TODO
 		"20051012-1.c":                 {}, //TODO
+		"20060420-1.c":                 {}, //TODO sizeof vector
 		"20061220-1.c":                 {}, //TODO
 		"20070614-1.c":                 {}, //TODO
 		"20070824-1.c":                 {}, //TODO
@@ -567,6 +568,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20071220-2.c":                 {}, //TODO
 		"20080502-1.c":                 {}, //TODO
 		"20090219-1.c":                 {}, //TODO
+		"20100430-1.c":                 {}, //TODO unsupported attribute: packed
 		"20180921-1.c":                 {}, //TODO
 		"920302-1.c":                   {}, //TODO
 		"920415-1.c":                   {}, //TODO

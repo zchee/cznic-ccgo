@@ -141,7 +141,6 @@ typedef struct { __UINT64_TYPE__ lo, hi; } __uint128_t; // must match modernc.or
 #define __FUNCTION__ __func__
 #define __PRETTY_FUNCTION__ __func__
 #define __asm __asm__
-#define __attribute__(...)
 #define __builtin_constant_p(x) __builtin_constant_p_impl(0, x)
 #define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_va_arg(ap, type) ((type)__ccgo_va_arg(ap))

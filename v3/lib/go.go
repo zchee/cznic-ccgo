@@ -41,6 +41,7 @@ var (
 	idPacked               = cc.String("packed")                 // __attribute__((packed))
 	idSubOverflow          = cc.String("__builtin_sub_overflow") // bool __builtin_sub_overflow (type1 a, type2 b, type3 *res)
 	idTls                  = cc.String("tls")
+	idTransparentUnion     = cc.String("__transparent_union__")
 	idTs                   = cc.String("ts")
 	idVa                   = cc.String("va")
 	idVaArg                = cc.String("__ccgo_va_arg")
@@ -393,6 +394,41 @@ func tokenSeparator(n cc.Node) (r string) {
 		return true
 	})
 	return tok.Sep.String()
+}
+
+func source(n ...cc.Node) (r string) {
+	if len(n) == 0 {
+		return "<nil>"
+	}
+
+	var a []*cc.Token
+	for _, v := range n {
+		cc.Inspect(v, func(n cc.Node, _ bool) bool {
+			if x, ok := n.(*cc.Token); ok && x.Seq() != 0 {
+				a = append(a, x)
+			}
+			return true
+		})
+	}
+	sort.Slice(a, func(i, j int) bool {
+		return a[i].Seq() < a[j].Seq()
+	})
+	w := 0
+	seq := -1
+	for _, v := range a {
+		if n := v.Seq(); n != seq {
+			seq = n
+			a[w] = v
+			w++
+		}
+	}
+	a = a[:w]
+	var b strings.Builder
+	for _, v := range a {
+		b.WriteString(v.Sep.String())
+		b.WriteString(v.Src.String())
+	}
+	return b.String()
 }
 
 type initPatch struct {
@@ -2377,7 +2413,6 @@ func (p *project) layoutTLDs() error {
 }
 
 func (p *project) checkAttributes(t cc.Type) (r bool) {
-	//TODO typedefs seem to not have attributes set from cc/v3
 	r = true
 	for _, v := range t.Attributes() {
 		cc.Inspect(v, func(n cc.Node, entry bool) bool {
@@ -2391,10 +2426,10 @@ func (p *project) checkAttributes(t cc.Type) (r bool) {
 					break
 				}
 
-				switch v := x.ExpressionList.AssignmentExpression.Operand.Value().(type) {
-				default:
-					panic(todo("%T(%v)", v, v))
-				}
+				//TODO switch v := x.ExpressionList.AssignmentExpression.Operand.Value().(type) {
+				//TODO default:
+				//TODO 	panic(todo("%T(%v)", v, v))
+				//TODO }
 			}
 			return true
 		})
@@ -10880,8 +10915,12 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 		}
 		switch {
 		case i < len(params):
-			t := arg.Promote()
-			p.assignmentExpression(f, arg, t, mode, fOutermost)
+			switch pt := params[i].Type(); {
+			case isTransparentUnion(params[i].Type()):
+				p.callArgTransparentUnion(f, arg, pt)
+			default:
+				p.assignmentExpression(f, arg, arg.Promote(), mode, fOutermost)
+			}
 		case va && i == len(params):
 			p.w("%sVaList(%s%s, ", p.task.crt, f.bpName, nonZeroUintptr(bpOff))
 			paren = ")"
@@ -10907,6 +10946,105 @@ func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, 
 		p.w(", 0")
 	}
 	p.w("%s)", paren)
+}
+
+// https://gcc.gnu.org/onlinedocs/gcc-3.3/gcc/Type-Attributes.html
+//
+// transparent_union
+//
+// This attribute, attached to a union type definition, indicates that any
+// function parameter having that union type causes calls to that function to
+// be treated in a special way.
+//
+// First, the argument corresponding to a transparent union type can be of any
+// type in the union; no cast is required. Also, if the union contains a
+// pointer type, the corresponding argument can be a null pointer constant or a
+// void pointer expression; and if the union contains a void pointer type, the
+// corresponding argument can be any pointer expression. If the union member
+// type is a pointer, qualifiers like const on the referenced type must be
+// respected, just as with normal pointer conversions.
+//
+// Second, the argument is passed to the function using the calling conventions
+// of first member of the transparent union, not the calling conventions of the
+// union itself. All members of the union must have the same machine
+// representation; this is necessary for this argument passing to work
+// properly.
+//
+// Transparent unions are designed for library functions that have multiple
+// interfaces for compatibility reasons. For example, suppose the wait function
+// must accept either a value of type int * to comply with Posix, or a value of
+// type union wait * to comply with the 4.1BSD interface. If wait's parameter
+// were void *, wait would accept both kinds of arguments, but it would also
+// accept any other pointer type and this would make argument type checking
+// less useful. Instead, <sys/wait.h> might define the interface as follows:
+//
+//	typedef union
+//		{
+//			int *__ip;
+//			union wait *__up;
+//		} wait_status_ptr_t __attribute__ ((__transparent_union__));
+//
+//	pid_t wait (wait_status_ptr_t);
+//
+// This interface allows either int * or union wait * arguments to be passed,
+// using the int * calling convention. The program can call wait with arguments
+// of either type:
+//
+//	int w1 () { int w; return wait (&w); }
+//	int w2 () { union wait w; return wait (&w); }
+//
+// With this interface, wait's implementation might look like this:
+//
+//	pid_t wait (wait_status_ptr_t p)
+//	{
+//		return waitpid (-1, p.__ip, 0);
+//	}
+func (p *project) callArgTransparentUnion(f *function, n *cc.AssignmentExpression, pt cc.Type) {
+	if pt.Kind() != cc.Union {
+		panic(todo("internal error"))
+	}
+
+	ot := n.Operand.Type()
+	switch k := pt.UnionCommon(); k {
+	case cc.Ptr:
+		if ot.Kind() != k {
+			panic(todo("", n.Position(), k, pt))
+		}
+
+		p.assignmentExpression(f, n, ot, exprValue, fOutermost)
+	default:
+		panic(todo("", n.Position(), k, pt))
+	}
+}
+
+func isTransparentUnion(t cc.Type) (r bool) {
+	for _, v := range attrs(t) {
+		cc.Inspect(v, func(n cc.Node, _ bool) bool {
+			if x, ok := n.(*cc.AttributeValue); ok && x.Token.Value == idTransparentUnion {
+				r = true
+				return false
+			}
+
+			return true
+		})
+	}
+	return r
+}
+
+func attrs(t cc.Type) []*cc.AttributeSpecifier {
+	if a := t.Attributes(); len(a) != 0 {
+		return a
+	}
+
+	if t.IsAliasType() {
+		if a := t.Alias().Attributes(); len(a) != 0 {
+			return a
+		}
+
+		return t.AliasDeclarator().Type().Attributes()
+	}
+
+	return nil
 }
 
 func (p *project) nzUintptr(n cc.Node, f func(), op cc.Operand) {
@@ -12481,7 +12619,7 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 				}
 			}
 		}
-		p.w(", %s %s", pn, p.paramTyp(v.Type()))
+		p.w(", %s %s", pn, p.paramTyp(v.Declarator(), v.Type()))
 	}
 	if t.IsVariadic() {
 		switch {
@@ -12497,9 +12635,18 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 	}
 }
 
-func (p *project) paramTyp(t cc.Type) string {
+func (p *project) paramTyp(n cc.Node, t cc.Type) string {
 	if t.Kind() == cc.Array {
 		return "uintptr"
+	}
+
+	if isTransparentUnion(t) {
+		switch k := t.UnionCommon(); k {
+		case cc.Ptr:
+			return "uintptr"
+		default:
+			panic(todo("%v: %v %k", n, t, k))
+		}
 	}
 
 	return p.typ(nil, t)
