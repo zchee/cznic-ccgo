@@ -1,6 +1,10 @@
-# ccgo
+# ccgo/v1
 
 Package ccgo translates [cc](https://modernc.org/cc/) ASTs to Go. (Work In Progress)
+
+The v1 and v2 versions are no longer maintained. Please see the v3 version at
+
+	https://modernc.org/ccgo/v3
 
 Installation
 

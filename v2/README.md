@@ -1,6 +1,10 @@
-# ccgo
+# ccgo/v2
 
 Package ccgo translates c99 ASTs to Go. Work In Progress. API unstable.
+
+The v1 and v2 versions are no longer maintained. Please see the v3 version at
+
+	https://modernc.org/ccgo/v3
 
 ### Installation
 

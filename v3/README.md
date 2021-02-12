@@ -1,7 +1,6 @@
-# ccgo
+# ccgo/v3
 
-Command ccgo is an experimental C99 compiler targeting Go. Work in
-progress.
+Command ccgo is a C compiler targeting Go.
 
 Installation
 

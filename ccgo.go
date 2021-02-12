@@ -6,9 +6,9 @@
 //
 // Changelog
 //
-// 2018-07-01 This package is no longer maintained. Please see the v2 version at
+// 2018-07-01 This package is no longer maintained. Please see the v3 version at
 //
-//	https://modernc.org/ccgo/v2
+//	https://modernc.org/ccgo/v3
 //
 // 2018-04-10: This code no longer passes tests and soon it will not even build
 // due to the upcoming changes in cznic/crt. For that reason the current crt

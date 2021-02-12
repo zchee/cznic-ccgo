@@ -3,6 +3,10 @@
 // license that can be found in the LICENSE file.
 
 // Package ccgo translates C99 ASTs to Go source code. Work In Progress. API unstable.
+//
+// This package is no longer maintained. Please see the v3 version at
+//
+//	https://modernc.org/ccgo/v3
 package ccgo // import "modernc.org/ccgo/v2"
 
 //TODO must respect 'volatile' -> use sync.Atomic
