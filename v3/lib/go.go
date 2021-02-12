@@ -9253,7 +9253,7 @@ func (p *project) postfixExpressionSelect(f *function, n *cc.PostfixExpression, 
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
 		p.postfixExpressionSelectIndex(f, n, t, mode, flags)
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-		panic(todo("", p.pos(n)))
+		p.postfixExpression(f, n, t, exprValue, flags)
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 		p.postfixExpressionSelectSelect(f, n, t, mode, flags)
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER

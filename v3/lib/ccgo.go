@@ -37,7 +37,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.13"
+const Version = "3.8.14"
 
 //TODO CPython
 //TODO Cython
@@ -51,9 +51,9 @@ const Version = "3.8.13"
 //TODO pcre2
 //TODO quickjs
 //TODO redis
+//TODO sdl2
 //TODO wolfssl
 //TODO zdat
-//TODO zlib
 //TODO zstd
 
 //TODO 2020-07-17
@@ -385,6 +385,14 @@ func env(name, deflt string) (r string) {
 
 // Get exported symbols from package having import path 'path'.
 func (t *Task) capi(path string) (pkgName string, exports map[string]struct{}, err error) {
+	// defer func() {
+	// 	var a []string
+	// 	for k := range exports {
+	// 		a = append(a, k)
+	// 	}
+	// 	sort.Strings(a)
+	// 	trc("%s\n%s", path, strings.Join(a, "\n"))
+	// }()
 	var errModule, errGopath error
 	defer func() {
 		if err != nil {
@@ -403,32 +411,35 @@ func (t *Task) capi(path string) (pkgName string, exports map[string]struct{}, e
 		}
 	}()
 
-	var pkgs []*packages.Package
-	pkgs, errModule = packages.Load(
-		&packages.Config{
-			Mode: packages.NeedFiles,
-			Env:  append(os.Environ(), fmt.Sprintf("GOOS=%s", t.goos), fmt.Sprintf("GOARCH=%s", t.goarch)),
-		},
-		path,
-	)
-	switch {
-	case errModule == nil:
-		if len(pkgs) != 1 {
-			errModule = fmt.Errorf("expected one package, loaded %d", len(pkgs))
-			break
-		}
-
-		pkg := pkgs[0]
-		if len(pkg.Errors) != 0 {
-			var a []string
-			for _, v := range pkg.Errors {
-				a = append(a, v.Error())
+	mod := os.Getenv("GO111MODULE")
+	if mod == "" || mod == "on" {
+		var pkgs []*packages.Package
+		pkgs, errModule = packages.Load(
+			&packages.Config{
+				Mode: packages.NeedFiles,
+				Env:  append(os.Environ(), fmt.Sprintf("GOOS=%s", t.goos), fmt.Sprintf("GOARCH=%s", t.goarch)),
+			},
+			path,
+		)
+		switch {
+		case errModule == nil:
+			if len(pkgs) != 1 {
+				errModule = fmt.Errorf("expected one package, loaded %d", len(pkgs))
+				break
 			}
-			errModule = fmt.Errorf("%s", strings.Join(a, "\n"))
-			break
-		}
 
-		return t.capi2(pkg.GoFiles)
+			pkg := pkgs[0]
+			if len(pkg.Errors) != 0 {
+				var a []string
+				for _, v := range pkg.Errors {
+					a = append(a, v.Error())
+				}
+				errModule = fmt.Errorf("%s", strings.Join(a, "\n"))
+				break
+			}
+
+			return t.capi2(pkg.GoFiles)
+		}
 	}
 
 	gopath0 := os.Getenv("GOPATH")
