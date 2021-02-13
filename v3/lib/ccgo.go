@@ -37,7 +37,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.14"
+const Version = "3.8.15"
 
 //TODO CPython
 //TODO Cython
@@ -258,6 +258,9 @@ func todo(s string, args ...interface{}) string { //TODO-
 		}
 	}
 	r := fmt.Sprintf("%s:%d:%s: TODOTODO %s", fn, fl, fns, s) //TODOOK
+	if dmesgs {
+		dmesg("%v: %v", origin(1), r)
+	}
 	fmt.Fprintf(os.Stdout, "%s\n", r)
 	os.Stdout.Sync()
 	return r
@@ -347,6 +350,9 @@ type Task struct {
 
 // NewTask returns a newly created Task.
 func NewTask(args []string, stdout, stderr io.Writer) *Task {
+	if dmesgs {
+		dmesg("%v: %v", origin(1), args)
+	}
 	if stdout == nil {
 		stdout = os.Stdout
 	}
@@ -527,6 +533,11 @@ func (t *Task) capi2(files []string) (pkgName string, exports map[string]struct{
 
 // Main executes task.
 func (t *Task) Main() (err error) {
+	if dmesgs {
+		if err != nil {
+			dmesg("%v: returning from Task.Main: %v", origin(1), err)
+		}
+	}
 	opts := opt.NewSet()
 	opts.Arg("D", true, func(arg, value string) error { t.D = append(t.D, value); return nil })
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
@@ -912,9 +923,6 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 
 	cdb := map[string]*cdbItem{}
 	for i, v := range items {
-		if dmesgs {
-			dmesg("item %q", v)
-		}
 		if len(v.Arguments) == 0 {
 			if len(v.Command) == 0 {
 				return fmt.Errorf("either arguments or command is required: %+v", v)
@@ -926,15 +934,9 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 		}
 		if s := v.output(t.cc); s != "" {
 			if cdb[s] != nil {
-				if dmesgs {
-					dmesg("multiples outputs: %s", s)
-				}
 				return fmt.Errorf("multiple outputs: %s", s)
 			}
 
-			if dmesgs {
-				dmesg("adding output: %s", s)
-			}
 			cdb[s] = &items[i]
 		}
 	}
@@ -1062,15 +1064,21 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 		cmd = exec.Command(strace, argv...)
 		parser = straceParser
 	}
-	// trc("%q", cmd.Args) //TODO-
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	cmd.Stdout = t.newCdbMakeWriter(w, cwd, parser)
+	cw := t.newCdbMakeWriter(w, cwd, parser)
+	cmd.Stdout = cw
 	cmd.Stderr = cmd.Stdout
+	if dmesgs {
+		dmesg("%v: %v", origin(1), cmd.Args)
+	}
 	if err := cmd.Run(); err != nil {
+		if dmesgs {
+			dmesg("%v: cmd.Run: %v", origin(1), err)
+		}
 		return err
 	}
 
-	return nil
+	return cw.err
 }
 
 func makeDParser(w *cdbMakeWriter, s string) (bool, error) {
@@ -1180,6 +1188,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 		set.Opt("c", func(opt string) error { return nil })
 		set.Opt("g", func(opt string) error { return nil })
 		set.Opt("pipe", func(opt string) error { return nil })
+		set.Opt("pthread", func(opt string) error { return nil })
 		if err := set.Parse(it.Arguments[1:], func(arg string) error {
 			switch {
 			case strings.HasSuffix(arg, ".c"):
@@ -1276,6 +1285,7 @@ type cdbMakeWriter struct {
 	cc    string
 	cc2   string // cc + " "
 	dir   string
+	err   error
 	it    cdbItem
 	parse func(w *cdbMakeWriter, s string) (bool, error)
 	sc    *bufio.Scanner
@@ -1297,6 +1307,12 @@ func (t *Task) newCdbMakeWriter(w io.Writer, dir string, parse func(w *cdbMakeWr
 	r.sc = bufio.NewScanner(&r.b)
 	r.sc.Buffer(make([]byte, sz), sz)
 	return r
+}
+
+func (w *cdbMakeWriter) fail(err error) {
+	if w.err == nil {
+		w.err = err
+	}
 }
 
 func (w *cdbMakeWriter) Write(b []byte) (int, error) {
@@ -1325,7 +1341,8 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 			s = `"` + s + `"`
 			dir, err := strconv.Unquote(s)
 			if err != nil {
-				return 0, err
+				w.fail(err)
+				continue
 			}
 
 			dir = filepath.Clean(dir)
@@ -1340,7 +1357,8 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 
 		ok, err := w.parse(w, s)
 		if err != nil {
-			return 0, err
+			w.fail(err)
+			continue
 		}
 
 		if !ok {
@@ -1355,16 +1373,19 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 			s = ",\n    "
 		}
 		if _, err := w.w.Write([]byte(s)); err != nil {
-			return 0, err
+			w.fail(err)
+			continue
 		}
 
 		b, err := json.MarshalIndent(&w.it, "    ", "    ")
 		if err != nil {
-			return 0, err
+			w.fail(err)
+			continue
 		}
 
 		if _, err := w.w.Write(b); err != nil {
-			return 0, err
+			w.fail(err)
+			continue
 		}
 
 		w.first = false
@@ -1392,8 +1413,6 @@ func (w *cdbMakeWriter) gccMakeX(s string) error {
 			}
 
 			w.it.File = v
-		case strings.HasSuffix(v, ".h"):
-			return fmt.Errorf("unexpected .h file: %s", v)
 		}
 	}
 	w.it.output(w.cc)
@@ -1454,8 +1473,6 @@ func (w *cdbMakeWriter) gccStrace(args []string) error {
 			}
 
 			w.it.File = filepath.Clean(v)
-		case strings.HasSuffix(v, ".h"):
-			return fmt.Errorf("unexpected .h file: %s", v)
 		}
 	}
 	w.it.output(w.cc)
