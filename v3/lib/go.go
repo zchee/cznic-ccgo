@@ -28,9 +28,10 @@ import (
 
 var (
 	idAddOverflow          = cc.String("__builtin_add_overflow") // bool __builtin_add_overflow (type1 a, type2 b, type3 *res)
-	idAligned              = cc.String("aligned")                // int __attribute__ ((aligned (8))) foo;
-	idAtomicLoadN          = cc.String("__atomic_load_n")        // type __atomic_load_n (type *ptr, int memorder)
-	idAtomicStoreN         = cc.String("__atomic_store_n")       // void __atomic_store_n (type *ptr, type val, int memorder)
+	idAlias                = cc.String("alias")
+	idAligned              = cc.String("aligned")          // int __attribute__ ((aligned (8))) foo;
+	idAtomicLoadN          = cc.String("__atomic_load_n")  // type __atomic_load_n (type *ptr, int memorder)
+	idAtomicStoreN         = cc.String("__atomic_store_n") // void __atomic_store_n (type *ptr, type val, int memorder)
 	idBp                   = cc.String("bp")
 	idBuiltinConstantPImpl = cc.String("__builtin_constant_p_impl")
 	idCAPI                 = cc.String("CAPI")
@@ -641,7 +642,7 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 		case *cc.CastExpression:
 			switch x.Case {
 			case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
-				if x.TypeName.Type().Kind() != cc.Void {
+				if t := x.TypeName.Type(); t != nil && t.Kind() != cc.Void {
 					break
 				}
 
@@ -2269,7 +2270,6 @@ func (p *project) layoutTLDs() error {
 			return a[i].NameTok().Seq() < a[j].NameTok().Seq()
 		})
 		for _, d := range a {
-
 			switch d.Type().Kind() {
 			case cc.Struct, cc.Union:
 				p.checkAttributes(d.Type())
@@ -2329,7 +2329,6 @@ func (p *project) layoutTLDs() error {
 					}
 				}
 			case cc.None:
-
 				if d.IsTypedefName {
 					if d.Type().IsIncomplete() {
 						break
@@ -4238,8 +4237,39 @@ func nonZeroUintptr(n uintptr) string {
 	return fmt.Sprintf("%+d", n)
 }
 
+func alias(attr []*cc.AttributeSpecifier) (r cc.StringID) {
+	for _, v := range attr {
+		cc.Inspect(v, func(n cc.Node, entry bool) bool {
+			if !entry {
+				return true
+			}
+
+			if x, ok := n.(*cc.AttributeValue); ok && x.Token.Value == idAlias {
+				switch y := x.ExpressionList.AssignmentExpression.Operand.Value().(type) {
+				case cc.StringValue:
+					r = cc.StringID(y)
+					return false
+				}
+			}
+			return true
+		})
+		if r != 0 {
+			return r
+		}
+	}
+	return 0
+}
+
 func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal bool) {
 	d := n.Declarator
+	if d.IsExtern() && d.Linkage == cc.External && !d.IsTypedefName {
+		if alias := alias(attrs(d.Type())); alias != 0 {
+			p.capi = append(p.capi, d.Name().String())
+			p.w("\n\nvar %s%s = %s\t// %v:\n", p.task.exportExterns, d.Name(), p.externs[alias].name, p.pos(d))
+			return
+		}
+	}
+
 	if _, ok := p.wanted[d]; !ok && !staticLocal {
 		return
 	}
@@ -4350,6 +4380,11 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	p.functionDefinitionSignature(f, tld)
 	p.w(" ")
 	comment := fmt.Sprintf("/* %v: */", p.pos(d))
+	if p.task.panicStubs {
+		p.w("%s{ panic(%q) }", comment, tld.name)
+		return
+	}
+
 	brace := "{"
 	if need := f.off; need != 0 {
 		scope := f.blocks[n.CompoundStatement].scope
@@ -4414,6 +4449,10 @@ func (p *project) flushStaticTLDs() {
 }
 
 func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomment string, forceNoBraces, fnBody bool, mode exprMode) {
+	if p.task.panicStubs {
+		return
+	}
+
 	// '{' BlockItemList '}'
 	brace := (!n.IsJumpTarget() || n.Parent() == nil) && !forceNoBraces
 	if brace && len(f.vlas) == 0 && (n.Parent() != nil || f.off == 0) {
@@ -11518,8 +11557,10 @@ func (p *project) charConst(n cc.Node, src string, op cc.Operand, to cc.Type, fl
 	switch {
 	case to.IsArithmeticType():
 		defer p.w("%s", p.convert(n, op, to, flags))
+	case to.Kind() == cc.Ptr && op.IsZero():
+		p.w(" 0 ")
 	default:
-		panic(todo("", op.Type(), to))
+		panic(todo("%v: t %v, to %v, to.Alias() %v", n.Position(), op.Type(), to, to.Alias()))
 	}
 
 	r, mb, _, err := strconv.UnquoteChar(src[1:len(src)-1], '\'')

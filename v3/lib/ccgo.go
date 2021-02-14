@@ -37,7 +37,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.15"
+const Version = "3.8.16"
 
 //TODO CPython
 //TODO Cython
@@ -198,6 +198,7 @@ int __builtin_constant_p_impl(int, ...);
 int __builtin_isnan(double);
 int __builtin_memcmp(const void *s1, const void *s2, size_t n);
 int __builtin_mul_overflow();
+int __builtin_popcount (unsigned int x);
 int __builtin_printf(const char *format, ...);
 int __builtin_snprintf(char *str, size_t size, const char *format, ...);
 int __builtin_sprintf(char *str, const char *format, ...);
@@ -341,6 +342,7 @@ type Task struct {
 	noCapi                bool // -nocapi
 	nostdinc              bool // -nostdinc
 	nostdlib              bool // -nostdlib
+	panicStubs            bool // -panic-stubs
 	traceTranslationUnits bool // -trace-translation-units
 	verifyStructs         bool // -verify-structs
 	version               bool // -version
@@ -568,6 +570,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("header", func(opt string) error { t.header = true; return nil })
 	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
+	opts.Opt("panic-stubs", func(opt string) error { t.panicStubs = true; return nil })
 	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
@@ -922,6 +925,7 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	}
 
 	cdb := map[string]*cdbItem{}
+	var cdbx []string
 	for i, v := range items {
 		if len(v.Arguments) == 0 {
 			if len(v.Command) == 0 {
@@ -933,16 +937,27 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 			}
 		}
 		if s := v.output(t.cc); s != "" {
-			if cdb[s] != nil {
+			if ex := cdb[s]; ex != nil {
+				if v.cmpString() == ex.cmpString() {
+					continue
+				}
+
+				if s == ex.output(t.cc) {
+					fmt.Printf("reusing %v\nfor %v\n", ex.cmpString(), v.cmpString())
+					continue
+				}
+
 				return fmt.Errorf("multiple outputs: %s", s)
 			}
 
 			cdb[s] = &items[i]
+			cdbx = append(cdbx, s)
 		}
 	}
+	sort.Strings(cdbx)
 	obj := map[string]*cdbItem{}
 	for _, v := range args {
-		if err := findCdbItems(obj, cdb, v); err != nil {
+		if err := findCdbItems(obj, cdb, cdbx, v); err != nil {
 			return err
 		}
 	}
@@ -974,20 +989,31 @@ func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
 	return t.scriptBuild2(script)
 }
 
-func findCdbItems(obj, cdb map[string]*cdbItem, nm string) error {
+func findCdbItems(obj, cdb map[string]*cdbItem, cdbx []string, nm string) error {
 	if obj[nm] != nil {
 		return nil
 	}
 
 	it := cdb[nm]
 	if it == nil {
-		fmt.Fprintf(os.Stderr, "not found in compile database: %s\n", nm)
-		return nil
+		ok := false
+		for _, v := range cdbx {
+			if strings.HasSuffix(v, nm) {
+				nm = v
+				it = cdb[nm]
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			fmt.Fprintf(os.Stderr, "not found in compile database: %s\n\t%s\n", nm, strings.Join(cdbx, "\n\t"))
+			return nil
+		}
 	}
 
 	obj[nm] = it
 	for _, v := range it.sources() {
-		if err := findCdbItems(obj, cdb, v); err != nil {
+		if err := findCdbItems(obj, cdb, cdbx, v); err != nil {
 			return err
 		}
 	}
@@ -1172,6 +1198,8 @@ type cdbItem struct {
 	Output    string   `json:"output,omitempty"`
 }
 
+func (it *cdbItem) cmpString() string { return fmt.Sprint(*it) }
+
 func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 	switch it.Arguments[0] {
 	case cc:
@@ -1215,7 +1243,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 	}
 }
 
-func (it *cdbItem) output(cc string) string {
+func (it *cdbItem) output(cc string) (r string) {
 	if it.Output != "" {
 		return it.Output
 	}
@@ -1228,7 +1256,7 @@ func (it *cdbItem) output(cc string) string {
 	case cc:
 		for i, v := range it.Arguments {
 			if v == "-o" && i < len(it.Arguments)-1 {
-				it.Output = it.Arguments[i+1]
+				it.Output = filepath.Join(it.Directory, it.Arguments[i+1])
 				break
 			}
 		}
@@ -1236,7 +1264,7 @@ func (it *cdbItem) output(cc string) string {
 			for _, v := range it.Arguments {
 				if v == "-c" {
 					bn := filepath.Base(it.File)
-					it.Output = bn[:len(bn)-2] + ".o"
+					it.Output = filepath.Join(it.Directory, bn[:len(bn)-2]+".o")
 					break
 				}
 			}
@@ -1244,14 +1272,14 @@ func (it *cdbItem) output(cc string) string {
 	case "ar":
 		for i, v := range it.Arguments {
 			if (strings.HasPrefix(v, "cr") || strings.HasPrefix(v, "rc")) && i < len(it.Arguments)-1 {
-				it.Output = it.Arguments[i+1]
+				it.Output = filepath.Join(it.Directory, it.Arguments[i+1])
 				break
 			}
 		}
 	case "libtool":
 		for i, v := range it.Arguments {
 			if v == "-o" && i < len(it.Arguments)-1 {
-				it.Output = it.Arguments[i+1]
+				it.Output = filepath.Join(it.Directory, it.Arguments[i+1])
 			}
 		}
 	}
@@ -1271,7 +1299,7 @@ func (it *cdbItem) sources() (r []string) {
 
 		for _, v := range it.Arguments {
 			if strings.HasSuffix(v, ".o") {
-				r = append(r, v)
+				r = append(r, filepath.Join(it.Directory, v))
 			}
 		}
 		return r
@@ -1406,7 +1434,7 @@ func (w *cdbMakeWriter) gccMakeX(s string) error {
 	for i, v := range args {
 		switch {
 		case v == "-o" && i < len(args)-1:
-			w.it.Output = args[i+1]
+			w.it.Output = filepath.Join(w.dir, args[i+1])
 		case strings.HasSuffix(v, ".c"):
 			if w.it.File != "" {
 				return fmt.Errorf("multiple .c files: %s", v)
@@ -1432,7 +1460,7 @@ func (w *cdbMakeWriter) libtoolMakeX(s string) error {
 	for i, v := range args {
 		switch {
 		case v == "-o" && i < len(args)-1:
-			w.it.Output = args[i+1]
+			w.it.Output = filepath.Join(w.dir, args[i+1])
 		}
 	}
 	w.it.output(w.cc)
@@ -1452,7 +1480,7 @@ func (w *cdbMakeWriter) arMakeX(s string) error {
 	for i, v := range args {
 		switch {
 		case v == "cr" && i < len(args)-1:
-			w.it.Output = args[i+1]
+			w.it.Output = filepath.Join(w.dir, args[i+1])
 		}
 	}
 	return nil
@@ -1466,7 +1494,7 @@ func (w *cdbMakeWriter) gccStrace(args []string) error {
 	for i, v := range args {
 		switch {
 		case v == "-o" && i < len(args)-1:
-			w.it.Output = args[i+1]
+			w.it.Output = filepath.Join(w.dir, args[i+1])
 		case strings.HasSuffix(v, ".c"):
 			if w.it.File != "" {
 				return fmt.Errorf("multiple .c files: %s", v)
@@ -1487,7 +1515,7 @@ func (w *cdbMakeWriter) arStrace(args []string) error {
 	for i, v := range args {
 		switch {
 		case v == "cr" && i < len(args)-1:
-			w.it.Output = args[i+1]
+			w.it.Output = filepath.Join(w.dir, args[i+1])
 		}
 	}
 	return nil

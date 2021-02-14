@@ -46,7 +46,7 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, sc cc.S
 	p.initializerInner("", 0, f, s, t, sc, tld, nil, lm, tm)
 }
 
-func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, fld cc.Field, lm, tm map[*cc.Initializer][]cc.StringID) {
+func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc.Initializer, t cc.Type, sc cc.StorageClass, tld *tld, patchField cc.Field, lm, tm map[*cc.Initializer][]cc.StringID) {
 	// 11: The initializer for a scalar shall be a single expression, optionally
 	// enclosed in braces. The initial value of the object is that of the
 	// expression (after conversion); the same type constraints and conversions as
@@ -56,7 +56,7 @@ func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc
 		p.w("%s%s", tidyComment("", s[0]), tag)
 		switch {
 		case tld != nil && t.Kind() == cc.Ptr && s[0].AssignmentExpression.Operand.Value() == nil:
-			tld.patches = append(tld.patches, initPatch{t, s[0], fld})
+			tld.patches = append(tld.patches, initPatch{t, s[0], patchField})
 			p.w(" 0 ")
 		default:
 			p.assignmentExpression(f, s[0].AssignmentExpression, t, exprValue, fOutermost)
@@ -332,7 +332,6 @@ func (p *project) initializerUnion(tag string, off uintptr, f *function, s []*cc
 	}
 
 	s0 := s[0]
-	p.w("%s%s%s{", initComment(s0, lm), tag, p.typ(s[0], t))
 	var parts []*cc.Initializer
 	var isZero bool
 	var fld cc.Field
@@ -340,38 +339,65 @@ func (p *project) initializerUnion(tag string, off uintptr, f *function, s []*cc
 	if len(s) != 0 {
 		panic(todo("%v: internal error: %v", s0.Position(), t))
 	}
-	comma := parts[len(parts)-1].TrailingComma()
-	if !isZero {
-		ft := fld.Type()
-		tag = fmt.Sprintf("%s:", p.fieldName2(parts[0], fld))
-		switch {
-		case fld.IsBitField():
-			first := true
-			for _, v := range parts {
-				if v.AssignmentExpression.Operand.IsZero() {
-					continue
-				}
 
-				if !first {
-					p.w("|")
-				}
-				first = false
-				bitFld := v.Field
-				bft := p.bitFileType(bitFld.BitFieldBlockWidth())
-				p.w("%s%s", tidyComment("", v.AssignmentExpression), tag)
-				tag = ""
-				p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
-				p.w("&%#x", uint64(1)<<uint64(bitFld.BitFieldWidth())-1)
-				if o := bitFld.BitFieldOffset(); o != 0 {
-					p.w("<<%d", o)
-				}
-			}
-		default:
-			p.initializerInner(tag, off+fld.Offset(), f, parts, ft, sc, tld, fld, lm, tm)
-		}
-		p.preCommaSep(comma)
-		p.w(",")
+	if isZero {
+		p.w("%s%s%s{", initComment(s0, lm), tag, p.typ(s0, t))
+		p.w("%s}", initComment(parts[len(parts)-1], tm))
+		return
 	}
+
+	if fld0 := parts[0].FirstDesignatorField(); fld0 != nil && fld0.Index() != 0 {
+		if fld0.IsBitField() || fld.IsBitField() {
+			panic(todo(""))
+		}
+
+		fld := parts[0].Field
+		if fld.IsBitField() {
+			panic(todo(""))
+		}
+
+		// tag: *(*T)(unsafe.Pointer(&struct{f: ft; pad _[n]byte}{f: expr}))
+		p.w("%s *(*%s)(unsafe.Pointer(&struct{f %s", tag, p.typ(s0, t), p.typ(s0, fld.Type()))
+		if pad := t.Size() - fld.Type().Size(); pad != 0 {
+			p.w("; _ [%v]byte", pad)
+		}
+		p.w("}{")
+		p.initializerInner("f:", off+fld.Offset(), f, parts, fld.Type(), sc, tld, fld, lm, tm)
+		p.w("}))")
+		return
+	}
+
+	p.w("%s%s%s{", initComment(s0, lm), tag, p.typ(s0, t))
+	ft := fld.Type()
+	tag = fmt.Sprintf("%s:", p.fieldName2(parts[0], fld))
+	switch {
+	case fld.IsBitField():
+		first := true
+		for _, v := range parts {
+			if v.AssignmentExpression.Operand.IsZero() {
+				continue
+			}
+
+			if !first {
+				p.w("|")
+			}
+			first = false
+			bitFld := v.Field
+			bft := p.bitFileType(bitFld.BitFieldBlockWidth())
+			p.w("%s%s", tidyComment("", v.AssignmentExpression), tag)
+			tag = ""
+			p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
+			p.w("&%#x", uint64(1)<<uint64(bitFld.BitFieldWidth())-1)
+			if o := bitFld.BitFieldOffset(); o != 0 {
+				p.w("<<%d", o)
+			}
+		}
+	default:
+		p.initializerInner(tag, off+fld.Offset(), f, parts, ft, sc, tld, fld, lm, tm)
+	}
+	comma := parts[len(parts)-1].TrailingComma()
+	p.preCommaSep(comma)
+	p.w(",")
 	p.w("%s}", initComment(parts[len(parts)-1], tm))
 }
 
@@ -379,7 +405,7 @@ func (p *project) initializerUnionField(off uintptr, s []*cc.Initializer, t cc.T
 	r = s
 	isZero = true
 	fld = t.FieldByIndex([]int{0})
-	nextOff := off + fld.Type().Size()
+	nextOff := off + t.Size()
 	for len(s) != 0 {
 		if v := s[0]; v.Offset < nextOff {
 			s = s[1:]
