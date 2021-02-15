@@ -2093,6 +2093,19 @@ func (p *project) fieldName(n cc.Node, id cc.StringID) string {
 	return capitalize(id.String())
 }
 
+func (p *project) dtyp(d *cc.Declarator) (r string) {
+	t := d.Type()
+	if t.IsIncomplete() {
+		if t.Kind() == cc.Array && d.IsParameter {
+			return "uintptr"
+		}
+
+		panic(todo(""))
+	}
+
+	return p.typ(d, t)
+}
+
 func (p *project) typ(nd cc.Node, t cc.Type) (r string) {
 	if t.IsIncomplete() {
 		panic(todo("", p.pos(nd), t))
@@ -3293,49 +3306,47 @@ func (p *project) declaratorFunc(n cc.Node, f *function, d *cc.Declarator, t cc.
 
 func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator, t cc.Type, mode exprMode, flags flags) {
 	u := d.Type()
-	switch u.Kind() {
-	case cc.Ptr:
+	if u.Kind() == cc.Ptr {
 		u = u.Elem()
-		if u.Kind() == cc.Function {
-			if local := f.locals[d]; local != nil {
-				if local.isPinned {
-					p.w("(*(*")
-					p.functionSignature(f, u, "")
-					p.w(")(unsafe.Pointer(%s%s)))", f.bpName, nonZeroUintptr(local.off))
-					return
-				}
-
-				if d.IsParameter {
-					p.w("(*(*")
-					p.functionSignature(f, u, "")
-					p.w(")(unsafe.Pointer(&%s)))", local.name)
-					return
-				}
-
-				panic(todo("", p.pos(d)))
-			}
-
-			if x := p.tlds[d]; x != nil && d.IsStatic() {
+	}
+	switch u.Kind() {
+	case cc.Function:
+		if local := f.locals[d]; local != nil {
+			if local.isPinned {
 				p.w("(*(*")
 				p.functionSignature(f, u, "")
-				p.w(")(unsafe.Pointer(&%s)))", x.name)
+				p.w(")(unsafe.Pointer(%s%s)))", f.bpName, nonZeroUintptr(local.off))
 				return
 			}
 
-			switch x := p.symtab[d.Name().String()].(type) {
-			case *tld:
+			if d.IsParameter {
 				p.w("(*(*")
 				p.functionSignature(f, u, "")
-				p.w(")(unsafe.Pointer(&%s)))", x.name)
-			case *imported:
-				x.used = true
-				p.w("uintptr(unsafe.Pointer(&%sX%s))", x.qualifier, d.Name())
-			default:
-				panic(todo("%v: %v: %q", n.Position(), p.pos(d), d.Name()))
+				p.w(")(unsafe.Pointer(&%s)))", local.name)
+				return
 			}
+
+			panic(todo("", p.pos(d)))
 		}
 
-		panic(todo("", p.pos(d), u))
+		if x := p.tlds[d]; x != nil && d.IsStatic() {
+			p.w("(*(*")
+			p.functionSignature(f, u, "")
+			p.w(")(unsafe.Pointer(&%s)))", x.name)
+			return
+		}
+
+		switch x := p.symtab[d.Name().String()].(type) {
+		case *tld:
+			p.w("(*(*")
+			p.functionSignature(f, u, "")
+			p.w(")(unsafe.Pointer(&%s)))", x.name)
+		case *imported:
+			x.used = true
+			p.w("uintptr(unsafe.Pointer(&%sX%s))", x.qualifier, d.Name())
+		default:
+			panic(todo("%v: %v: %q", n.Position(), p.pos(d), d.Name()))
+		}
 	default:
 		panic(todo("", p.pos(d), u))
 	}
@@ -3351,7 +3362,12 @@ func (p *project) declaratorFuncFunc(n cc.Node, f *function, d *cc.Declarator, t
 
 	if f != nil {
 		if local := f.locals[d]; local != nil {
-			panic(todo("", n.Position(), p.pos(d)))
+			if local.isPinned {
+				panic(todo(""))
+			}
+
+			p.w(" %s", local.name)
+			return
 		}
 	}
 
@@ -3396,7 +3412,7 @@ func (p *project) declaratorLValueNormal(n cc.Node, f *function, d *cc.Declarato
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.dtyp(d), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3440,7 +3456,7 @@ func (p *project) declaratorKind(d *cc.Declarator) opKind {
 		return opArrayParameter
 	case !p.pass1 && p.isArrayDeclarator(d):
 		return opArray
-	case d.Type().Kind() == cc.Function:
+	case d.Type().Kind() == cc.Function && !d.IsParameter:
 		return opFunction
 	case d.Type().Kind() == cc.Union:
 		return opUnion
@@ -4376,7 +4392,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	p.pass1 = true
 	p.compoundStatement(f, n.CompoundStatement, "", false, false, 0)
 	p.pass1 = false
-	p.w("\n")
+	p.w("\n\n")
 	p.functionDefinitionSignature(f, tld)
 	p.w(" ")
 	comment := fmt.Sprintf("/* %v: */", p.pos(d))
@@ -7348,6 +7364,7 @@ func (p *project) binaryAdditiveExpression(f *function, n *cc.AdditiveExpression
 }
 
 func (p *project) binaryAdditiveExpressionBool(f *function, n *cc.AdditiveExpression, oper string, t cc.Type, mode exprMode, flags flags) {
+	// AdditiveExpression '+' MultiplicativeExpression
 	flags &^= fOutermost
 	defer p.w("%s", p.artithmeticBinaryExpression(n, n.Operand, n.Operand.Type(), &mode, flags))
 	lo := n.AdditiveExpression.Operand
@@ -7355,6 +7372,10 @@ func (p *project) binaryAdditiveExpressionBool(f *function, n *cc.AdditiveExpres
 	lt := lo.Type()
 	rt := ro.Type()
 	switch {
+	case lt.Kind() == cc.Ptr && rt.Kind() == cc.Ptr && oper == "-":
+		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
+		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
+		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags)
 	case lt.IsArithmeticType() && rt.IsArithmeticType(): // x +- y
 		defer p.w("%s", p.bitFieldPatch2(n, lo, ro, n.Promote()))
 		switch {
@@ -11948,6 +11969,9 @@ func (p *project) readBitfield(n cc.Node, ptr string, bf cc.Field, promote cc.Ty
 }
 
 func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t cc.Type, oper, oper2 string, mode exprMode, flags flags) {
+	if mode == exprCondReturn {
+		p.w("return ")
+	}
 	asInt := oper2 == "Shl" || oper2 == "Shr"
 	lhs := n.UnaryExpression
 	// UnaryExpression "*=" AssignmentExpression etc.
@@ -12039,14 +12063,16 @@ func (p *project) assignOpVoid(f *function, n *cc.AssignmentExpression, t cc.Typ
 
 func (p *project) assignOpVoidArrayParameter(f *function, n *cc.AssignmentExpression, t cc.Type, oper, oper2 string, mode exprMode, flags flags) {
 	// UnaryExpression "*=" AssignmentExpression etc.
-	d := n.UnaryExpression.Declarator()
-	if local := f.locals[d]; local != nil && local.isPinned {
+	if oper != "+" && oper != "-" {
 		panic(todo("", p.pos(n)))
 	}
 
-	p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
-	if oper != "+" && oper != "-" {
-		panic(todo("", p.pos(n)))
+	d := n.UnaryExpression.Declarator()
+	switch local := f.locals[d]; {
+	case local != nil && local.isPinned:
+		p.w("*(*uintptr)(unsafe.Pointer(%s%s))", f.bpName, nonZeroUintptr(local.off))
+	default:
+		p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 	}
 
 	p.w(" %s= ", oper)

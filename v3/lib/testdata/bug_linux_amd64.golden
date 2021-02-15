@@ -2,6 +2,7 @@ csmith.c
 csmith2.c
 enums.c
 fp.c
+func.c
 objv.c
 paramarray.c
 sizeof.c

@@ -37,7 +37,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.16"
+const Version = "3.8.17"
 
 //TODO CPython
 //TODO Cython

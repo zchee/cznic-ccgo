@@ -512,6 +512,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20010924-1.c":    {}, //TODO hangs
 		"20041124-1.c":    {}, //TODO crash stack overflow
 		"20041201-1.c":    {}, //TODO crash stack overflow
+		"pr28865.c":       {}, //TODO hangs
 		"pr33382.c":       {}, //TODO hangs
 		"zero-struct-2.c": {}, //TODO hangs
 
@@ -692,7 +693,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr23467.c":                    {}, //TODO
 		"pr24135.c":                    {}, //TODO
 		"pr28289.c":                    {}, //TODO
-		"pr28865.c":                    {}, //TODO
 		"pr34154.c":                    {}, //TODO
 		"pr34768-1.c":                  {}, //TODO
 		"pr34768-2.c":                  {}, //TODO

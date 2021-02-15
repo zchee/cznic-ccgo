@@ -250,8 +250,8 @@
 // -volatile comma-separated-list
 //
 // The separated items of the list are added to the list of file scope extern
-// variables the will be access atomically, like if their C declarator used the
-// 'volatile' type specifier. Currently only C scalar types of size 4 and 8
+// variables the will be accessed atomically, like if their C declarator used
+// the 'volatile' type specifier. Currently only C scalar types of size 4 and 8
 // bytes are supported. Other types/sizes will ignore both the volatile
 // specifier and the -volatile option.
 //
