@@ -317,6 +317,7 @@ type Task struct {
 	replaceTclIeeeDoubleRounding    string // -replace-tcl-default-double-rounding
 	scriptFn                        string // -script
 	sources                         []cc.Source
+	staticLocalsPrefix              string // -static-locals-prefix
 	stderr                          io.Writer
 	stdout                          io.Writer
 	symSearchOrder                  []int                    // >= 0: asts[i], < 0 : imported[-i-1]
@@ -560,6 +561,7 @@ func (t *Task) Main() (err error) {
 	opts.Arg("replace-tcl-default-double-rounding", false, func(arg, value string) error { t.replaceTclDefaultDoubleRounding = value; return nil })
 	opts.Arg("replace-tcl-ieee-double-rounding", false, func(arg, value string) error { t.replaceTclIeeeDoubleRounding = value; return nil })
 	opts.Arg("script", false, func(arg, value string) error { t.scriptFn = value; return nil })
+	opts.Arg("static-locals-prefix", false, func(arg, value string) error { t.staticLocalsPrefix = value; return nil })
 
 	opts.Opt("E", func(opt string) error { t.E = true; return nil })
 	opts.Opt("all-errors", func(opt string) error { t.allErrors = true; return nil })

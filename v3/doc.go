@@ -197,6 +197,12 @@
 //
 // Name conflicts are resolved by adding a numeric suffix.
 //
+// Prefixing static identifiers
+//
+// -static-locals-prefix prefix
+//
+// Prefix C static local declarators names with 'prefix'.
+//
 // Selecting command for target configuration
 //
 // -host-config-cmd command

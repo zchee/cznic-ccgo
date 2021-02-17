@@ -9,3 +9,4 @@ sizeof.c
 sizeof2.c
 sqlite.c
 sqlite2.c
+tk.c

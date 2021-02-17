@@ -1653,7 +1653,11 @@ func (p *project) layoutStaticLocals() error {
 						break
 					}
 
-					p.tlds[x] = &tld{name: p.scope.take(x.Name())}
+					nm := x.Name()
+					if s := p.task.staticLocalsPrefix; s != "" {
+						nm = cc.String(s + nm.String())
+					}
+					p.tlds[x] = &tld{name: p.scope.take(nm)}
 				}
 				return true
 			})
@@ -8604,25 +8608,19 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 			p.castExpression(f, n.CastExpression, n.Operand.Type(), exprValue, flags)
 		}
 	case cc.UnaryExpressionCpl: // '~' CastExpression
+		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		switch {
 		case n.CastExpression.Operand.Value() != nil:
 			switch {
 			case !t.IsIntegerType():
-				defer p.w("%s", p.convert(n, n.Operand, t, flags))
 				p.w(" ^")
 				p.castExpression(f, n.CastExpression, n.Operand.Type(), exprValue, flags|fForceRuntimeConv)
 			default:
-				if n.CastExpression.Operand.IsZero() {
-					p.w("^%s(0)", p.typ(n, t))
-					break
-				}
-
-				p.w("^%s(", p.helperType2(n, n.CastExpression.Operand.Type(), t))
+				p.w("%sCpl%s(", p.task.crt, p.helperType(n, n.CastExpression.Operand.Type()))
 				p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags|fOutermost)
 				p.w(")")
 			}
 		default:
-			defer p.w("%s", p.convert(n, n.Operand, t, flags))
 			p.w(" ^")
 			p.castExpression(f, n.CastExpression, n.Operand.Type(), exprValue, flags)
 		}
