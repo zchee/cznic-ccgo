@@ -224,6 +224,7 @@ void __builtin_trap (void);
 void __builtin_unreachable (void);
 void __ccgo_va_end(__builtin_va_list ap);
 void __ccgo_va_start(__builtin_va_list ap);
+
 `
 	defaultCrt = "modernc.org/libc"
 )
@@ -345,6 +346,7 @@ type Task struct {
 	nostdlib              bool // -nostdlib
 	panicStubs            bool // -panic-stubs
 	traceTranslationUnits bool // -trace-translation-units
+	tracePinning          bool // -trace-pinning
 	verifyStructs         bool // -verify-structs
 	version               bool // -version
 	watch                 bool // -watch-instrumentation
@@ -574,6 +576,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("panic-stubs", func(opt string) error { t.panicStubs = true; return nil })
 	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
+	opts.Opt("trace-pinning", func(opt string) error { t.tracePinning = true; return nil })
 	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("version", func(opt string) error { t.version = true; return nil })
@@ -958,10 +961,15 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	}
 	sort.Strings(cdbx)
 	obj := map[string]*cdbItem{}
+	notFound := false
 	for _, v := range args {
-		if err := findCdbItems(obj, cdb, cdbx, v); err != nil {
-			return err
+		if err := findCdbItems(obj, cdb, cdbx, v, nil); err != nil {
+			notFound = true
+			fmt.Fprintln(os.Stderr, err)
 		}
+	}
+	if notFound {
+		fmt.Printf("compile DB index:\n\t%s\n", strings.Join(cdbx, "\n\t"))
 	}
 
 	var a []string
@@ -991,7 +999,7 @@ func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
 	return t.scriptBuild2(script)
 }
 
-func findCdbItems(obj, cdb map[string]*cdbItem, cdbx []string, nm string) error {
+func findCdbItems(obj, cdb map[string]*cdbItem, cdbx []string, nm string, path []string) error {
 	if obj[nm] != nil {
 		return nil
 	}
@@ -1008,14 +1016,13 @@ func findCdbItems(obj, cdb map[string]*cdbItem, cdbx []string, nm string) error 
 			}
 		}
 		if !ok {
-			fmt.Fprintf(os.Stderr, "not found in compile database: %s\n\t%s\n", nm, strings.Join(cdbx, "\n\t"))
-			return nil
+			return fmt.Errorf("not found in compile DB: %s, path %v", nm, path)
 		}
 	}
 
 	obj[nm] = it
 	for _, v := range it.sources() {
-		if err := findCdbItems(obj, cdb, cdbx, v); err != nil {
+		if err := findCdbItems(obj, cdb, cdbx, v, append(path, nm)); err != nil {
 			return err
 		}
 	}
@@ -1133,7 +1140,7 @@ func makeParser(w *cdbMakeWriter, s string) (bool, error) {
 	case strings.HasPrefix(s, w.cc2):
 		fmt.Println(s)
 		return true, w.gccMakeX(s)
-	case strings.HasPrefix(s, "ar ") && (strings.HasPrefix(s[3:], "cr") || strings.HasPrefix(s[3:], "rc")):
+	case strings.HasPrefix(s, "ar ") && isCreateArchive(s[3:]):
 		fmt.Println(s)
 		return true, w.arMakeX(s)
 	case strings.HasPrefix(s, "libtool "):
@@ -1141,6 +1148,17 @@ func makeParser(w *cdbMakeWriter, s string) (bool, error) {
 		return true, w.libtoolMakeX(s)
 	}
 	return false, nil
+}
+
+func isCreateArchive(s string) bool {
+	b := []byte(s)
+	sort.Slice(b, func(i, j int) bool { return b[i] < b[j] })
+	switch string(b) {
+	case "cr", "cq":
+		return true
+	}
+
+	return false
 }
 
 func makeXParser(w *cdbMakeWriter, s string) (bool, error) {
@@ -1211,12 +1229,14 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 		set.Arg("MF", true, func(opt, arg string) error { return nil })
 		set.Arg("MT", true, func(opt, arg string) error { return nil })
 		set.Arg("O", true, func(opt, arg string) error { return nil })
+		set.Arg("U", true, func(opt, arg string) error { r = append(r, "-U"+arg); return nil })
 		set.Arg("o", true, func(opt, arg string) error { return nil })
 		set.Arg("std", true, func(opt, arg string) error { return nil })
 		set.Opt("MD", func(opt string) error { return nil })
 		set.Opt("MP", func(opt string) error { return nil })
 		set.Opt("c", func(opt string) error { return nil })
 		set.Opt("g", func(opt string) error { return nil })
+		set.Opt("pedantic", func(opt string) error { return nil })
 		set.Opt("pipe", func(opt string) error { return nil })
 		set.Opt("pthread", func(opt string) error { return nil })
 		if err := set.Parse(it.Arguments[1:], func(arg string) error {
@@ -1273,7 +1293,7 @@ func (it *cdbItem) output(cc string) (r string) {
 		}
 	case "ar":
 		for i, v := range it.Arguments {
-			if (strings.HasPrefix(v, "cr") || strings.HasPrefix(v, "rc")) && i < len(it.Arguments)-1 {
+			if isCreateArchive(v) && i < len(it.Arguments)-1 {
 				it.Output = filepath.Join(it.Directory, it.Arguments[i+1])
 				break
 			}
@@ -1481,7 +1501,7 @@ func (w *cdbMakeWriter) arMakeX(s string) error {
 	}
 	for i, v := range args {
 		switch {
-		case v == "cr" && i < len(args)-1:
+		case isCreateArchive(v) && i < len(args)-1:
 			w.it.Output = filepath.Join(w.dir, args[i+1])
 		}
 	}
@@ -1516,7 +1536,7 @@ func (w *cdbMakeWriter) arStrace(args []string) error {
 	}
 	for i, v := range args {
 		switch {
-		case v == "cr" && i < len(args)-1:
+		case isCreateArchive(v) && i < len(args)-1:
 			w.it.Output = filepath.Join(w.dir, args[i+1])
 		}
 	}

@@ -120,6 +120,7 @@ func TestMain(m *testing.M) {
 
 	flag.BoolVar(&oTraceW, "trcw", false, "Print generator writes")
 	flag.BoolVar(&oTraceG, "trcg", false, "Print generator output")
+	flag.BoolVar(&oTracePin, "trcpin", false, "Print pinning")
 	flag.Parse()
 	var err error
 	if testWD, err = os.Getwd(); err != nil {

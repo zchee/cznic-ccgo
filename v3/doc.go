@@ -299,6 +299,13 @@
 // This option disables importing of the runtime library by the resulting Go
 // code.
 //
+// Output information about pinned declarators
+//
+// -trace-pinning
+//
+// This option will print the positions and names of local declarators that are
+// being pinned.
+//
 // -version
 //
 // Ignore all other options, print version and exit.

@@ -54,8 +54,9 @@ var (
 
 	bytesBufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
 
-	oTraceG bool
-	oTraceW bool
+	oTraceG   bool
+	oTraceW   bool
+	oTracePin bool
 )
 
 type exprMode int
@@ -1042,13 +1043,16 @@ func roundup(n, to uintptr) uintptr {
 	return n
 }
 
-func (f *function) pin(d *cc.Declarator) {
+func (f *function) pin(n cc.Node, d *cc.Declarator) {
 	local := f.locals[d]
 	if local == nil || local.isPinned {
 		return
 	}
 
 	local.isPinned = true
+	if oTracePin || f.project.task.tracePinning {
+		fmt.Printf("%v: %s at %v: is pinned (%v)\n", n.Position(), d.Name(), d.Position(), origin(2))
+	}
 	local.off = roundup(f.off, uintptr(d.Type().Align()))
 	f.off = local.off + paramTypeDecay(d).Size()
 }
@@ -1182,11 +1186,17 @@ type typedef struct {
 	tld *tld
 }
 
+type define struct {
+	name  string
+	value cc.Value
+}
+
 type project struct {
 	ast                *cc.AST
 	buf                bytes.Buffer
 	capi               []string
-	defines            []string
+	defines            map[cc.StringID]define
+	defineLines        []string
 	emitedEnums        map[cc.StringID]struct{}
 	enumConsts         map[cc.StringID]string
 	enumSpecs          map[*cc.EnumSpecifier]*enumSpec
@@ -1248,6 +1258,7 @@ func newProject(t *Task) (*project, error) {
 	}
 
 	p := &project{
+		defines:          map[cc.StringID]define{},
 		emitedEnums:      map[cc.StringID]struct{}{},
 		enumConsts:       map[cc.StringID]string{},
 		enumSpecs:        map[*cc.EnumSpecifier]*enumSpec{},
@@ -1450,7 +1461,7 @@ func (p *project) layoutDefines() error {
 		sort.Slice(a, func(i, j int) bool { return a[i].String() < a[j].String() })
 		for _, nm := range a {
 			m := ast.Macros[nm]
-			src := evalMacro(m, ast)
+			val, src := evalMacro(m, ast)
 			if src == "" {
 				continue
 			}
@@ -1463,13 +1474,14 @@ func (p *project) layoutDefines() error {
 				name = prefix + name
 			}
 			name = p.scope.take(cc.String(name))
-			p.defines = append(p.defines, fmt.Sprintf("%s = %s", name, src))
+			p.defines[nm] = define{name, val}
+			p.defineLines = append(p.defineLines, fmt.Sprintf("%s = %s", name, src))
 		}
 	}
 	return nil
 }
 
-func evalMacro(m *cc.Macro, ast *cc.AST) string {
+func evalMacro(m *cc.Macro, ast *cc.AST) (cc.Value, string) {
 	toks := m.ReplacementTokens()
 	if len(toks) != 1 {
 		return evalMacro2(m, ast)
@@ -1477,14 +1489,14 @@ func evalMacro(m *cc.Macro, ast *cc.AST) string {
 
 	src := strings.TrimSpace(toks[0].Src.String())
 	if len(src) == 0 {
-		return ""
+		return nil, ""
 	}
 
 	neg := ""
 	switch src[0] {
 	case '"':
 		if _, err := strconv.Unquote(src); err == nil {
-			return src
+			return cc.StringValue(cc.String(src)), src
 		}
 	case '-':
 		neg = "-"
@@ -1492,30 +1504,35 @@ func evalMacro(m *cc.Macro, ast *cc.AST) string {
 		fallthrough
 	default:
 		src = strings.TrimRight(src, "lLuU")
-		if _, err := strconv.ParseUint(src, 0, 64); err == nil {
-			return neg + src
+		if u64, err := strconv.ParseUint(src, 0, 64); err == nil {
+			switch {
+			case neg == "":
+				return cc.Uint64Value(u64), src
+			default:
+				return cc.Int64Value(-u64), neg + src
+			}
 		}
 
 		src = strings.TrimRight(src, "fF")
-		if _, err := strconv.ParseFloat(src, 64); err == nil {
-			return neg + src
+		if f64, err := strconv.ParseFloat(src, 64); err == nil {
+			return cc.Float64Value(f64), neg + src
 		}
 	}
 
 	return evalMacro2(m, ast)
 }
 
-func evalMacro2(m *cc.Macro, ast *cc.AST) string {
+func evalMacro2(m *cc.Macro, ast *cc.AST) (cc.Value, string) {
 	op, err := ast.Eval(m)
 	if err != nil {
-		return ""
+		return nil, ""
 	}
 
 	switch x := op.Value().(type) {
 	case cc.Int64Value:
-		return fmt.Sprintf("%d", int64(x))
+		return op.Value(), fmt.Sprintf("%d", int64(x))
 	case cc.Uint64Value:
-		return fmt.Sprintf("%d", uint64(x))
+		return op.Value(), fmt.Sprintf("%d", uint64(x))
 	default:
 		panic(todo("", pos(m)))
 	}
@@ -2533,9 +2550,9 @@ package %s
 		strings.Join(targs[1:], " "),
 		p.task.pkgName,
 	)
-	if len(p.defines) != 0 {
+	if len(p.defineLines) != 0 {
 		p.w("\nconst (")
-		p.w("%s", strings.Join(p.defines, "\n"))
+		p.w("%s", strings.Join(p.defineLines, "\n"))
 		p.w("\n)\n\n")
 	}
 	var a []*enumSpec
@@ -3110,7 +3127,7 @@ func (p *project) declaratorDecay(n cc.Node, f *function, d *cc.Declarator, t cc
 
 			if p.pass1 {
 				if !d.Type().IsVLA() {
-					f.pin(d)
+					f.pin(n, d)
 				}
 				return
 			}
@@ -3529,8 +3546,7 @@ func (p *project) declaratorAddrOf(n cc.Node, f *function, d *cc.Declarator, t c
 
 func (p *project) declaratorAddrOfArrayParameter(n cc.Node, f *function, d *cc.Declarator) {
 	if p.pass1 {
-		// trc("PIN %v", d.Position())
-		f.pin(d)
+		f.pin(n, d)
 		return
 	}
 
@@ -3569,8 +3585,7 @@ func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if p.pass1 {
-				// trc("PIN %v", d.Position())
-				f.pin(d)
+				f.pin(n, d)
 				return
 			}
 
@@ -3603,8 +3618,7 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if p.pass1 && flags&fAddrOfFuncPtrOk == 0 {
-				// trc("PIN %v", d.Position())
-				f.pin(d)
+				f.pin(n, d)
 				return
 			}
 
@@ -3646,8 +3660,7 @@ func (p *project) declaratorAddrOfArray(n cc.Node, f *function, d *cc.Declarator
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if p.pass1 {
-				// trc("PIN %v", d.Position())
-				f.pin(d)
+				f.pin(n, d)
 				return
 			}
 
@@ -5419,7 +5432,12 @@ func (p *project) bfHelperType(t cc.Type) string {
 
 func (p *project) helperType(n cc.Node, t cc.Type) string {
 	for t.IsAliasType() {
-		t = t.Alias()
+		if t2 := t.Alias(); t2 != t { //TODO HDF5 H5O.c
+			t = t2
+			continue
+		}
+
+		break
 	}
 	switch t.Kind() {
 	case cc.Int128:
@@ -9592,7 +9610,7 @@ func (p *project) postfixExpressionAddrOfPSelect(f *function, n *cc.PostfixExpre
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
 		p.bitFldOff(pe.Elem(), n.Token2)
 	case pe.Kind() == cc.Array:
-		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
+		p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags|fOutermost)
 		p.fldOff(pe.Elem(), n.Token2)
 	default:
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
@@ -11412,6 +11430,16 @@ func (p *project) primaryExpressionFunc(f *function, n *cc.PrimaryExpression, t 
 	}
 }
 
+func cmpNormalizeValue(v cc.Value) cc.Value {
+	switch x := v.(type) {
+	case cc.Int64Value:
+		if x >= 0 {
+			return cc.Uint64Value(x)
+		}
+	}
+	return v
+}
+
 func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t cc.Type, mode exprMode, flags flags) {
 	switch n.Case {
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
@@ -11422,8 +11450,20 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 			panic(todo("", p.pos(n)))
 		}
 	case cc.PrimaryExpressionInt: // INTCONST
+		if m := n.Token.Macro(); m != 0 {
+			if d := p.defines[m]; d.name != "" {
+				if cmpNormalizeValue(n.Operand.Value()) == cmpNormalizeValue(d.value) {
+					p.w(" %s ", d.name)
+					break
+				}
+
+				p.w("/* %s */", m)
+			}
+		}
+
 		p.intConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionFloat: // FLOATCONST
+		//TODO use #define
 		p.floatConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionEnum: // ENUMCONST
 		en := n.ResolvedTo().(*cc.Enumerator)

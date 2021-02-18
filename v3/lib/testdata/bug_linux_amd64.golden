@@ -5,6 +5,7 @@ fp.c
 func.c
 objv.c
 paramarray.c
+paramarray2.c
 sizeof.c
 sizeof2.c
 sqlite.c
