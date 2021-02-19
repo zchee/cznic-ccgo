@@ -218,6 +218,11 @@ func (p *project) initializerStruct(tag string, off uintptr, f *function, s []*c
 		return
 	}
 
+	if t.HasFlexibleMember() {
+		p.err(s[0], "flexible array members not supported")
+		return
+	}
+
 	p.w("%s%s%s{", initComment(s[0], lm), tag, p.typ(s[0], t))
 	var parts []*cc.Initializer
 	var isZero bool
@@ -227,6 +232,10 @@ func (p *project) initializerStruct(tag string, off uintptr, f *function, s []*c
 		s, fld, parts, isZero = p.initializerStructField(off, s, t)
 		if isZero {
 			continue
+		}
+
+		if fld.Type().IsIncomplete() {
+			panic(todo(""))
 		}
 
 		comma = parts[len(parts)-1].TrailingComma()
@@ -276,7 +285,7 @@ func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.
 	isZero = true
 	valueOff := s[0].Offset
 	nf := t.NumField()
-	nextOff := t.Size() + off
+	nextOff := off + t.Size()
 	bits := false
 	for i := []int{0}; i[0] < nf; i[0]++ {
 		fld2 := t.FieldByIndex(i)
@@ -288,7 +297,7 @@ func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.
 			fld = fld2
 		}
 		if fld2.Offset()+off > valueOff {
-			nextOff = fld2.Offset() + off
+			nextOff = off + fld2.Offset()
 			break
 		}
 

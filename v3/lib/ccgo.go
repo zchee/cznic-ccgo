@@ -947,14 +947,13 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 					continue
 				}
 
-				if s == ex.output(t.cc) {
-					fmt.Printf("reusing %v\nfor %v\n", ex.cmpString(), v.cmpString())
-					continue
+				exN := suffixNum(s)
+				if exN < 0 {
+					exN = 1
 				}
-
-				return fmt.Errorf("multiple outputs: %s", s)
+				exN++
+				s = fmt.Sprintf("%s#%d", s, exN)
 			}
-
 			cdb[s] = &items[i]
 			cdbx = append(cdbx, s)
 		}
@@ -978,6 +977,21 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	}
 	sort.Strings(a)
 	return t.cdbBuild(obj, a)
+}
+
+func suffixNum(s string) int {
+	x := strings.LastIndexByte(s, '#')
+	if x < 0 {
+		return -1
+	}
+
+	s = s[x+1:]
+	n, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return -1
+	}
+
+	return int(n)
 }
 
 func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {

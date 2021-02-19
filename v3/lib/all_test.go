@@ -510,11 +510,13 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr89195.c":    {}, // unsupported volatile declarator size: 1
 		"rbug.c":       {}, // cannot pass on 386
 
-		"20010924-1.c":    {}, //TODO hangs
+		"20010924-1.c":    {}, //TODO flexible array member
+		"20030109-1.c":    {}, //TODO flexible array member
 		"20041124-1.c":    {}, //TODO crash stack overflow
 		"20041201-1.c":    {}, //TODO crash stack overflow
-		"pr28865.c":       {}, //TODO hangs
-		"pr33382.c":       {}, //TODO hangs
+		"20050613-1.c":   {}, //TODO flexible array member
+		"pr28865.c":       {}, //TODO flexible array member
+		"pr33382.c":       {}, //TODO flexible array member
 		"zero-struct-2.c": {}, //TODO hangs
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
