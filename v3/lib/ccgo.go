@@ -1154,7 +1154,7 @@ func isCreateArchive(s string) bool {
 	b := []byte(s)
 	sort.Slice(b, func(i, j int) bool { return b[i] < b[j] })
 	switch string(b) {
-	case "cr", "cq":
+	case "cq", "cr", "cru":
 		return true
 	}
 

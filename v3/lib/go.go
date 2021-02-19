@@ -4810,6 +4810,13 @@ func (p *project) expressionValue(f *function, n *cc.Expression, t cc.Type, mode
 	case cc.ExpressionAssign: // AssignmentExpression
 		p.assignmentExpression(f, n.AssignmentExpression, t, mode, flags)
 	case cc.ExpressionComma: // Expression ',' AssignmentExpression
+		if mode == exprCondReturn {
+			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, flags)
+			p.w("; return ")
+			p.assignmentExpression(f, n.AssignmentExpression, n.AssignmentExpression.Operand.Type(), exprValue, flags)
+			return
+		}
+
 		switch {
 		case n.AssignmentExpression.Operand.Type().Kind() == cc.Array:
 			p.expressionDecay(f, n, t, exprDecay, flags)
