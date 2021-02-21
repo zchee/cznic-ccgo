@@ -7985,7 +7985,7 @@ func (p *project) castExpressionFunc(f *function, n *cc.CastExpression, t cc.Typ
 		switch tn.Kind() {
 		case cc.Ptr:
 			switch et := ot.Elem(); et.Kind() {
-			case cc.Function:
+			case cc.Function, cc.Void:
 				// ok
 			default:
 				panic(todo("", p.pos(n), et, et.Kind()))
@@ -8026,7 +8026,7 @@ func (p *project) castExpressionFunc(f *function, n *cc.CastExpression, t cc.Typ
 		//TODO- 	}
 		case cc.Ptr:
 			switch et := ot.Elem(); et.Kind() {
-			case cc.Function:
+			case cc.Function, cc.Void:
 				p.w("(*(*")
 				p.functionSignature(f, ft, "")
 				p.w(")(unsafe.Pointer(")

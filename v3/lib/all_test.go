@@ -514,7 +514,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20030109-1.c":    {}, //TODO flexible array member
 		"20041124-1.c":    {}, //TODO crash stack overflow
 		"20041201-1.c":    {}, //TODO crash stack overflow
-		"20050613-1.c":   {}, //TODO flexible array member
+		"20050613-1.c":    {}, //TODO flexible array member
 		"pr28865.c":       {}, //TODO flexible array member
 		"pr33382.c":       {}, //TODO flexible array member
 		"zero-struct-2.c": {}, //TODO hangs

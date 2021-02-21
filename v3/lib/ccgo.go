@@ -889,6 +889,9 @@ func (t *Task) scriptBuild2(script [][]string) error {
 		}
 		t2 := NewTask(append(ccgo, args...), t.stdout, t.stderr)
 		t2.cfg.SharedFunctionDefinitions = t.cfg.SharedFunctionDefinitions
+		t2.replaceFdZero = t.replaceFdZero
+		t2.replaceTclDefaultDoubleRounding = t.replaceTclDefaultDoubleRounding
+		t2.replaceTclIeeeDoubleRounding = t.replaceTclIeeeDoubleRounding
 		t2.isScripted = true
 		if err := inDir(dir, t2.Main); err != nil {
 			return err
@@ -915,23 +918,133 @@ func (t *Task) scriptBuild2(script [][]string) error {
 	return t.link()
 }
 
+type cdb struct {
+	items       []*cdbItem
+	outputIndex map[string][]*cdbItem
+}
+
+func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace bool, path []string) error {
+	var item *cdbItem
+	var k string
+	switch {
+	case ver < 0:
+		// find highest ver with .seq < seqLimit
+		for i, v := range db.outputIndex[nm] {
+			if v.seq >= seqLimit {
+				break
+			}
+
+			item = v
+			ver = i
+		}
+		if item == nil {
+			for _, v := range db.items {
+				if seqLimit >= 0 && v.seq >= seqLimit {
+					break
+				}
+
+				if filepath.Base(v.Output) == filepath.Base(nm) {
+					item = v
+					break
+				}
+			}
+		}
+
+		k = fmt.Sprintf("%s#%d", nm, ver)
+	default:
+		// match ver exactly
+		k = fmt.Sprintf("%s#%d", nm, ver)
+		if obj[k] != nil {
+			return nil
+		}
+
+		items := db.outputIndex[nm]
+		switch {
+		case ver < len(items):
+			panic(todo("", nm, ver, seqLimit))
+		default:
+			n := -1
+			for _, v := range db.items {
+				if seqLimit >= 0 && v.seq >= seqLimit {
+					break
+				}
+
+				if filepath.Base(v.Output) == filepath.Base(nm) {
+					n++
+					if n == ver {
+						item = v
+						break
+					}
+				}
+			}
+		}
+	}
+	if item == nil {
+		return fmt.Errorf("not found in compile DB: %s, path %v", k, path)
+	}
+
+	if obj[k] != nil {
+		return nil
+	}
+
+	obj[k] = item
+	var errs []string
+	for _, v := range item.sources() {
+		if err := db.find(obj, v, -1, item.seq, trace, append(path, nm)); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) != 0 {
+		sort.Strings(errs)
+		w := 0
+		for i, v := range errs {
+			if i > 0 && v != errs[w-1] {
+				errs[w] = v
+				w++
+			}
+		}
+		errs = errs[:w]
+		return fmt.Errorf("%s", strings.Join(errs, "\n"))
+	}
+
+	return nil
+}
+
+func suffixNum(s string, dflt int) (string, int) {
+	x := strings.LastIndexByte(s, '#')
+	if x < 0 {
+		return s, dflt
+	}
+
+	// foo#42
+	// 012345
+	// x == 3
+	num := s[x+1:]
+	n, err := strconv.ParseUint(num, 10, 32)
+	if err != nil {
+		return s, dflt
+	}
+
+	return s[:x], int(n)
+}
+
 func (t *Task) useCompileDB(fn string, args []string) error {
+	var cdb cdb
 	f, err := os.Open(fn)
 	if err != nil {
 		return err
 	}
 
 	de := json.NewDecoder(f)
-	var items []cdbItem
-	err = de.Decode(&items)
+	err = de.Decode(&cdb.items)
 	f.Close()
 	if err != nil {
 		return err
 	}
 
-	cdb := map[string]*cdbItem{}
-	var cdbx []string
-	for i, v := range items {
+	cdb.outputIndex = map[string][]*cdbItem{}
+	for i, v := range cdb.items {
+		v.seq = i
 		if len(v.Arguments) == 0 {
 			if len(v.Command) == 0 {
 				return fmt.Errorf("either arguments or command is required: %+v", v)
@@ -941,34 +1054,28 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 				return err
 			}
 		}
-		if s := v.output(t.cc); s != "" {
-			if ex := cdb[s]; ex != nil {
-				if v.cmpString() == ex.cmpString() {
-					continue
-				}
 
-				exN := suffixNum(s)
-				if exN < 0 {
-					exN = 1
-				}
-				exN++
-				s = fmt.Sprintf("%s#%d", s, exN)
-			}
-			cdb[s] = &items[i]
-			cdbx = append(cdbx, s)
-		}
+		k := v.output(t.cc)
+		cdb.outputIndex[k] = append(cdb.outputIndex[k], v)
 	}
-	sort.Strings(cdbx)
 	obj := map[string]*cdbItem{}
 	notFound := false
 	for _, v := range args {
-		if err := findCdbItems(obj, cdb, cdbx, v, nil); err != nil {
+		v, ver := suffixNum(v, 0)
+		if err := cdb.find(obj, v, ver, -1, t.traceTranslationUnits, nil); err != nil {
 			notFound = true
 			fmt.Fprintln(os.Stderr, err)
 		}
 	}
 	if notFound {
-		fmt.Printf("compile DB index:\n\t%s\n", strings.Join(cdbx, "\n\t"))
+		var a []string
+		for k, v := range cdb.outputIndex {
+			for _, w := range v {
+				a = append(a, fmt.Sprintf("%5d %s", w.seq, k))
+			}
+		}
+		sort.Strings(a)
+		fmt.Fprintf(os.Stderr, "compile DB index:\n\t%s\n", strings.Join(a, "\n\t"))
 	}
 
 	var a []string
@@ -977,21 +1084,6 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	}
 	sort.Strings(a)
 	return t.cdbBuild(obj, a)
-}
-
-func suffixNum(s string) int {
-	x := strings.LastIndexByte(s, '#')
-	if x < 0 {
-		return -1
-	}
-
-	s = s[x+1:]
-	n, err := strconv.ParseUint(s, 10, 32)
-	if err != nil {
-		return -1
-	}
-
-	return int(n)
 }
 
 func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
@@ -1011,36 +1103,6 @@ func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
 		script = append(script, line)
 	}
 	return t.scriptBuild2(script)
-}
-
-func findCdbItems(obj, cdb map[string]*cdbItem, cdbx []string, nm string, path []string) error {
-	if obj[nm] != nil {
-		return nil
-	}
-
-	it := cdb[nm]
-	if it == nil {
-		ok := false
-		for _, v := range cdbx {
-			if strings.HasSuffix(v, nm) {
-				nm = v
-				it = cdb[nm]
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			return fmt.Errorf("not found in compile DB: %s, path %v", nm, path)
-		}
-	}
-
-	obj[nm] = it
-	for _, v := range it.sources() {
-		if err := findCdbItems(obj, cdb, cdbx, v, append(path, nm)); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (t *Task) createCompileDB(command []string) (rerr error) {
@@ -1230,6 +1292,8 @@ type cdbItem struct {
 	Directory string   `json:"directory"`
 	File      string   `json:"file"`
 	Output    string   `json:"output,omitempty"`
+
+	seq int
 }
 
 func (it *cdbItem) cmpString() string { return fmt.Sprint(*it) }
