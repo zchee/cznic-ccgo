@@ -50,6 +50,7 @@ var (
 	idVaList               = cc.String("va_list")
 	idVaStart              = cc.String("__ccgo_va_start")
 	idWcharT               = cc.String("wchar_t")
+	idWinWchar             = cc.String("WCHAR")
 	idWtext                = cc.String("wtext")
 
 	bytesBufferPool = sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}

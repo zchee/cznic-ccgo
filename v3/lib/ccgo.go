@@ -938,6 +938,7 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace
 			ver = i
 		}
 		if item == nil {
+			ver = -1
 			for _, v := range db.items {
 				if seqLimit >= 0 && v.seq >= seqLimit {
 					break
@@ -945,6 +946,7 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace
 
 				if filepath.Base(v.Output) == filepath.Base(nm) {
 					item = v
+					ver = v.ver
 					break
 				}
 			}
@@ -980,7 +982,7 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace
 		}
 	}
 	if item == nil {
-		return fmt.Errorf("not found in compile DB: %s, path %v", k, path)
+		return fmt.Errorf("not found in compile DB: %s (max seq %d), path %v", k, seqLimit, path)
 	}
 
 	if obj[k] != nil {
@@ -998,7 +1000,7 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace
 		sort.Strings(errs)
 		w := 0
 		for _, v := range errs {
-			if w > 0 && v != errs[w-1] {
+			if w == 0 || w > 0 && v != errs[w-1] {
 				errs[w] = v
 				w++
 			}
@@ -1056,7 +1058,9 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 		}
 
 		k := v.output(t.cc)
-		cdb.outputIndex[k] = append(cdb.outputIndex[k], v)
+		a := cdb.outputIndex[k]
+		v.ver = len(a)
+		cdb.outputIndex[k] = append(a, v)
 	}
 	obj := map[string]*cdbItem{}
 	notFound := false
@@ -1169,10 +1173,13 @@ out:
 			cmd = exec.Command(command[0], argv...)
 			parser = makeDParser
 			break out
+		case "linux":
+			// ok
 		default:
 			return fmt.Errorf("usupported cross compile host: %s", s)
 		}
 
+		fallthrough
 	default:
 		strace, err := exec.LookPath("strace")
 		if err != nil {
@@ -1302,6 +1309,7 @@ type cdbItem struct {
 	Output    string   `json:"output,omitempty"`
 
 	seq int
+	ver int
 }
 
 func (it *cdbItem) cmpString() string { return fmt.Sprint(*it) }
@@ -1405,14 +1413,16 @@ func (it *cdbItem) sources(cc string) (r []string) {
 		"libtool",
 		cc:
 
+		var prev string
 		for _, v := range it.Arguments {
-			if strings.HasSuffix(v, ".o") {
+			if prev != "-o" && strings.HasSuffix(v, ".o") {
 				r = append(r, filepath.Join(it.Directory, v))
 			}
+			prev = v
 		}
 		return r
 	default:
-		panic(todo("%+v", it))
+		panic(todo("%q %+v", cc, it))
 	}
 }
 

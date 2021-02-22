@@ -87,6 +87,9 @@ func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc
 
 	if k == cc.Array && len(s) == 1 {
 		et := t.Elem()
+		if dmesgs { //TODO-
+			dmesg("%v: %v", s[0].Position(), et)
+		}
 		switch {
 		case isCharType(et):
 			// 14: An array of character type may be initialized by a character string
@@ -511,7 +514,14 @@ func (p *project) bitFileType(bits int) cc.Type {
 }
 
 func (p *project) isWCharType(t cc.Type) bool {
-	return t.IsAliasType() && t.AliasDeclarator().Name() == idWcharT
+	if t.IsAliasType() {
+		if id := t.AliasDeclarator().Name(); id == idWcharT ||
+			p.task.goos == "windows" && id == idWinWchar {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isCharType(t cc.Type) bool {
