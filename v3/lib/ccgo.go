@@ -4,8 +4,6 @@
 
 //go:generate stringer -output stringer.go -type=exprMode,opKind
 
-//TODO strace -f -s1000000 -e trace=chdir,execve make
-
 // Package ccgo implements the ccgo command.
 package ccgo // import "modernc.org/ccgo/v3/lib"
 
@@ -37,7 +35,7 @@ import (
 	"modernc.org/opt"
 )
 
-const Version = "3.8.17"
+const Version = "3.8.19"
 
 //TODO CPython
 //TODO Cython
@@ -539,9 +537,11 @@ func (t *Task) capi2(files []string) (pkgName string, exports map[string]struct{
 // Main executes task.
 func (t *Task) Main() (err error) {
 	if dmesgs {
-		if err != nil {
-			dmesg("%v: returning from Task.Main: %v", origin(1), err)
-		}
+		defer func() {
+			if err != nil {
+				dmesg("%v: returning from Task.Main: %v", origin(1), err)
+			}
+		}()
 	}
 	opts := opt.NewSet()
 	opts.Arg("D", true, func(arg, value string) error { t.D = append(t.D, value); return nil })
@@ -923,7 +923,7 @@ type cdb struct {
 	outputIndex map[string][]*cdbItem
 }
 
-func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace bool, path []string) error {
+func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace bool, path []string, cc string) error {
 	var item *cdbItem
 	var k string
 	switch {
@@ -989,16 +989,16 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace
 
 	obj[k] = item
 	var errs []string
-	for _, v := range item.sources() {
-		if err := db.find(obj, v, -1, item.seq, trace, append(path, nm)); err != nil {
+	for _, v := range item.sources(cc) {
+		if err := db.find(obj, v, -1, item.seq, trace, append(path, nm), cc); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
 	if len(errs) != 0 {
 		sort.Strings(errs)
 		w := 0
-		for i, v := range errs {
-			if i > 0 && v != errs[w-1] {
+		for _, v := range errs {
+			if w > 0 && v != errs[w-1] {
 				errs[w] = v
 				w++
 			}
@@ -1062,7 +1062,7 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	notFound := false
 	for _, v := range args {
 		v, ver := suffixNum(v, 0)
-		if err := cdb.find(obj, v, ver, -1, t.traceTranslationUnits, nil); err != nil {
+		if err := cdb.find(obj, v, ver, -1, t.traceTranslationUnits, nil, t.cc); err != nil {
 			notFound = true
 			fmt.Fprintln(os.Stderr, err)
 		}
@@ -1113,7 +1113,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 
 	f, err := os.Create(t.compiledb)
 	if err != nil {
-		return rerr
+		return err
 	}
 
 	defer func() {
@@ -1142,6 +1142,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 
 	var cmd *exec.Cmd
 	var parser func(w *cdbMakeWriter, s string) (bool, error)
+out:
 	switch {
 	case t.goos == "darwin":
 		if command[0] != "make" {
@@ -1161,10 +1162,17 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 			return fmt.Errorf("usupported build command: %s", command[0])
 		}
 
-		argv := append([]string{"-d"}, command[1:]...)
-		command[0] += ".exe"
-		cmd = exec.Command(command[0], argv...)
-		parser = makeDParser
+		switch s := runtime.GOOS; s {
+		case "windows":
+			argv := append([]string{"-d"}, command[1:]...)
+			command[0] += ".exe"
+			cmd = exec.Command(command[0], argv...)
+			parser = makeDParser
+			break out
+		default:
+			return fmt.Errorf("usupported cross compile host: %s", s)
+		}
+
 	default:
 		strace, err := exec.LookPath("strace")
 		if err != nil {
@@ -1386,7 +1394,7 @@ func (it *cdbItem) output(cc string) (r string) {
 	return it.Output
 }
 
-func (it *cdbItem) sources() (r []string) {
+func (it *cdbItem) sources(cc string) (r []string) {
 	if len(it.Arguments) == 0 {
 		return nil
 	}
@@ -1395,7 +1403,7 @@ func (it *cdbItem) sources() (r []string) {
 	case
 		"ar",
 		"libtool",
-		"gcc":
+		cc:
 
 		for _, v := range it.Arguments {
 			if strings.HasSuffix(v, ".o") {
