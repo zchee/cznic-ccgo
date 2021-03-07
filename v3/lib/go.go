@@ -8642,8 +8642,8 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 				p.w(" ^")
 				p.castExpression(f, n.CastExpression, n.Operand.Type(), exprValue, flags|fForceRuntimeConv)
 			default:
-				p.w("%sCpl%s(", p.task.crt, p.helperType(n, n.CastExpression.Operand.Type()))
-				p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprValue, flags|fOutermost)
+				p.w("%sCpl%s(", p.task.crt, p.helperType(n, n.Operand.Type()))
+				p.castExpression(f, n.CastExpression, n.Operand.Type(), exprValue, flags|fOutermost)
 				p.w(")")
 			}
 		default:
