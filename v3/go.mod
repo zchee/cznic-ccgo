@@ -7,8 +7,8 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	golang.org/x/sys v0.0.0-20201126233918-771906719818
 	golang.org/x/tools v0.0.0-20201124115921-2c860bdd6e78
-	modernc.org/cc/v3 v3.0.0-20210308102129-22dee8d0fef1
-	modernc.org/libc v1.7.12
+	modernc.org/cc/v3 v3.31.5-0.20210308123301-7a3e9dab9009
+	modernc.org/libc v1.7.13-0.20210308123627-12f642a52bb8
 	modernc.org/mathutil v1.2.2
 	modernc.org/opt v0.1.1
 )

@@ -1192,7 +1192,7 @@ out:
 	}
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	cw := t.newCdbMakeWriter(w, cwd, parser)
-	cmd.Stdout = cw
+	cmd.Stdout = io.MultiWriter(cw, os.Stdout)
 	cmd.Stderr = cmd.Stdout
 	if dmesgs {
 		dmesg("%v: %v", origin(1), cmd.Args)
@@ -1242,13 +1242,11 @@ func makeParser(w *cdbMakeWriter, s string) (bool, error) {
 }
 
 func isCreateArchive(s string) bool {
-	b := []byte(s)
-	sort.Slice(b, func(i, j int) bool { return b[i] < b[j] })
-	switch string(b) {
-	case "cq", "cr", "cru":
-		return true
+	for _, c := range []string{"cq", "cr", "cru"} {
+		if c == s || strings.HasPrefix(s, c+" ") {
+			return true
+		}
 	}
-
 	return false
 }
 
