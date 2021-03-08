@@ -11461,6 +11461,7 @@ func (p *project) primaryExpressionValue(f *function, n *cc.PrimaryExpression, t
 		if m := n.Token.Macro(); m != 0 {
 			if d := p.defines[m]; d.name != "" {
 				if cmpNormalizeValue(n.Operand.Value()) == cmpNormalizeValue(d.value) {
+					defer p.w("%s", p.convert(n, n.Operand, t, flags))
 					p.w(" %s ", d.name)
 					break
 				}
