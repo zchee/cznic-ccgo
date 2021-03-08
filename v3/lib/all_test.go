@@ -1528,7 +1528,11 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func TestCSmith(t *testing.T) {
-	gcc, err := exec.LookPath("gcc")
+	gcc := os.Getenv("CC")
+	if gcc == "" {
+		gcc = "gcc"
+	}
+	gcc, err := exec.LookPath(gcc)
 	if err != nil {
 		t.Fatalf("%v", err)
 		return
