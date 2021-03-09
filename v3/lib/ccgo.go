@@ -322,6 +322,14 @@ type Task struct {
 	symSearchOrder                  []int                    // >= 0: asts[i], < 0 : imported[-i-1]
 	volatiles                       map[cc.StringID]struct{} // -volatile
 
+	// Path to a binary that will be called instead of executing
+	// Task.Main().  Intended to support TestGenerate in stable vs latest
+	// modes. This is _not_ supposed to be used when the Task instance is
+	// constructed by a ccgo _command_ (ccgo/v3) - it should never set this
+	// field. Only programs importing ccgo/v3/lib that opt-in into this
+	// feature should ever set it.
+	CallOutBinary string
+
 	E                     bool // -E
 	allErrors             bool // -all-errors
 	compiledbValid        bool // -compiledb present
@@ -542,7 +550,20 @@ func (t *Task) Main() (err error) {
 				dmesg("%v: returning from Task.Main: %v", origin(1), err)
 			}
 		}()
+
 	}
+	if t.CallOutBinary != "" {
+		if dmesgs {
+			dmesg("%v: calling out '%s' instead", origin(1))
+		}
+		cmd := exec.Command(t.CallOutBinary, t.args[1:]...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			err = fmt.Errorf("%v\n%s", err, out)
+		}
+		return err
+	}
+
 	opts := opt.NewSet()
 	opts.Arg("D", true, func(arg, value string) error { t.D = append(t.D, value); return nil })
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
