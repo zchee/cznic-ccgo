@@ -487,37 +487,38 @@ func TestGCCExec(t *testing.T) {
 func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
 	const main = "main.go"
 	blacklist := map[string]struct{}{
-		"20000822-1.c": {}, // nested func
-		"20001009-2.c": {}, // asm
-		"20010122-1.c": {}, // __builtin_return_address
-		"20010904-1.c": {}, // __attribute__((aligned(32)))
-		"20010904-2.c": {}, // __attribute__((aligned(32)))
-		"20021127-1.c": {}, // gcc specific optimization
-		"20030128-1.c": {}, // volatile short
-		"20030323-1.c": {}, // __builtin_return_address
-		"20101011-1.c": {}, // sigfpe
-		"960830-1.c":   {}, // assembler statements not supported
-		"991014-1.c":   {}, // Struct type too big
-		"align-3.c":    {}, // __attribute__((aligned(256)))
-		"eeprof-1.c":   {}, // requires instrumentation
-		"fp-cmp-1.c":   {}, // sigfpe
-		"fp-cmp-2.c":   {}, // sigfpe
-		"fp-cmp-3.c":   {}, // sigfpe
-		"pr15296.c":    {}, // union initializer designates non-first field (gcc extension)
-		"pr53160.c":    {}, // unsupported volatile declarator size: 1
-		"pr71631.c":    {}, // unsupported volatile declarator size: 1
-		"pr83269.c":    {}, // unsupported volatile declarator size: 1
-		"pr89195.c":    {}, // unsupported volatile declarator size: 1
-		"rbug.c":       {}, // cannot pass on 386
+		"20000822-1.c":    {}, // nested func
+		"20001009-2.c":    {}, // asm
+		"20010122-1.c":    {}, // __builtin_return_address
+		"20010904-1.c":    {}, // __attribute__((aligned(32)))
+		"20010904-2.c":    {}, // __attribute__((aligned(32)))
+		"20021127-1.c":    {}, // gcc specific optimization
+		"20030128-1.c":    {}, // volatile short
+		"20030323-1.c":    {}, // __builtin_return_address
+		"20101011-1.c":    {}, // sigfpe
+		"960830-1.c":      {}, // assembler statements not supported
+		"991014-1.c":      {}, // Struct type too big
+		"align-3.c":       {}, // __attribute__((aligned(256)))
+		"eeprof-1.c":      {}, // requires instrumentation
+		"fp-cmp-1.c":      {}, // sigfpe
+		"fp-cmp-2.c":      {}, // sigfpe
+		"fp-cmp-3.c":      {}, // sigfpe
+		"pr15296.c":       {}, // union initializer designates non-first field (gcc extension)
+		"pr53160.c":       {}, // unsupported volatile declarator size: 1
+		"pr71631.c":       {}, // unsupported volatile declarator size: 1
+		"pr83269.c":       {}, // unsupported volatile declarator size: 1
+		"pr89195.c":       {}, // unsupported volatile declarator size: 1
+		"rbug.c":          {}, // cannot pass on 386
+		"zero-struct-1.c": {}, // initializing zero sized fields not supported
+		"zero-struct-2.c": {}, // initializing zero sized fields not supported
 
-		"20010924-1.c":    {}, //TODO flexible array member
-		"20030109-1.c":    {}, //TODO flexible array member
-		"20041124-1.c":    {}, //TODO crash stack overflow
-		"20041201-1.c":    {}, //TODO crash stack overflow
-		"20050613-1.c":    {}, //TODO flexible array member
-		"pr28865.c":       {}, //TODO flexible array member
-		"pr33382.c":       {}, //TODO flexible array member
-		"zero-struct-2.c": {}, //TODO hangs
+		"20010924-1.c": {}, //TODO flexible array member
+		"20030109-1.c": {}, //TODO flexible array member
+		"20041124-1.c": {}, //TODO _Complex
+		"20041201-1.c": {}, //TODO _Complex
+		"20050613-1.c": {}, //TODO flexible array member
+		"pr28865.c":    {}, //TODO flexible array member
+		"pr33382.c":    {}, //TODO flexible array member
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
 		"20000801-3.c":                 {}, //TODO designators

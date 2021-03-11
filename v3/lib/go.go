@@ -1942,12 +1942,13 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 				}
 				fmt.Fprintf(b, "%s uint%d /* %s */;", p.bitFieldName(n, nmf), f.BitFieldBlockWidth(), strings.Join(a, ", "))
 			default:
-				if t := f.Type(); t.Kind() == cc.Array && t.IsIncomplete() || t.Size() == 0 {
+				ft := f.Type()
+				if ft.Kind() == cc.Array && ft.IsIncomplete() || ft.Size() == 0 {
 					break
 				}
 
-				max += f.Type().Size()
-				fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, f.Type()))
+				max += ft.Size()
+				fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, ft))
 			}
 		}
 		if info.padAfter != 0 {

@@ -312,7 +312,7 @@ func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.
 		fld = fld2.BitFieldBlockFirst()
 	}
 	for len(s) != 0 {
-		if v := s[0]; v.Offset < nextOff {
+		if v := s[0]; v.Offset < nextOff || v.Type().Size() == 0 {
 			if v.Field != nil && v.Field.IsBitField() {
 				bits = true
 			}

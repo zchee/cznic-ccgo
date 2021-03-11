@@ -1268,6 +1268,5 @@ vrp-6.c
 vrp-7.c
 wchar_t-1.c
 widechar-2.c
-zero-struct-1.c
 zerolen-1.c
 zerolen-2.c
