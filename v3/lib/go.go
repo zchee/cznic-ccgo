@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,7 +83,9 @@ const (
 	exprSelect              // foo in foo.bar
 	exprValue               // foo in bar = foo
 	exprVoid                //
+)
 
+const (
 	tooManyErrors = "too many errors"
 )
 
@@ -1320,7 +1323,7 @@ func (p *project) newScope() scope {
 }
 
 func (p *project) err(n cc.Node, s string, args ...interface{}) {
-	if p.task.errTrace {
+	if p.task.errTrace || strings.Contains(s, "internal error") {
 		s = s + "(" + origin(2) + ")"
 	}
 	if p.task.traceTranslationUnits {
@@ -1353,6 +1356,12 @@ func (p *project) w(s string, args ...interface{}) {
 		return
 	}
 
+	if coverExperiment {
+		pc, _, _, ok := runtime.Caller(1)
+		if ok {
+			coverMap[pc] = struct{}{}
+		}
+	}
 	if oTraceW {
 		fmt.Printf(s, args...)
 	}
@@ -3178,6 +3187,7 @@ func (p *project) declaratorValueArrayParameter(n cc.Node, f *function, d *cc.De
 	}
 	local := f.locals[d]
 	if local.isPinned {
+		p.dbg()
 		p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(n, paramTypeDecay(d)), f.bpName, nonZeroUintptr(local.off), local.name)
 		return
 	}
@@ -3343,6 +3353,7 @@ func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator,
 			}
 
 			if d.IsParameter {
+				p.dbg()
 				p.w("(*(*")
 				p.functionSignature(f, u, "")
 				p.w(")(unsafe.Pointer(&%s)))", local.name)
@@ -3553,6 +3564,7 @@ func (p *project) declaratorAddrOfArrayParameter(n cc.Node, f *function, d *cc.D
 	}
 
 	local := f.locals[d]
+	p.dbg()
 	p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 }
 
@@ -4244,6 +4256,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 						}
 					}
 
+					p.dbg()
 					p.w("%sUint32FromUint%d(", p.task.crt, from.Size()*8)
 					return ")"
 				case 8:
@@ -4534,6 +4547,7 @@ func (p *project) zeroValue(t cc.Type) {
 
 	switch t.Kind() {
 	case cc.Struct, cc.Union:
+		p.dbg()
 		p.w("%s{}", p.typ(nil, t))
 	default:
 		panic(todo("", t, t.Kind()))
@@ -5179,6 +5193,7 @@ func (p *project) assignmentExpressionValue(f *function, n *cc.AssignmentExpress
 func (p *project) assignmentExpressionValueAssign(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
 	// UnaryExpression '=' AssignmentExpression
 	if mode == exprCondReturn {
+		p.dbg()
 		p.w("return ")
 	}
 	lhs := n.UnaryExpression
@@ -5202,6 +5217,7 @@ func (p *project) assignmentExpressionValueAssignStruct(f *function, n *cc.Assig
 		panic(todo("", p.pos(n)))
 	}
 
+	p.dbg()
 	p.w(" func() %s { __v := ", p.typ(n, lhs))
 	p.assignmentExpression(f, n.AssignmentExpression, rhs, exprValue, flags|fOutermost)
 	p.w(";")
@@ -5302,6 +5318,7 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 			}
 		case opBitfield:
 			bf := lt.BitField()
+			p.dbg()
 			p.w("%sSetBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
 			p.unaryExpression(f, lhs, lt, exprAddrOf, flags)
 			p.w(", ")
@@ -7160,6 +7177,7 @@ func (p *project) binaryShiftExpressionBool(f *function, n *cc.ShiftExpression, 
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	default:
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
+		p.dbg()
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	}
@@ -7405,6 +7423,7 @@ func (p *project) binaryAdditiveExpressionBool(f *function, n *cc.AdditiveExpres
 	switch {
 	case lt.Kind() == cc.Ptr && rt.Kind() == cc.Ptr && oper == "-":
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
+		p.dbg()
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags)
 	case lt.IsArithmeticType() && rt.IsArithmeticType(): // x +- y
@@ -8686,6 +8705,7 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 
 		t := n.UnaryExpression.Operand.Type()
 		if p.isArray(f, n.UnaryExpression, t) {
+			p.dbg()
 			p.w("%d", t.Len()*t.Elem().Size())
 			break
 		}
@@ -9243,10 +9263,17 @@ func (p *project) postfixExpressionPSelectSelect(f *function, n *cc.PostfixExpre
 
 func (p *project) postfixExpressionPSelectSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression '.' IDENTIFIER
+	fld := n.Field
+	if fld.Offset() != 0 {
+		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
+	}
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*(**%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type().Elem()))
@@ -9258,10 +9285,14 @@ func (p *project) postfixExpressionPSelectSelectUnion(f *function, n *cc.Postfix
 
 func (p *project) postfixExpressionPSelectSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression '.' IDENTIFIER
+	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, t.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprSelect, flags)
@@ -9370,10 +9401,14 @@ func (p *project) postfixExpressionPSelectPSelect(f *function, n *cc.PostfixExpr
 
 func (p *project) postfixExpressionPSelectPSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
+	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, t.Elem()))
@@ -9397,14 +9432,22 @@ func (p *project) postfixExpressionSelectPSelect(f *function, n *cc.PostfixExpre
 
 func (p *project) postfixExpressionSelectPSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
+	fld := n.Field
+	if fld.Offset() != 0 {
+		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
+	}
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	case n.Operand.Type().Kind() == cc.Array:
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
+		p.dbg()
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
 		p.w("))")
@@ -9413,10 +9456,14 @@ func (p *project) postfixExpressionSelectPSelectUnion(f *function, n *cc.Postfix
 
 func (p *project) postfixExpressionSelectPSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
+	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
@@ -9439,12 +9486,16 @@ func (p *project) postfixExpressionSelectSelect(f *function, n *cc.PostfixExpres
 
 func (p *project) postfixExpressionSelectSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression '.' IDENTIFIER
+	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	case n.Operand.Type().Kind() == cc.Array:
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		p.postfixExpression(f, n.PostfixExpression, pe, exprSelect, flags&^fOutermost)
 		p.w(".%s", p.fieldName(n, n.Token2.Value))
@@ -9453,12 +9504,19 @@ func (p *project) postfixExpressionSelectSelectStruct(f *function, n *cc.Postfix
 
 func (p *project) postfixExpressionSelectSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression '.' IDENTIFIER
+	fld := n.Field
+	if fld.Offset() != 0 {
+		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
+	}
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	case n.Operand.Type().Kind() == cc.Array:
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
@@ -9916,6 +9974,10 @@ func (p *project) postfixExpressionValuePSelect(f *function, n *cc.PostfixExpres
 
 func (p *project) postfixExpressionValuePSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
+	fld := n.Field
+	if fld.Offset() != 0 {
+		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
+	}
 	pe := n.PostfixExpression.Operand.Type()
 	switch {
 	case n.Operand.Type().IsBitFieldType():
@@ -9923,6 +9985,9 @@ func (p *project) postfixExpressionValuePSelectUnion(f *function, n *cc.PostfixE
 	case n.Operand.Type().Kind() == cc.Array:
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
@@ -9933,10 +9998,12 @@ func (p *project) postfixExpressionValuePSelectUnion(f *function, n *cc.PostfixE
 
 func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
+	fld := n.Field
 	pe := n.PostfixExpression.Operand.Type()
 	k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type())
 	switch {
 	case n.Operand.Type().IsBitFieldType():
+		p.dbg()
 		p.w("(")
 		defer p.w(")")
 		fld := n.Field
@@ -9955,6 +10022,7 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			}
 		default:
 			x := p.convertType(n, nil, fld.Promote(), flags)
+			p.dbg()
 			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
 			p.bitFldOff(pe.Elem(), n.Token2)
@@ -9972,6 +10040,9 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
 		p.w("[0].%s", p.fieldName(n, n.Token2.Value))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
@@ -10112,6 +10183,9 @@ func (p *project) postfixExpressionValueSelectUnion(f *function, n *cc.PostfixEx
 	// PostfixExpression '.' IDENTIFIER
 	pe := n.PostfixExpression.Operand.Type()
 	fld := n.Field
+	if fld.Offset() != 0 {
+		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
+	}
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		p.w("(")
@@ -10127,6 +10201,9 @@ func (p *project) postfixExpressionValueSelectUnion(f *function, n *cc.PostfixEx
 	case n.Operand.Type().Kind() == cc.Array:
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
@@ -10159,6 +10236,9 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 		p.fldOff(pe, n.Token2)
 		p.w("))")
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprSelect, flags&^fOutermost)
 		p.w(".%s", p.fieldName(n, n.Token2.Value))
@@ -10215,10 +10295,17 @@ func (p *project) postfixExpressionLValuePSelect(f *function, n *cc.PostfixExpre
 
 func (p *project) postfixExpressionLValuePSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression "->" IDENTIFIER
+	fld := n.Field
+	if fld.Offset() != 0 {
+		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
+	}
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
@@ -10229,9 +10316,10 @@ func (p *project) postfixExpressionLValuePSelectUnion(f *function, n *cc.Postfix
 }
 
 func (p *project) postfixExpressionLValuePSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	// PostfixExpression "->" IDENTIFIER
+	fld := n.Field
 	pe := n.PostfixExpression.Operand.Type()
 	k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type())
-	// PostfixExpression "->" IDENTIFIER
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
@@ -10240,6 +10328,9 @@ func (p *project) postfixExpressionLValuePSelectStruct(f *function, n *cc.Postfi
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
 		p.w("[0].%s", p.fieldName(n, n.Token2.Value))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
@@ -10265,6 +10356,7 @@ func (p *project) postfixExpressionLValueIndexArrayParameter(f *function, n *cc.
 	// PostfixExpression '[' Expression ']'
 	defer p.w("%s", p.convert(n, n.Operand, t, flags))
 	pe := n.PostfixExpression.Operand.Type()
+	p.dbg()
 	p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 	p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
 	if !n.Expression.Operand.IsZero() {
@@ -10352,6 +10444,10 @@ func (p *project) inUnion(n cc.Node, t cc.Type, fname cc.StringID) bool {
 }
 
 func (p *project) postfixExpressionLValueSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	fld := n.Field
+	if fld.Offset() != 0 {
+		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
+	}
 	pe := n.PostfixExpression.Operand.Type()
 	switch {
 	case pe.Kind() == cc.Array:
@@ -10359,6 +10455,9 @@ func (p *project) postfixExpressionLValueSelectUnion(f *function, n *cc.PostfixE
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
 		p.w("))")
@@ -10367,10 +10466,14 @@ func (p *project) postfixExpressionLValueSelectUnion(f *function, n *cc.PostfixE
 
 func (p *project) postfixExpressionLValueSelectStruct(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	// PostfixExpression '.' IDENTIFIER
+	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		panic(todo("", p.pos(n)))
 	default:
+		if fld.IsBitField() {
+			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
+		}
 		pe := n.PostfixExpression.Operand.Type()
 		p.postfixExpression(f, n.PostfixExpression, pe, exprSelect, flags&^fOutermost)
 		p.w(".%s", p.fieldName(n, n.Token2.Value))
@@ -10582,7 +10685,7 @@ func (p *project) bitFldOff(t cc.Type, tok cc.Token) {
 	fld, ok := t.FieldByName(tok.Value)
 	switch {
 	case ok && !fld.IsBitField():
-		panic(todo("%v: ICE: bitFdlOff must not be used with non bit fields", origin(2)))
+		panic(todo("%v: internal error: bitFdlOff must not be used with non bit fields", origin(2)))
 	case !ok:
 		p.err(&tok, "uknown field: %s", tok.Value)
 	default:
@@ -10599,7 +10702,7 @@ func (p *project) fldOff(t cc.Type, tok cc.Token) {
 	fld, ok := t.FieldByName(tok.Value)
 	switch {
 	case ok && fld.IsBitField():
-		panic(todo("%v: ICE: fdlOff must not be used with bit fields", origin(2)))
+		panic(todo("%v: internal error: fdlOff must not be used with bit fields", origin(2)))
 	case !ok:
 		p.err(&tok, "uknown field: %s", tok.Value)
 	default:
@@ -11930,10 +12033,11 @@ func (p *project) assignShiftOpVoidNormal(f *function, n *cc.AssignmentExpressio
 		lhs := n.UnaryExpression
 		switch {
 		case lhs.Operand.Type().IsArithmeticType():
+			p.dbg()
 			p.w("%sAssign%sPtr%s(", p.task.crt, oper2, p.helperType(n, lhs.Operand.Type()))
 			p.unaryExpression(f, lhs, lhs.Operand.Type(), exprAddrOf, flags|fOutermost)
 			p.w(", int(")
-			p.assignmentExpression(f, n.AssignmentExpression, lhs.Operand.Type(), exprValue, flags|fOutermost)
+			p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags|fOutermost)
 			p.w("))")
 		default:
 			panic(todo("", p.pos(n), lhs.Operand.Type()))
@@ -12063,6 +12167,7 @@ func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t
 			p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 			p.w(", ")
 			if asInt {
+				p.dbg()
 				p.w("int(")
 			}
 			p.assignmentExpression(f, n.AssignmentExpression, d.Type(), exprValue, flags|fOutermost)
@@ -12765,4 +12870,8 @@ func (p *project) paramTyp(n cc.Node, t cc.Type) string {
 	}
 
 	return p.typ(nil, t)
+}
+
+func (p *project) dbg() {
+	// p.w("/*DBG %v */", origin(2))
 }
