@@ -3187,7 +3187,6 @@ func (p *project) declaratorValueArrayParameter(n cc.Node, f *function, d *cc.De
 	}
 	local := f.locals[d]
 	if local.isPinned {
-		p.dbg()
 		p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(n, paramTypeDecay(d)), f.bpName, nonZeroUintptr(local.off), local.name)
 		return
 	}
@@ -3353,7 +3352,6 @@ func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator,
 			}
 
 			if d.IsParameter {
-				p.dbg()
 				p.w("(*(*")
 				p.functionSignature(f, u, "")
 				p.w(")(unsafe.Pointer(&%s)))", local.name)
@@ -3564,7 +3562,6 @@ func (p *project) declaratorAddrOfArrayParameter(n cc.Node, f *function, d *cc.D
 	}
 
 	local := f.locals[d]
-	p.dbg()
 	p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 }
 
@@ -4256,7 +4253,6 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 						}
 					}
 
-					p.dbg()
 					p.w("%sUint32FromUint%d(", p.task.crt, from.Size()*8)
 					return ")"
 				case 8:
@@ -4547,7 +4543,6 @@ func (p *project) zeroValue(t cc.Type) {
 
 	switch t.Kind() {
 	case cc.Struct, cc.Union:
-		p.dbg()
 		p.w("%s{}", p.typ(nil, t))
 	default:
 		panic(todo("", t, t.Kind()))
@@ -5193,7 +5188,6 @@ func (p *project) assignmentExpressionValue(f *function, n *cc.AssignmentExpress
 func (p *project) assignmentExpressionValueAssign(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
 	// UnaryExpression '=' AssignmentExpression
 	if mode == exprCondReturn {
-		p.dbg()
 		p.w("return ")
 	}
 	lhs := n.UnaryExpression
@@ -5217,7 +5211,6 @@ func (p *project) assignmentExpressionValueAssignStruct(f *function, n *cc.Assig
 		panic(todo("", p.pos(n)))
 	}
 
-	p.dbg()
 	p.w(" func() %s { __v := ", p.typ(n, lhs))
 	p.assignmentExpression(f, n.AssignmentExpression, rhs, exprValue, flags|fOutermost)
 	p.w(";")
@@ -5318,7 +5311,6 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 			}
 		case opBitfield:
 			bf := lt.BitField()
-			p.dbg()
 			p.w("%sSetBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
 			p.unaryExpression(f, lhs, lt, exprAddrOf, flags)
 			p.w(", ")
@@ -7177,7 +7169,6 @@ func (p *project) binaryShiftExpressionBool(f *function, n *cc.ShiftExpression, 
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	default:
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
-		p.dbg()
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
 	}
@@ -7423,7 +7414,6 @@ func (p *project) binaryAdditiveExpressionBool(f *function, n *cc.AdditiveExpres
 	switch {
 	case lt.Kind() == cc.Ptr && rt.Kind() == cc.Ptr && oper == "-":
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
-		p.dbg()
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.multiplicativeExpression(f, n.MultiplicativeExpression, n.Promote(), exprValue, flags)
 	case lt.IsArithmeticType() && rt.IsArithmeticType(): // x +- y
@@ -8705,7 +8695,6 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 
 		t := n.UnaryExpression.Operand.Type()
 		if p.isArray(f, n.UnaryExpression, t) {
-			p.dbg()
 			p.w("%d", t.Len()*t.Elem().Size())
 			break
 		}
@@ -9447,7 +9436,6 @@ func (p *project) postfixExpressionSelectPSelectUnion(f *function, n *cc.Postfix
 		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		p.dbg()
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags|fOutermost)
 		p.w("))")
@@ -10003,7 +9991,6 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 	k := p.opKind(f, n.PostfixExpression, n.PostfixExpression.Operand.Type())
 	switch {
 	case n.Operand.Type().IsBitFieldType():
-		p.dbg()
 		p.w("(")
 		defer p.w(")")
 		fld := n.Field
@@ -10022,7 +10009,6 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			}
 		default:
 			x := p.convertType(n, nil, fld.Promote(), flags)
-			p.dbg()
 			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
 			p.bitFldOff(pe.Elem(), n.Token2)
@@ -10356,7 +10342,6 @@ func (p *project) postfixExpressionLValueIndexArrayParameter(f *function, n *cc.
 	// PostfixExpression '[' Expression ']'
 	defer p.w("%s", p.convert(n, n.Operand, t, flags))
 	pe := n.PostfixExpression.Operand.Type()
-	p.dbg()
 	p.w("*(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
 	p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags&^fOutermost)
 	if !n.Expression.Operand.IsZero() {
@@ -12033,7 +12018,6 @@ func (p *project) assignShiftOpVoidNormal(f *function, n *cc.AssignmentExpressio
 		lhs := n.UnaryExpression
 		switch {
 		case lhs.Operand.Type().IsArithmeticType():
-			p.dbg()
 			p.w("%sAssign%sPtr%s(", p.task.crt, oper2, p.helperType(n, lhs.Operand.Type()))
 			p.unaryExpression(f, lhs, lhs.Operand.Type(), exprAddrOf, flags|fOutermost)
 			p.w(", int(")
@@ -12167,7 +12151,6 @@ func (p *project) assignOpValueNormal(f *function, n *cc.AssignmentExpression, t
 			p.declarator(n, f, d, d.Type(), exprLValue, flags|fOutermost)
 			p.w(", ")
 			if asInt {
-				p.dbg()
 				p.w("int(")
 			}
 			p.assignmentExpression(f, n.AssignmentExpression, d.Type(), exprValue, flags|fOutermost)
@@ -12872,6 +12855,6 @@ func (p *project) paramTyp(n cc.Node, t cc.Type) string {
 	return p.typ(nil, t)
 }
 
-func (p *project) dbg() {
-	// p.w("/*DBG %v */", origin(2))
+func (p *project) dbg(a ...interface{}) {
+	p.w("/*DBG.%v %v */", a, origin(2))
 }

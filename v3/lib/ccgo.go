@@ -36,8 +36,10 @@ import (
 )
 
 const (
-	Version           = "3.9.1"
+	Version = "3.9.1"
+
 	experimentsEnvVar = "CCGO_EXPERIMENT"
+	maxSourceLine     = 1 << 20
 )
 
 var (
@@ -394,6 +396,9 @@ func NewTask(args []string, stdout, stderr io.Writer) *Task {
 	return &Task{
 		args: args,
 		cfg: &cc.Config{
+			Config3: cc.Config3{
+				MaxSourceLine: maxSourceLine,
+			},
 			DoNotTypecheckAsm:                     true,
 			EnableAssignmentCompatibilityChecking: true,
 			LongDoubleIsDouble:                    true,
