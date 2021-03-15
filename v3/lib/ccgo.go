@@ -1178,20 +1178,10 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 		}
 	}()
 
-	w := bufio.NewWriter(f)
+	cwr := newCDBWriter(f)
 
 	defer func() {
-		if err := w.Flush(); err != nil && rerr == nil {
-			rerr = err
-		}
-	}()
-
-	if _, err := w.WriteString("[\n"); err != nil {
-		return err
-	}
-
-	defer func() {
-		if _, err := w.WriteString("\n]\n"); err != nil && rerr == nil {
+		if err := cwr.finish(); err != nil && rerr == nil {
 			rerr = err
 		}
 	}()
@@ -1243,7 +1233,7 @@ out:
 		parser = straceParser
 	}
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	cw := t.newCdbMakeWriter(w, cwd, parser)
+	cw := t.newCdbMakeWriter(cwr, cwd, parser)
 	cmd.Stdout = io.MultiWriter(cw, os.Stdout)
 	cmd.Stderr = cmd.Stdout
 	if dmesgs {
@@ -1485,18 +1475,15 @@ type cdbMakeWriter struct {
 	it    cdbItem
 	parse func(w *cdbMakeWriter, s string) (bool, error)
 	sc    *bufio.Scanner
-	w     io.Writer
-
-	first bool
+	w     *cdbWriter
 }
 
-func (t *Task) newCdbMakeWriter(w io.Writer, dir string, parse func(w *cdbMakeWriter, s string) (bool, error)) *cdbMakeWriter {
+func (t *Task) newCdbMakeWriter(w *cdbWriter, dir string, parse func(w *cdbMakeWriter, s string) (bool, error)) *cdbMakeWriter {
 	const sz = 1 << 16
 	r := &cdbMakeWriter{
 		cc2:   t.cc + " ",
 		cc:    t.cc,
 		dir:   dir,
-		first: true,
 		parse: parse,
 		w:     w,
 	}
@@ -1564,27 +1551,8 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 		for i, v := range w.it.Arguments {
 			w.it.Arguments[i] = strings.TrimSpace(v)
 		}
-		s = "    "
-		if !w.first {
-			s = ",\n    "
-		}
-		if _, err := w.w.Write([]byte(s)); err != nil {
-			w.fail(err)
-			continue
-		}
 
-		b, err := json.MarshalIndent(&w.it, "    ", "    ")
-		if err != nil {
-			w.fail(err)
-			continue
-		}
-
-		if _, err := w.w.Write(b); err != nil {
-			w.fail(err)
-			continue
-		}
-
-		w.first = false
+		w.w.add(w.it)
 	}
 	return len(b), nil
 }
@@ -1687,6 +1655,28 @@ func (w *cdbMakeWriter) arStrace(args []string) error {
 		}
 	}
 	return nil
+}
+
+type cdbWriter struct {
+	w     *bufio.Writer
+	items []cdbItem
+}
+
+func newCDBWriter(w io.Writer) *cdbWriter {
+	return &cdbWriter{w: bufio.NewWriter(w)}
+}
+
+func (w *cdbWriter) add(item cdbItem) {
+	w.items = append(w.items, item)
+}
+
+func (w *cdbWriter) finish() error {
+	enc := json.NewEncoder(w.w)
+	enc.SetIndent("", "    ")
+	if err := enc.Encode(w.items); err != nil {
+		return err
+	}
+	return w.w.Flush()
 }
 
 func join(sep string, a ...interface{}) string {
