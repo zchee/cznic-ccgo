@@ -7996,7 +7996,7 @@ func (p *project) castExpressionFunc(f *function, n *cc.CastExpression, t cc.Typ
 		switch tn.Kind() {
 		case cc.Ptr:
 			switch et := ot.Elem(); et.Kind() {
-			case cc.Function:
+			case cc.Function, cc.Void:
 				// ok
 			default:
 				panic(todo("", p.pos(n), et, et.Kind()))
@@ -8016,28 +8016,9 @@ func (p *project) castExpressionFunc(f *function, n *cc.CastExpression, t cc.Typ
 			panic(todo("%v: %v, %v -> %v, %v -> %v, %v", p.pos(n), ot, ot.Kind(), tn, tn.Kind(), t, t.Kind()))
 		}
 		switch ot.Kind() {
-		//TODO- case op.Type().Kind() == cc.Ptr:
-		//TODO- 	switch {
-		//TODO- 	case tn.Kind() == cc.Ptr && tn.Elem().Kind() == cc.Function && t.Kind() == cc.Ptr:
-		//TODO- 		ft := tn.Elem().Alias()
-		//TODO- 		switch ft.Kind() {
-		//TODO- 		default:
-		//TODO- 			panic(todo("", p.pos(n), n.CastExpression.Operand.Type(), n.CastExpression.Operand.Type().Kind()))
-		//TODO- 		}
-		//TODO- 		if ft.Kind() == cc.Ptr { //TODO probably wrong
-		//TODO- 			ft = ft.Elem()
-		//TODO- 		}
-		//TODO- 		p.w("(*(*")
-		//TODO- 		p.functionSignature(f, ft, "")
-		//TODO- 		p.w(")(unsafe.Pointer(")
-		//TODO- 		p.castExpression(f, n.CastExpression, op.Type(), exprAddrOf, flags)
-		//TODO- 		p.w(")))")
-		//TODO- 	default:
-		//TODO- 		panic(todo("", p.pos(n)))
-		//TODO- 	}
 		case cc.Ptr:
 			switch et := ot.Elem(); et.Kind() {
-			case cc.Function:
+			case cc.Function, cc.Void:
 				p.w("(*(*")
 				p.functionSignature(f, ft, "")
 				p.w(")(unsafe.Pointer(")
