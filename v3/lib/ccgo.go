@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	Version = "3.9.2"
+	Version = "3.9.2-202103171551"
 
 	experimentsEnvVar = "CCGO_EXPERIMENT"
 	maxSourceLine     = 1 << 20
@@ -1272,9 +1272,8 @@ func isCreateArchive(s string) bool {
 	// This turns eg `rc` into `cr`.
 	b := []byte(s)
 	sort.Slice(b, func(i, j int) bool { return b[i] < b[j] })
-
 	switch string(b) {
-	case "cq", "cr", "cru":
+	case "cq", "cr", "crs", "cru":
 		return true
 	}
 	return false
