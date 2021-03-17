@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	Version = "3.9.2-202103171551"
+	Version = "3.9.2-202103171745"
 
 	experimentsEnvVar = "CCGO_EXPERIMENT"
 	maxSourceLine     = 1 << 20
@@ -308,10 +308,13 @@ type Task struct {
 	D                               []string // -D
 	I                               []string // -I
 	U                               []string // -U
+	ar                              string   // $AR, default "ar"
+	arLookPath                      string   // LookPath(ar)
 	args                            []string
 	asts                            []*cc.AST
 	capif                           string
 	cc                              string // $CC, default "gcc"
+	ccLookPath                      string // LookPath(cc)
 	cdb                             string // foo.json, use compile DB
 	cfg                             *cc.Config
 	compiledb                       string // -compiledb
@@ -404,6 +407,7 @@ func NewTask(args []string, stdout, stderr io.Writer) *Task {
 			LongDoubleIsDouble:                    true,
 			SharedFunctionDefinitions:             &cc.SharedFunctionDefinitions{},
 		},
+		ar:            env("AR", "ar"),
 		cc:            env("CC", "gcc"),
 		crt:           "libc.",
 		crtImportPath: defaultCrt,
@@ -855,6 +859,15 @@ func (t *Task) Main() (err error) {
 	return t.link()
 }
 
+func (t *Task) setLookPaths() (err error) {
+	if t.ccLookPath, err = exec.LookPath(t.cc); err != nil {
+		return err
+	}
+
+	t.arLookPath, err = exec.LookPath(t.ar)
+	return err
+}
+
 func (t *Task) link() (err error) {
 	if len(t.asts) == 0 {
 		return fmt.Errorf("no objects to link")
@@ -975,7 +988,7 @@ type cdb struct {
 	outputIndex map[string][]*cdbItem
 }
 
-func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace bool, path []string, cc string) error {
+func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace bool, path []string, cc, ar string) error {
 	var item *cdbItem
 	var k string
 	switch {
@@ -1043,8 +1056,8 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace
 
 	obj[k] = item
 	var errs []string
-	for _, v := range item.sources(cc) {
-		if err := db.find(obj, v, -1, item.seq, trace, append(path, nm), cc); err != nil {
+	for _, v := range item.sources(cc, ar) {
+		if err := db.find(obj, v, -1, item.seq, trace, append(path, nm), cc, ar); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -1083,6 +1096,10 @@ func suffixNum(s string, dflt int) (string, int) {
 }
 
 func (t *Task) useCompileDB(fn string, args []string) error {
+	if err := t.setLookPaths(); err != nil {
+		return err
+	}
+
 	var cdb cdb
 	f, err := os.Open(fn)
 	if err != nil {
@@ -1109,7 +1126,7 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 			}
 		}
 
-		k := v.output(t.cc)
+		k := v.output(t.ccLookPath, t.arLookPath)
 		a := cdb.outputIndex[k]
 		v.ver = len(a)
 		cdb.outputIndex[k] = append(a, v)
@@ -1118,7 +1135,7 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	notFound := false
 	for _, v := range args {
 		v, ver := suffixNum(v, 0)
-		if err := cdb.find(obj, v, ver, -1, t.traceTranslationUnits, nil, t.cc); err != nil {
+		if err := cdb.find(obj, v, ver, -1, t.traceTranslationUnits, nil, t.ccLookPath, t.arLookPath); err != nil {
 			notFound = true
 			fmt.Fprintln(os.Stderr, err)
 		}
@@ -1162,6 +1179,10 @@ func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
 }
 
 func (t *Task) createCompileDB(command []string) (rerr error) {
+	if err := t.setLookPaths(); err != nil {
+		return err
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -1250,21 +1271,36 @@ out:
 }
 
 func makeDParser(s string) ([]string, error) {
-	if !strings.HasPrefix(s, "CreateProcess(") {
+	const prefix = "CreateProcess("
+	if !strings.HasPrefix(s, prefix) {
 		return nil, nil
 	}
 
+	// s: `CreateProcess(C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe,gcc -O3 -Wall -c -o compress.o compress.c,...)`
+	s = s[len(prefix):]
+	// s: `C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe,gcc -O3 -Wall -c -o compress.o compress.c,...)`
 	x := strings.IndexByte(s, ',')
 	if x < 0 {
 		return nil, nil
 	}
 
+	cmd := s[:x]
+	// cmd: `C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe`
+
 	s = s[x+1:]
+	// s: `gcc -O3 -Wall -c -o compress.o compress.c,...)`
 	if x = strings.LastIndexByte(s, ','); x < 0 {
 		return nil, nil
 	}
 
-	return shellquote.Split(strings.TrimSpace(s[:x]))
+	s = s[:x]
+	// s: `gcc -O3 -Wall -c -o compress.o compress.c`
+	a, err := shellquote.Split(strings.TrimSpace(s))
+	if err != nil || len(a) == 0 {
+		return nil, err
+	}
+
+	return append([]string{cmd}, a[1:]...), nil
 }
 
 func isCreateArchive(s string) bool {
@@ -1288,22 +1324,34 @@ func makeXParser(s string) ([]string, error) {
 }
 
 func straceParser(s string) ([]string, error) {
+	prefix := "execve("
 	if strings.HasPrefix(s, "[pid ") {
 		s = strings.TrimSpace(s[strings.IndexByte(s, ']')+1:])
 	}
-	if !strings.HasPrefix(s, "execve(") || !strings.HasSuffix(s, ") = 0") {
+	if !strings.HasPrefix(s, prefix) || !strings.HasSuffix(s, ") = 0") {
 		return nil, nil
 	}
 
-	s = s[len("execve("):]
+	// s: `execve("/usr/bin/ar", ["ar", "cr", "libtcl8.6.a", "regcomp.o", ... "bn_s_mp_sqr.o", "bn_s_mp_sub.o"], 0x55e6bbf49648 /* 60 vars */) = 0`
+	s = s[len(prefix):]
+	// s: `"/usr/bin/ar", ["ar", "cr", "libtcl8.6.a", "regcomp.o", ... "bn_s_mp_sqr.o", "bn_s_mp_sub.o"], 0x55e6bbf49648 /* 60 vars */) = 0`
 	a := strings.SplitN(s, ", [", 2)
+	// a[0]: `"/usr/bin/ar"`, a[1]: `"ar", "cr", "libtcl8.6.a", "regcomp.o", ... "bn_s_mp_sqr.o", "bn_s_mp_sub.o"], 0x55e6bbf49648 /* 60 vars */) = 0`
 	args := a[1]
+	// args: `"ar", "cr", "libtcl8.6.a", "regcomp.o", ... "bn_s_mp_sqr.o", "bn_s_mp_sub.o"], 0x55e6bbf49648 /* 60 vars */) = 0`
 	args = args[:strings.LastIndex(args, "], ")]
+	// args: `"ar", "cr", "libtcl8.6.a", "regcomp.o", ... "bn_s_mp_sqr.o", "bn_s_mp_sub.o"`
 	argv, err := shellquote.Split(args)
 	if err != nil {
 		return nil, err
 	}
 
+	words, err := shellquote.Split(a[0])
+	if err != nil {
+		return nil, err
+	}
+
+	argv[0] = words[0]
 	for i, v := range argv {
 		if strings.HasSuffix(v, ",") {
 			v = v[:len(v)-1]
@@ -1375,7 +1423,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 	}
 }
 
-func (it *cdbItem) output(cc string) (r string) {
+func (it *cdbItem) output(cc, ar string) (r string) {
 	if it.Output != "" {
 		return it.Output
 	}
@@ -1401,7 +1449,7 @@ func (it *cdbItem) output(cc string) (r string) {
 				}
 			}
 		}
-	case "ar":
+	case ar:
 		if isCreateArchive(it.Arguments[1]) {
 			it.Output = filepath.Join(it.Directory, it.Arguments[2])
 		}
@@ -1415,15 +1463,15 @@ func (it *cdbItem) output(cc string) (r string) {
 	return it.Output
 }
 
-func (it *cdbItem) sources(cc string) (r []string) {
+func (it *cdbItem) sources(cc, ar string) (r []string) {
 	if len(it.Arguments) == 0 {
 		return nil
 	}
 
 	switch it.Arguments[0] {
 	case
-		"ar",
 		"libtool",
+		ar,
 		cc:
 
 		var prev string
@@ -1435,13 +1483,14 @@ func (it *cdbItem) sources(cc string) (r []string) {
 		}
 		return r
 	default:
-		panic(todo("%q %+v", cc, it))
+		panic(todo("cc: %q ar: %q it: %+v", cc, ar, it))
 	}
 }
 
 type cdbMakeWriter struct {
 	b      bytes.Buffer
 	cc     string
+	ar     string
 	dir    string
 	err    error
 	it     cdbItem
@@ -1453,7 +1502,8 @@ type cdbMakeWriter struct {
 func (t *Task) newCdbMakeWriter(w *cdbWriter, dir string, parser func(s string) ([]string, error)) *cdbMakeWriter {
 	const sz = 1 << 16
 	r := &cdbMakeWriter{
-		cc:     t.cc,
+		cc:     t.ccLookPath,
+		ar:     t.arLookPath,
 		dir:    dir,
 		parser: parser,
 		w:      w,
@@ -1484,7 +1534,7 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 				continue
 			}
 
-			if s[0] == '\'' && s[len(s)-1] == '\'' {
+			if (s[0] == '\'' || s[0] == '`') && s[len(s)-1] == '\'' {
 				s = s[1:]
 				if len(s) == 0 {
 					continue
@@ -1527,7 +1577,7 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 		case w.cc:
 			fmt.Println(args)
 			err = w.handleGCC(args)
-		case "ar":
+		case w.ar:
 			if isCreateArchive(args[1]) {
 				fmt.Println(args)
 				err = w.handleAR(args)
@@ -1559,7 +1609,7 @@ func (w *cdbMakeWriter) handleLibtool(args []string) error {
 			w.it.Output = filepath.Join(w.dir, args[i+1])
 		}
 	}
-	w.it.output(w.cc)
+	w.it.output(w.cc, w.ar)
 	return nil
 }
 
@@ -1590,7 +1640,7 @@ func (w *cdbMakeWriter) handleGCC(args []string) error {
 			w.it.File = filepath.Clean(v)
 		}
 	}
-	w.it.output(w.cc)
+	w.it.output(w.cc, w.ar)
 	return nil
 }
 

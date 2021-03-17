@@ -1740,3 +1740,29 @@ func dumpInitializer(s []*cc.Initializer) string {
 	}
 	return strings.Join(a, "\n")
 }
+
+func TestMakeDParser(t *testing.T) {
+	in := `CreateProcess(C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe,gcc -O3 -Wall -c -o adler32.o adler32.c,...)`
+	got, err := makeDParser(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{`C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe`, "-O3", "-Wall", "-c", "-o", "adler32.o", "adler32.c"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got args %v\nwant %v", got, want)
+	}
+}
+
+func TestStraceParser(t *testing.T) {
+	in := `execve("/usr/bin/ar", ["ar", "cr", "libtcl8.6.a", "regcomp.o", "bn_s_mp_sqr.o", "bn_s_mp_sub.o"], 0x55e6bbf49648 /* 60 vars */) = 0`
+	got, err := straceParser(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"/usr/bin/ar", "cr", "libtcl8.6.a", "regcomp.o", "bn_s_mp_sqr.o", "bn_s_mp_sub.o"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got args %v\nwant %v", got, want)
+	}
+}
