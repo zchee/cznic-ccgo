@@ -1187,7 +1187,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 	}()
 
 	var cmd *exec.Cmd
-	var parser func(w *cdbMakeWriter, s string) (bool, error)
+	var parser func(s string) ([]string, error)
 out:
 	switch {
 	case t.goos == "darwin":
@@ -1249,63 +1249,51 @@ out:
 	return cw.err
 }
 
-func makeDParser(w *cdbMakeWriter, s string) (bool, error) {
+func makeDParser(s string) ([]string, error) {
 	if !strings.HasPrefix(s, "CreateProcess(") {
-		return false, nil
+		return nil, nil
 	}
 
 	x := strings.IndexByte(s, ',')
 	if x < 0 {
-		return false, nil
+		return nil, nil
 	}
 
 	s = s[x+1:]
 	if x = strings.LastIndexByte(s, ','); x < 0 {
-		return false, nil
+		return nil, nil
 	}
 
-	s = strings.TrimSpace(s[:x])
-	return makeParser(w, s)
-}
-
-func makeParser(w *cdbMakeWriter, s string) (bool, error) {
-	switch {
-	case strings.HasPrefix(s, w.cc2):
-		fmt.Println(s)
-		return true, w.gccMakeX(s)
-	case strings.HasPrefix(s, "ar ") && isCreateArchive(s[3:]):
-		fmt.Println(s)
-		return true, w.arMakeX(s)
-	case strings.HasPrefix(s, "libtool "):
-		fmt.Println(s)
-		return true, w.libtoolMakeX(s)
-	}
-	return false, nil
+	return shellquote.Split(strings.TrimSpace(s[:x]))
 }
 
 func isCreateArchive(s string) bool {
-	for _, c := range []string{"cq", "cr", "cru"} {
-		if c == s || strings.HasPrefix(s, c+" ") {
-			return true
-		}
+	// ar modifiers may be in any order so sort characters in s before checking.
+	// This turns eg `rc` into `cr`.
+	b := []byte(s)
+	sort.Slice(b, func(i, j int) bool { return b[i] < b[j] })
+
+	switch string(b) {
+	case "cq", "cr", "cru":
+		return true
 	}
 	return false
 }
 
-func makeXParser(w *cdbMakeWriter, s string) (bool, error) {
+func makeXParser(s string) ([]string, error) {
 	if !strings.HasPrefix(s, "+ ") {
-		return false, nil
+		return nil, nil
 	}
 
-	return makeParser(w, s[2:])
+	return shellquote.Split(s[2:])
 }
 
-func straceParser(w *cdbMakeWriter, s string) (bool, error) {
+func straceParser(s string) ([]string, error) {
 	if strings.HasPrefix(s, "[pid ") {
 		s = strings.TrimSpace(s[strings.IndexByte(s, ']')+1:])
 	}
 	if !strings.HasPrefix(s, "execve(") || !strings.HasSuffix(s, ") = 0") {
-		return false, nil
+		return nil, nil
 	}
 
 	s = s[len("execve("):]
@@ -1314,7 +1302,7 @@ func straceParser(w *cdbMakeWriter, s string) (bool, error) {
 	args = args[:strings.LastIndex(args, "], ")]
 	argv, err := shellquote.Split(args)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	for i, v := range argv {
@@ -1326,19 +1314,8 @@ func straceParser(w *cdbMakeWriter, s string) (bool, error) {
 		}
 		argv[i] = v
 	}
-	switch argv[0] {
-	case w.cc:
-		fmt.Printf("%s\n", strings.Join(argv, " "))
-		return true, w.gccStrace(argv)
-	case "ar":
-		if len(argv) > 2 {
-			if strings.Contains(argv[1], "c") {
-				fmt.Printf("%s\n", strings.Join(argv, " "))
-				return true, w.arStrace(argv)
-			}
-		}
-	}
-	return false, nil
+
+	return argv, nil
 }
 
 type cdbItem struct {
@@ -1426,11 +1403,8 @@ func (it *cdbItem) output(cc string) (r string) {
 			}
 		}
 	case "ar":
-		for i, v := range it.Arguments {
-			if isCreateArchive(v) && i < len(it.Arguments)-1 {
-				it.Output = filepath.Join(it.Directory, it.Arguments[i+1])
-				break
-			}
+		if isCreateArchive(it.Arguments[1]) {
+			it.Output = filepath.Join(it.Directory, it.Arguments[2])
 		}
 	case "libtool":
 		for i, v := range it.Arguments {
@@ -1467,25 +1441,23 @@ func (it *cdbItem) sources(cc string) (r []string) {
 }
 
 type cdbMakeWriter struct {
-	b     bytes.Buffer
-	cc    string
-	cc2   string // cc + " "
-	dir   string
-	err   error
-	it    cdbItem
-	parse func(w *cdbMakeWriter, s string) (bool, error)
-	sc    *bufio.Scanner
-	w     *cdbWriter
+	b      bytes.Buffer
+	cc     string
+	dir    string
+	err    error
+	it     cdbItem
+	parser func(s string) ([]string, error)
+	sc     *bufio.Scanner
+	w      *cdbWriter
 }
 
-func (t *Task) newCdbMakeWriter(w *cdbWriter, dir string, parse func(w *cdbMakeWriter, s string) (bool, error)) *cdbMakeWriter {
+func (t *Task) newCdbMakeWriter(w *cdbWriter, dir string, parser func(s string) ([]string, error)) *cdbMakeWriter {
 	const sz = 1 << 16
 	r := &cdbMakeWriter{
-		cc2:   t.cc + " ",
-		cc:    t.cc,
-		dir:   dir,
-		parse: parse,
-		w:     w,
+		cc:     t.cc,
+		dir:    dir,
+		parser: parser,
+		w:      w,
 	}
 	r.sc = bufio.NewScanner(&r.b)
 	r.sc.Buffer(make([]byte, sz), sz)
@@ -1538,57 +1510,46 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 			continue
 		}
 
-		ok, err := w.parse(w, s)
+		args, err := w.parser(s)
+		if err != nil {
+			w.fail(err)
+			continue
+		}
+		if len(args) == 0 {
+			continue
+		}
+
+		// TODO: change so eg handleGCC returns []cdbItem, skip if none.
+
+		w.it = cdbItem{}
+
+		err = nil
+		switch args[0] {
+		case w.cc:
+			fmt.Println(args)
+			err = w.handleGCC(args)
+		case "ar":
+			if isCreateArchive(args[1]) {
+				fmt.Println(args)
+				err = w.handleAR(args)
+			}
+		case "libtool":
+			fmt.Println(args)
+			err = w.handleLibtool(args)
+		}
 		if err != nil {
 			w.fail(err)
 			continue
 		}
 
-		if !ok {
-			continue
+		if w.it.Output != "" {
+			w.w.add(w.it)
 		}
-
-		for i, v := range w.it.Arguments {
-			w.it.Arguments[i] = strings.TrimSpace(v)
-		}
-
-		w.w.add(w.it)
 	}
 	return len(b), nil
 }
 
-func (w *cdbMakeWriter) gccMakeX(s string) error {
-	args, err := shellquote.Split(s)
-	if err != nil {
-		return err
-	}
-
-	w.it = cdbItem{
-		Arguments: args,
-		Directory: w.dir,
-	}
-	for i, v := range args {
-		switch {
-		case v == "-o" && i < len(args)-1:
-			w.it.Output = filepath.Join(w.dir, args[i+1])
-		case strings.HasSuffix(v, ".c"):
-			if w.it.File != "" {
-				return fmt.Errorf("multiple .c files: %s", v)
-			}
-
-			w.it.File = v
-		}
-	}
-	w.it.output(w.cc)
-	return nil
-}
-
-func (w *cdbMakeWriter) libtoolMakeX(s string) error {
-	args, err := shellquote.Split(s)
-	if err != nil {
-		return err
-	}
-
+func (w *cdbMakeWriter) handleLibtool(args []string) error {
 	w.it = cdbItem{
 		Arguments: args,
 		Directory: w.dir,
@@ -1603,26 +1564,17 @@ func (w *cdbMakeWriter) libtoolMakeX(s string) error {
 	return nil
 }
 
-func (w *cdbMakeWriter) arMakeX(s string) error {
-	args, err := shellquote.Split(s)
-	if err != nil {
-		return err
-	}
-
+func (w *cdbMakeWriter) handleAR(args []string) error {
 	w.it = cdbItem{
 		Arguments: args,
 		Directory: w.dir,
 	}
-	for i, v := range args {
-		switch {
-		case isCreateArchive(v) && i < len(args)-1:
-			w.it.Output = filepath.Join(w.dir, args[i+1])
-		}
-	}
+	// TODO: assumes isCreateArchive has already been checked
+	w.it.Output = filepath.Join(w.dir, args[2])
 	return nil
 }
 
-func (w *cdbMakeWriter) gccStrace(args []string) error {
+func (w *cdbMakeWriter) handleGCC(args []string) error {
 	w.it = cdbItem{
 		Arguments: args,
 		Directory: w.dir,
@@ -1640,20 +1592,6 @@ func (w *cdbMakeWriter) gccStrace(args []string) error {
 		}
 	}
 	w.it.output(w.cc)
-	return nil
-}
-
-func (w *cdbMakeWriter) arStrace(args []string) error {
-	w.it = cdbItem{
-		Arguments: args,
-		Directory: w.dir,
-	}
-	for i, v := range args {
-		switch {
-		case isCreateArchive(v) && i < len(args)-1:
-			w.it.Output = filepath.Join(w.dir, args[i+1])
-		}
-	}
 	return nil
 }
 
