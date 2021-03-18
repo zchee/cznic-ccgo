@@ -1901,7 +1901,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 	switch t.Kind() {
 	case cc.Struct:
 		info := cc.NewStructLayout(t)
-		trc("%v: %q\n%s", p.pos(n), t.Tag(), info)
+		// trc("%v: %q\n%s", p.pos(n), t.Tag(), info)
 		b.WriteString("struct {")
 		if info.NeedExplicitAlign {
 			fmt.Fprintf(b, "_[0]uint%d;", 8*t.Align())
