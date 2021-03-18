@@ -1900,15 +1900,15 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
 	switch t.Kind() {
 	case cc.Struct:
-		info := p.structLayout(n, t)
-		// trc("%v:\n%s", p.pos(n), dumpLayout(t, info))
+		info := cc.NewStructLayout(t)
+		trc("%v: %q\n%s", p.pos(n), t.Tag(), info)
 		b.WriteString("struct {")
-		if info.forceAlign {
+		if info.NeedExplicitAlign {
 			fmt.Fprintf(b, "_[0]uint%d;", 8*t.Align())
 		}
 		var max uintptr
-		for _, off := range info.offs {
-			flds := info.flds[off]
+		for _, off := range info.Offsets {
+			flds := info.OffsetToFields[off]
 			if off < max {
 				var a []string
 				var nmf cc.Field
@@ -1917,7 +1917,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 						nmf = f
 					}
 					if !f.IsBitField() {
-						panic(todo("internal error %q, off %v max %v\n%s", f.Name(), off, max, dumpLayout(t, info)))
+						panic(todo("internal error %q, off %v max %v\n%s", f.Name(), off, max, info))
 					}
 					a = append(a, fmt.Sprintf("%s %s: %d", f.Type(), f.Name(), f.BitFieldWidth()))
 				}
@@ -1926,7 +1926,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			}
 
 			f := flds[0]
-			switch pad := info.padBefore[f]; {
+			switch pad := info.PaddingsBefore[f]; {
 			case pad < 0:
 				continue
 			case pad > 0:
@@ -1942,7 +1942,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 						nmf = f
 					}
 					if !f.IsBitField() {
-						panic(todo("internal error %q\n%s", f.Name(), dumpLayout(t, info)))
+						panic(todo("internal error %q\n%s", f.Name(), info))
 					}
 					a = append(a, fmt.Sprintf("%s %s: %d", f.Type(), f.Name(), f.BitFieldWidth()))
 				}
@@ -1960,8 +1960,8 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 				fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, ft))
 			}
 		}
-		if info.padAfter != 0 {
-			fmt.Fprintf(b, "_ [%d]byte;", info.padAfter)
+		if info.PaddingAfter != 0 {
+			fmt.Fprintf(b, "_ [%d]byte;", info.PaddingAfter)
 		}
 		b.WriteByte('}')
 	case cc.Union:
@@ -2004,84 +2004,6 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		}
 	}
 	return r
-}
-
-type structInfo struct {
-	offs      []uintptr
-	flds      map[uintptr][]cc.Field
-	padBefore map[cc.Field]int
-	padAfter  int
-
-	forceAlign bool
-}
-
-func (p *project) structLayout(n cc.Node, t cc.Type) *structInfo {
-	nf := t.NumField()
-	flds := map[uintptr][]cc.Field{}
-	var maxAlign int
-	for idx := []int{0}; idx[0] < nf; idx[0]++ {
-		f := t.FieldByIndex(idx)
-		if f.IsBitField() && f.BitFieldWidth() == 0 {
-			continue
-		}
-
-		if a := f.Type().Align(); !f.IsBitField() && a > maxAlign {
-			maxAlign = a
-		}
-		off := f.Offset()
-		flds[off] = append(flds[off], f)
-	}
-	var offs []uintptr
-	for k := range flds {
-		offs = append(offs, k)
-	}
-	sort.Slice(offs, func(i, j int) bool { return offs[i] < offs[j] })
-	var pads map[cc.Field]int
-	var pos uintptr
-	var forceAlign bool
-	for _, off := range offs {
-		f := flds[off][0]
-		ft := f.Type()
-		//trc("%q off %d pos %d %v %v %v", f.Name(), off, pos, ft, ft.Kind(), ft.IsIncomplete())
-		switch {
-		case ft.IsBitFieldType():
-			if f.BitFieldOffset() != 0 {
-				break
-			}
-
-			if p := int(off - pos); p != 0 {
-				if pads == nil {
-					pads = map[cc.Field]int{}
-				}
-				pads[f] = p
-				pos = off
-			}
-			pos += uintptr(f.BitFieldBlockWidth()) >> 3
-		default:
-			var sz uintptr
-			switch {
-			case ft.Kind() != cc.Array || ft.Len() != 0:
-				sz = ft.Size()
-			default:
-				forceAlign = true
-			}
-			if p := int(off - pos); p != 0 {
-				if pads == nil {
-					pads = map[cc.Field]int{}
-				}
-				pads[f] = p
-				pos = off
-			}
-			pos += sz
-		}
-	}
-	return &structInfo{
-		offs:       offs,
-		flds:       flds,
-		padBefore:  pads,
-		padAfter:   int(t.Size() - pos),
-		forceAlign: forceAlign || maxAlign < t.Align(),
-	}
 }
 
 func (p *project) bitFieldName(n cc.Node, f cc.Field) string {
@@ -10411,9 +10333,6 @@ func (p *project) inUnion(n cc.Node, t cc.Type, fname cc.StringID) bool {
 
 func (p *project) postfixExpressionLValueSelectUnion(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
 	fld := n.Field
-	if fld.Offset() != 0 {
-		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
-	}
 	pe := n.PostfixExpression.Operand.Type()
 	switch {
 	case pe.Kind() == cc.Array:
@@ -10426,6 +10345,7 @@ func (p *project) postfixExpressionLValueSelectUnion(f *function, n *cc.PostfixE
 		}
 		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
 		p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags|fOutermost)
+		nonZeroUintptr(fld.Offset())
 		p.w("))")
 	}
 }
