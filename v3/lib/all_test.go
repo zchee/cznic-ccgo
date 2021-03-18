@@ -226,6 +226,9 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		"94_generic.c":              {}, //TODO cc _Generic
 		"98_al_ax_extend.c":         {}, //TODO
 	}
+	if runtime.GOOS == "windows" {
+		blacklist["46_grep.c"] = struct{}{} //TODO
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -243,6 +246,15 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 	if err := os.Chdir(temp); err != nil {
 		t.Fatal(err)
 	}
+
+	moduleMode := os.Getenv("GO111MODULE") != "off"
+	if moduleMode {
+		if out, err := Shell("go", "mod", "init", "example.com/tcctest"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	}
+
+	var tidy bool
 
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
@@ -329,6 +341,14 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return true
 		}() {
 			return nil
+		}
+
+		if moduleMode && !tidy {
+			if out, err := Shell("go", "mod", "tidy"); err != nil {
+				return fmt.Errorf("%s\n%s", err, out)
+			}
+
+			tidy = true
 		}
 
 		out, err := exec.Command("go", append([]string{"run", main}, args...)...).CombinedOutput()
@@ -830,11 +850,19 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		t.Fatal(err)
 	}
 
+	moduleMode := os.Getenv("GO111MODULE") != "off"
+	if moduleMode {
+		if out, err := Shell("go", "mod", "init", "example.com/tcctest"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	}
+
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
 	}
 
+	var tidy bool
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -907,6 +935,14 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			return true
 		}() {
 			return nil
+		}
+
+		if moduleMode && !tidy {
+			if out, err := Shell("go", "mod", "tidy"); err != nil {
+				return fmt.Errorf("%s\n%s", err, out)
+			}
+
+			tidy = true
 		}
 
 		out, err := exec.Command("go", "run", main).CombinedOutput()
@@ -1243,6 +1279,10 @@ next:
 			continue
 		}
 
+		if runtime.GOOS == "windows" && base == "mandelbrot.c" { //TODO
+			continue
+		}
+
 		bin := nm + "-" + base + ".out"
 		out, err := exec.Command("gcc", "-O", "-o", bin, fn, "-lm").CombinedOutput()
 		if err != nil {
@@ -1321,6 +1361,11 @@ next:
 		if re != nil && !re.MatchString(base) {
 			continue
 		}
+
+		if runtime.GOOS == "windows" && base == "knucleotide.c" { //TODO
+			continue
+		}
+
 		src := nm + "-" + base + ".go"
 		bin := nm + "-" + base + ".out"
 		var args []string
@@ -1535,7 +1580,7 @@ func TestCSmith(t *testing.T) {
 	}
 	gcc, err := exec.LookPath(gcc)
 	if err != nil {
-		t.Fatalf("%v", err)
+		t.Skip(err)
 		return
 	}
 
