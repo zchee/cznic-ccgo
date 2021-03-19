@@ -247,14 +247,12 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		t.Fatal(err)
 	}
 
-	moduleMode := os.Getenv("GO111MODULE") != "off"
-	if moduleMode {
-		if out, err := Shell("go", "mod", "init", "example.com/tcctest"); err != nil {
+	var tidy, moduleMode bool
+	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+		if out, err := Shell("go", "mod", "init", "example.com/gcc/v3/lib/tcc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
 	}
-
-	var tidy bool
 
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
@@ -344,11 +342,10 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		}
 
 		if moduleMode && !tidy {
+			tidy = true
 			if out, err := Shell("go", "mod", "tidy"); err != nil {
 				return fmt.Errorf("%s\n%s", err, out)
 			}
-
-			tidy = true
 		}
 
 		out, err := exec.Command("go", append([]string{"run", main}, args...)...).CombinedOutput()
@@ -850,9 +847,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		t.Fatal(err)
 	}
 
-	moduleMode := os.Getenv("GO111MODULE") != "off"
-	if moduleMode {
-		if out, err := Shell("go", "mod", "init", "example.com/tcctest"); err != nil {
+	var tidy, moduleMode bool
+	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/gcc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
 	}
@@ -862,7 +859,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		re = regexp.MustCompile(s)
 	}
 
-	var tidy bool
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -938,11 +934,10 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		}
 
 		if moduleMode && !tidy {
-			if out, err := Shell("go", "mod", "tidy"); err != nil {
-				return fmt.Errorf("%s\n%s", err, out)
-			}
-
 			tidy = true
+			if out, err := Shell("go", "mod", "tidy"); err != nil {
+				t.Fatalf("%s\n%s", err, out)
+			}
 		}
 
 		out, err := exec.Command("go", "run", main).CombinedOutput()
@@ -1019,6 +1014,10 @@ func testSQLite(t *testing.T, dir string) {
 		defer os.RemoveAll(temp)
 	}
 
+	if _, _, err := CopyDir(temp, dir, nil); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := os.Chdir(temp); err != nil {
 		t.Fatal(err)
 	}
@@ -1037,8 +1036,8 @@ func testSQLite(t *testing.T, dir string) {
 		"-all-errors",
 		"-o", main,
 		"-verify-structs",
-		filepath.Join(dir, "shell.c"),
-		filepath.Join(dir, "sqlite3.c"),
+		"shell.c",
+		"sqlite3.c",
 	}
 	if *oDebug {
 		ccgoArgs = append(ccgoArgs, "-DSQLITE_DEBUG_OS_TRACE", "-DSQLITE_FORCE_OS_TRACE")
@@ -1074,6 +1073,17 @@ func testSQLite(t *testing.T, dir string) {
 	}() {
 		return
 	}
+
+	if os.Getenv("GO111MODULE") != "off" {
+		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/sqlite"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		if out, err := Shell("go", "mod", "tidy"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	}
+
 	shell := "./shell"
 	if runtime.GOOS == "windows" {
 		shell = "shell.exe"
@@ -1198,6 +1208,13 @@ func TestCompCert(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	var tidy, moduleMode bool
+	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/compcert"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	}
+
 	if err := os.Mkdir("Results", 0770); err != nil {
 		t.Fatal(err)
 	}
@@ -1208,7 +1225,7 @@ func TestCompCert(t *testing.T) {
 
 	var r []*compCertResult
 	t.Run("gcc", func(t *testing.T) { r = append(r, testCompCertGcc(t, m, 5, rdir)...) })
-	t.Run("ccgo", func(t *testing.T) { r = append(r, testCompCertCcgo(t, m, 5, rdir)...) })
+	t.Run("ccgo", func(t *testing.T) { r = append(r, testCompCertCcgo(t, m, 5, rdir, moduleMode, &tidy)...) })
 	consider := map[string]struct{}{}
 	for _, v := range r {
 		consider[v.test] = struct{}{}
@@ -1346,7 +1363,7 @@ func checkResult(t *testing.T, out []byte, base, rdir string) bool {
 	return false
 }
 
-func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
+func testCompCertCcgo(t *testing.T, files []string, N int, rdir string, moduleMode bool, tidy *bool) (r []*compCertResult) {
 	const nm = "ccgo"
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
@@ -1378,6 +1395,7 @@ next:
 					err = fmt.Errorf("%v", e)
 				}
 			}()
+
 			args = []string{
 				"ccgo",
 
@@ -1394,6 +1412,13 @@ next:
 		if *oTraceF {
 			b, _ := ioutil.ReadFile(src)
 			fmt.Printf("\n----\n%s\n----\n", b)
+		}
+
+		if moduleMode && !*tidy {
+			*tidy = true
+			if out, err := Shell("go", "mod", "tidy"); err != nil {
+				t.Fatalf("%s\n%s", err, out)
+			}
 		}
 
 		if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
@@ -1451,6 +1476,13 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 
 	if err := os.Chdir(temp); err != nil {
 		t.Fatal(err)
+	}
+
+	var tidy, moduleMode bool
+	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+		if out, err := Shell("go", "mod", "init", "example.com/gcc/v3/lib/bug"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
 	}
 
 	var re *regexp.Regexp
@@ -1525,6 +1557,13 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return nil
 		}
 
+		if moduleMode && !tidy {
+			tidy = true
+			if out, err := Shell("go", "mod", "tidy"); err != nil {
+				t.Fatalf("%s\n%s", err, out)
+			}
+		}
+
 		out, err := exec.Command("go", append([]string{"run", main}, args...)...).CombinedOutput()
 		if err != nil {
 			if *oTrace {
@@ -1586,7 +1625,7 @@ func TestCSmith(t *testing.T) {
 
 	csmith, err := exec.LookPath("csmith")
 	if err != nil {
-		t.Fatalf("%v", err)
+		t.Skip(err)
 		return
 	}
 	binaryName := filepath.FromSlash("./a.out")
@@ -1607,6 +1646,13 @@ func TestCSmith(t *testing.T) {
 
 	if err := os.Chdir(temp); err != nil {
 		t.Fatal(err)
+	}
+
+	var tidy, moduleMode bool
+	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/csmith"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
 	}
 
 	fixedBugs := []string{
@@ -1742,6 +1788,13 @@ out:
 			}
 		}()
 
+		if moduleMode && !tidy {
+			tidy = true
+			if out, err := Shell("go", "mod", "tidy"); err != nil {
+				t.Fatalf("%s\n%s", err, out)
+			}
+		}
+
 		binOutB, err := func() ([]byte, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 			defer cancel()
@@ -1784,30 +1837,4 @@ func dumpInitializer(s []*cc.Initializer) string {
 		a = append(a, fmt.Sprintf("%v: off %#04x val %v %s", v.Position(), v.Offset, v.AssignmentExpression.Operand.Value(), s))
 	}
 	return strings.Join(a, "\n")
-}
-
-func TestMakeDParser(t *testing.T) {
-	in := `CreateProcess(C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe,gcc -O3 -Wall -c -o adler32.o adler32.c,...)`
-	got, err := makeDParser(in)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := []string{`C:\Program Files\CodeBlocks\MinGW\bin\gcc.exe`, "-O3", "-Wall", "-c", "-o", "adler32.o", "adler32.c"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got args %v\nwant %v", got, want)
-	}
-}
-
-func TestStraceParser(t *testing.T) {
-	in := `execve("/usr/bin/ar", ["ar", "cr", "libtcl8.6.a", "regcomp.o", "bn_s_mp_sqr.o", "bn_s_mp_sub.o"], 0x55e6bbf49648 /* 60 vars */) = 0`
-	got, err := straceParser(in)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := []string{"/usr/bin/ar", "cr", "libtcl8.6.a", "regcomp.o", "bn_s_mp_sqr.o", "bn_s_mp_sub.o"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got args %v\nwant %v", got, want)
-	}
 }
