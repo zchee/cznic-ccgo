@@ -460,6 +460,7 @@ func (t *Task) capi(path string) (pkgName string, exports map[string]struct{}, e
 
 	mod := os.Getenv("GO111MODULE")
 	if mod == "" || mod == "on" {
+		Shell("go", "get", "-d", path)
 		var pkgs []*packages.Package
 		pkgs, errModule = packages.Load(
 			&packages.Config{
