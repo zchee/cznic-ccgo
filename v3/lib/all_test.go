@@ -1317,15 +1317,13 @@ next:
 			}
 		}
 		d := time.Since(t0) / time.Duration(N)
-		if base != "mandelbrot.c" {
-			out = bytes.ReplaceAll(out, []byte{'\r'}, nil)
-		}
-		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
+		isBinary := base == "mandelbrot.c"
+		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir, isBinary)})
 	}
 	return r
 }
 
-func checkResult(t *testing.T, out []byte, base, rdir string) bool {
+func checkResult(t *testing.T, out []byte, base, rdir string, bin bool) bool {
 	base = base[:len(base)-len(filepath.Ext(base))]
 	fn := filepath.Join(rdir, base)
 	b, err := ioutil.ReadFile(fn)
@@ -1334,11 +1332,10 @@ func checkResult(t *testing.T, out []byte, base, rdir string) bool {
 		return false
 	}
 
-	if runtime.GOOS == "windows" {
-		// '\n'  -->  '\r\n'
-		out = bytes.ReplaceAll(out, []byte("\n"), []byte("\r\n"))
+	if !bin {
+		out = bytes.ReplaceAll(out, []byte("\r"), nil)
+		b = bytes.ReplaceAll(out, []byte("\r"), nil)
 	}
-
 	if bytes.Equal(out, b) {
 		return true
 	}
@@ -1438,10 +1435,8 @@ next:
 			}
 		}
 		d := time.Since(t0) / time.Duration(N)
-		if base != "mandelbrot.c" {
-			out = bytes.ReplaceAll(out, []byte{'\r'}, nil)
-		}
-		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir)})
+		isBinary := base == "mandelbrot.c"
+		r = append(r, &compCertResult{nm, base, d, 0, true, true, checkResult(t, out, base, rdir, isBinary)})
 	}
 	return r
 }
