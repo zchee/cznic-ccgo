@@ -38,8 +38,8 @@ golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 h1:go1bK/D/BFZV2I8cIQd1N
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 modernc.org/cc/v3 v3.0.0-20210318154801-be1b88075ae3 h1:5dQjtXRCemSp1ScrwyDEe4qxr35S0KAXE7zzaPuWR44=
 modernc.org/cc/v3 v3.0.0-20210318154801-be1b88075ae3/go.mod h1:0R6jl1aZlIl2avnYfbfHBS1QB6/f+16mihBObaBC878=
-modernc.org/libc v1.8.1 h1:y9oPIhwcaFXxX7kMp6Qb2ZLKzr0mDkikWN3CV5GS63o=
-modernc.org/libc v1.8.1/go.mod h1:U1eq8YWr/Kc1RWCMFUWEdkTg8OTcfLw2kY8EDwl039w=
+modernc.org/libc v0.0.0-20210322225427-1ae588a1420f h1:/Eopv2AxLzTk8nzAWf76JbHTT14hGXsBYJnQMdmTRLE=
+modernc.org/libc v0.0.0-20210322225427-1ae588a1420f/go.mod h1:U1eq8YWr/Kc1RWCMFUWEdkTg8OTcfLw2kY8EDwl039w=
 modernc.org/mathutil v1.1.1/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
 modernc.org/mathutil v1.2.2 h1:+yFk8hBprV+4c0U9GjFtL+dV3N8hOJ8JCituQcMShFY=
 modernc.org/mathutil v1.2.2/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
