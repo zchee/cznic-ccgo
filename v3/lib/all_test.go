@@ -23,6 +23,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -83,6 +84,7 @@ var (
 	oTraceF     = flag.Bool("trcf", false, "Print test file content")
 	oTraceO     = flag.Bool("trco", false, "Print test output")
 	oXTags      = flag.String("xtags", "", "passed to go build of TestSQLite")
+	writeFailed = flag.Bool("write-failed", false, "Write all failed tests into a file called FAILED in the cwd, in the format of go maps for easy copy-pasting.")
 
 	gccDir    = filepath.FromSlash("testdata/gcc-9.1.0")
 	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3330000")
@@ -502,7 +504,6 @@ func TestGCCExec(t *testing.T) {
 }
 
 func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
-	const main = "main.go"
 	blacklist := map[string]struct{}{
 		"20000822-1.c":    {}, // nested func
 		"20001009-2.c":    {}, // asm
@@ -847,11 +848,15 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		t.Fatal(err)
 	}
 
-	var tidy, moduleMode bool
+	var tidy sync.Once
+	var moduleMode bool
 	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/gcc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
+	} else {
+		//if we spend the sync.Once now will we no longer use it in testOnce.
+		tidy.Do(func() {})
 	}
 
 	var re *regexp.Regexp
@@ -859,6 +864,12 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		re = regexp.MustCompile(s)
 	}
 
+	mutex := &sync.RWMutex{}
+	var wg sync.WaitGroup
+	failed := make([]string, 0, 0)
+	success := make([]string, 0, 0)
+	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
+	limiter := make(chan int, runtime.GOMAXPROCS(0))
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -889,105 +900,152 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			return nil
 		}
 
-		if *oTrace {
-			fmt.Fprintln(os.Stderr, files, ok, path)
-		}
-
-		if err := os.Remove(main); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-
-		ccgoArgs := []string{
-			"ccgo",
-
-			"-D__FUNCTION__=__func__",
-			"-o", main,
-			"-verify-structs",
-		}
-		if !func() (r bool) {
-			defer func() {
-				if err := recover(); err != nil {
-					if *oStackTrace {
-						fmt.Printf("%s\n", stack())
-					}
-					if *oTrace {
-						fmt.Println(err)
-					}
-					t.Errorf("%s: %v", path, err)
-					r = false
-				}
-			}()
-
-			ccgoArgs = append(ccgoArgs, path)
-			if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
-				if *oTrace {
-					fmt.Println(err)
-				}
-				err = cpp(*oCpp, ccgoArgs, err)
-				t.Errorf("%s: %v", path, err)
-				return false
-			}
-
-			return true
-		}() {
+		main_file, err := ioutil.TempFile(temp, "*.go")
+		if err != nil {
 			return nil
 		}
-
-		if moduleMode && !tidy {
-			tidy = true
-			if out, err := Shell("go", "mod", "tidy"); err != nil {
-				t.Fatalf("%s\n%s", err, out)
-			}
-		}
-
-		out, err := exec.Command("go", "run", main).CombinedOutput()
-		if err != nil {
+		main := main_file.Name()
+		main_file.Close()
+		wg.Add(1)
+		go func() {
+			id := <-limiter
 			if *oTrace {
-				fmt.Println(err)
+				fmt.Fprintln(os.Stderr, path)
 			}
-			b, _ := ioutil.ReadFile(main)
-			t.Errorf("\n%s\n%v: %s\n%v", b, path, out, err)
-			return nil
-		}
+			mutex.Lock()
+			workinOn[id] = filepath.Base(path)
+			mutex.Unlock()
 
-		if *oTraceF {
-			b, _ := ioutil.ReadFile(main)
-			fmt.Printf("\n----\n%s\n----\n", b)
-		}
-		if *oTraceO {
-			fmt.Printf("%s\n", out)
-		}
-		exp, err := ioutil.ReadFile(noExt(path) + ".expect")
-		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Fprintln(w, filepath.Base(path))
+			ccgoArgs := []string{
+				"ccgo",
+
+				"-D__FUNCTION__=__func__",
+				"-o", main,
+				"-verify-structs",
+			}
+
+			ret := testSingle(t, main, path, ccgoArgs, nil, &tidy)
+			mutex.Lock()
+			workinOn[id] = ""
+			limiter <- id
+			if ret {
 				ok++
-				return nil
+				success = append(success, filepath.Base(path))
+			} else {
+				failed = append(failed, filepath.Base(path))
 			}
-
-			return err
-		}
-
-		out = trim(out)
-		exp = trim(exp)
-
-		if !bytes.Equal(out, exp) {
 			if *oTrace {
-				fmt.Println(err)
+				percent := (len(success) + len(failed)) * 100 / files
+				fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
 			}
-			t.Errorf("%v: out\n%s\nexp\n%s", path, out, exp)
-			return nil
-		}
-
-		fmt.Fprintln(w, filepath.Base(path))
-		ok++
+			mutex.Unlock()
+			wg.Done()
+		}()
 		return nil
 	}); err != nil {
 		t.Errorf("%v", err)
 	}
-	return files, ok
-}
+	//fill the limiter
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		limiter <- i
+	}
 
+	wg.Wait()
+	sort.Strings(failed)
+	sort.Strings(success)
+	if *writeFailed {
+		failedFile, _ := os.Create("FAILED")
+		for _, fpath := range failed {
+			failedFile.WriteString("\"")
+			failedFile.WriteString(fpath)
+			failedFile.WriteString("\": {},\n")
+		}
+	}
+	for _, fpath := range success {
+		w.Write([]byte(fpath))
+		w.Write([]byte{'\n'})
+	}
+
+	return len(failed) + len(success), len(success)
+}
+func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []string, tidy *sync.Once) bool {
+	if !func() (r bool) {
+		defer func() {
+			if err := recover(); err != nil {
+				if *oStackTrace {
+					fmt.Printf("%s\n", stack())
+				}
+				if *oTrace {
+					fmt.Println(err)
+				}
+				t.Errorf("%s: %v", path, err)
+				r = false
+			}
+		}()
+
+		ccgoArgs = append(ccgoArgs, path)
+		if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
+			if *oTrace {
+				fmt.Println(err)
+			}
+			err = cpp(*oCpp, ccgoArgs, err)
+			t.Errorf("%s: %v", path, err)
+			return false
+		}
+
+		return true
+	}() {
+		return false
+	}
+	tidy.Do(func() {
+		if out, err := Shell("go", "mod", "tidy"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	})
+	out, err := exec.Command("go", append([]string{"run", main}, runargs...)...).CombinedOutput()
+	if err != nil {
+		if *oTrace {
+			fmt.Println(err)
+		}
+		b, _ := ioutil.ReadFile(main)
+		t.Errorf("\n%s\n%v: %s\n%v", b, path, out, err)
+		return false
+	}
+
+	if *oTraceF {
+		b, _ := ioutil.ReadFile(main)
+		fmt.Printf("\n----\n%s\n----\n", b)
+	}
+	if *oTraceO {
+		fmt.Printf("%s\n", out)
+	}
+	exp, err := ioutil.ReadFile(noExt(path) + ".expect")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true
+		}
+
+		return false
+	}
+
+	out = trim(out)
+	exp = trim(exp)
+	switch base := filepath.Base(path); base {
+	case "70_floating_point_literals.c": //TODO TCC binary extension
+		a := strings.Split(string(exp), "\n")
+		exp = []byte(strings.Join(a[:35], "\n"))
+	}
+
+	if !bytes.Equal(out, exp) {
+		if *oTrace {
+			fmt.Println(err)
+		}
+		t.Errorf("%v: out\n%s\nexp\n%s", path, out, exp)
+		return false
+	}
+
+	return true
+}
 func TestSQLite(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(sqliteDir))
 	testSQLite(t, root)
@@ -1832,4 +1890,25 @@ func dumpInitializer(s []*cc.Initializer) string {
 		a = append(a, fmt.Sprintf("%v: off %#04x val %v %s", v.Position(), v.Offset, v.AssignmentExpression.Operand.Value(), s))
 	}
 	return strings.Join(a, "\n")
+}
+
+func formatCurrentFiles(slice []string) string {
+	i := 0
+	ret := ""
+	for i2, s := range slice {
+		if s != "" {
+			i = i2 + 1
+			ret += s
+			break
+		}
+	}
+	for _, s := range slice[i:] {
+		if s != "" {
+			ret += ", " + s
+		}
+	}
+	if ret == "" {
+		ret = "Done!"
+	}
+	return ret
 }
