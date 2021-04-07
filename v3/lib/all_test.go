@@ -202,7 +202,6 @@ func TestTCC(t *testing.T) {
 }
 
 func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
-	const main = "main.go"
 	blacklist := map[string]struct{}{
 		"34_array_assignment.c":       {}, // gcc: 16:6: error: assignment to expression with array type
 		"60_errors_and_warnings.c":    {}, // Not a standalone test. gcc fails.
@@ -249,18 +248,27 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		t.Fatal(err)
 	}
 
-	var tidy, moduleMode bool
+	var tidy sync.Once
+	var moduleMode bool
 	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
-		if out, err := Shell("go", "mod", "init", "example.com/gcc/v3/lib/tcc"); err != nil {
+		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/tcc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
+	} else {
+		//if we spend the sync.Once now will we no longer use it in testOnce.
+		tidy.Do(func() {})
 	}
 
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
 	}
-
+	mutex := &sync.RWMutex{}
+	var wg sync.WaitGroup
+	failed := make([]string, 0, 0)
+	success := make([]string, 0, 0)
+	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
+	limiter := make(chan int, runtime.GOMAXPROCS(0))
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -287,123 +295,88 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return nil
 		}
 
-		if *oTrace {
-			fmt.Fprintln(os.Stderr, files, ok, path)
+		main_file, err := ioutil.TempFile(temp, "*.go")
+		if err != nil {
+			return nil
 		}
-
-		if err := os.Remove(main); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-
-		ccgoArgs := []string{
-			"ccgo",
-
-			"-all-errors",
-			"-hide", "__sincosf,__sincos,__sincospif,__sincospi",
-			"-o", main,
-			"-verify-structs",
-		}
-		var args []string
-		switch base := filepath.Base(path); base {
-		case "31_args.c":
-			args = []string{"arg1", "arg2", "arg3", "arg4", "arg5"}
-		case "46_grep.c":
-			if err := copyFile(path, filepath.Join(temp, base)); err != nil {
-				return err
+		main := main_file.Name()
+		main_file.Close()
+		wg.Add(1)
+		go func() {
+			id := <-limiter
+			if *oTrace {
+				fmt.Fprintln(os.Stderr, path)
 			}
-
-			args = []string{`[^* ]*[:a:d: ]+\:\*-/: $`, base}
-		}
-		if !func() (r bool) {
+			mutex.Lock()
+			workinOn[id] = filepath.Base(path)
+			mutex.Unlock()
+			var ret bool
 			defer func() {
-				if err := recover(); err != nil {
-					if *oStackTrace {
-						fmt.Printf("%s\n", stack())
-					}
-					if *oTrace {
-						fmt.Println(err)
-					}
-					t.Errorf("%s: %v", path, err)
-					r = false
+				mutex.Lock()
+				workinOn[id] = ""
+				limiter <- id
+				if ret {
+					ok++
+					success = append(success, filepath.Base(path))
+				} else {
+					failed = append(failed, filepath.Base(path))
 				}
-			}()
-
-			ccgoArgs = append(ccgoArgs, path)
-			if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 				if *oTrace {
-					fmt.Println(err)
+					percent := (len(success) + len(failed)) * 100 / files
+					fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
 				}
-				err = cpp(*oCpp, ccgoArgs, err)
-				t.Errorf("%s: %v", path, err)
-				return false
+				mutex.Unlock()
+				wg.Done()
+			}()
+			ccgoArgs := []string{
+				"ccgo",
+
+				"-all-errors",
+				"-hide", "__sincosf,__sincos,__sincospif,__sincospi",
+				"-o", main,
+				"-verify-structs",
+			}
+			var args []string
+			switch base := filepath.Base(path); base {
+			case "31_args.c":
+				args = []string{"arg1", "arg2", "arg3", "arg4", "arg5"}
+			case "46_grep.c":
+				if err := copyFile(path, filepath.Join(temp, base)); err != nil {
+					t.Error(err)
+					return
+				}
+
+				args = []string{`[^* ]*[:a:d: ]+\:\*-/: $`, base}
 			}
 
-			return true
-		}() {
-			return nil
-		}
-
-		if moduleMode && !tidy {
-			tidy = true
-			if out, err := Shell("go", "mod", "tidy"); err != nil {
-				return fmt.Errorf("%s\n%s", err, out)
-			}
-		}
-
-		out, err := exec.Command("go", append([]string{"run", main}, args...)...).CombinedOutput()
-		if err != nil {
-			if *oTrace {
-				fmt.Println(err)
-			}
-			b, _ := ioutil.ReadFile(main)
-			t.Errorf("\n%s\n%v: %s\n%v", b, path, out, err)
-			return nil
-		}
-
-		if *oTraceF {
-			b, _ := ioutil.ReadFile(main)
-			fmt.Printf("\n----\n%s\n----\n", b)
-		}
-		if *oTraceO {
-			fmt.Printf("%s\n", out)
-		}
-		exp, err := ioutil.ReadFile(noExt(path) + ".expect")
-		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Fprintln(w, filepath.Base(path))
-				ok++
-				return nil
-			}
-
-			return err
-		}
-
-		// trc("out\n%s\nexp\n%s", hex.Dump(out), hex.Dump(exp))
-		out = trim(out)
-		exp = trim(exp)
-		// trc("out\n%s\nexp\n%s", hex.Dump(out), hex.Dump(exp))
-
-		switch base := filepath.Base(path); base {
-		case "70_floating_point_literals.c": //TODO TCC binary extension
-			a := strings.Split(string(exp), "\n")
-			exp = []byte(strings.Join(a[:35], "\n"))
-		}
-
-		if !bytes.Equal(out, exp) {
-			if *oTrace {
-				fmt.Println(err)
-			}
-			t.Errorf("%v: out\n%s\nexp\n%s\nout\n%s\nexp\n%s", path, out, exp, hex.Dump(out), hex.Dump(exp))
-			return nil
-		}
-
-		fmt.Fprintln(w, filepath.Base(path))
-		ok++
+			ret = testSingle(t, main, path, ccgoArgs, args, &tidy)
+		}()
 		return nil
 	}); err != nil {
 		t.Errorf("%v", err)
 	}
-	return files, ok
+	//fill the limiter
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		limiter <- i
+	}
+
+	wg.Wait()
+	sort.Strings(failed)
+	sort.Strings(success)
+	if *writeFailed {
+		failedFile, _ := os.Create("FAILED")
+		for _, fpath := range failed {
+			failedFile.WriteString("\"")
+			failedFile.WriteString(fpath)
+			failedFile.WriteString("\": {},\n")
+		}
+	}
+	for _, fpath := range success {
+		w.Write([]byte(fpath))
+		w.Write([]byte{'\n'})
+	}
+
+	return len(failed) + len(success), len(success)
 }
 
 func cpp(enabled bool, args []string, err0 error) error {
@@ -915,6 +888,24 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			mutex.Lock()
 			workinOn[id] = filepath.Base(path)
 			mutex.Unlock()
+			var ret bool
+			defer func() {
+				mutex.Lock()
+				workinOn[id] = ""
+				limiter <- id
+				if ret {
+					ok++
+					success = append(success, filepath.Base(path))
+				} else {
+					failed = append(failed, filepath.Base(path))
+				}
+				if *oTrace {
+					percent := (len(success) + len(failed)) * 100 / files
+					fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
+				}
+				mutex.Unlock()
+				wg.Done()
+			}()
 
 			ccgoArgs := []string{
 				"ccgo",
@@ -924,22 +915,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 				"-verify-structs",
 			}
 
-			ret := testSingle(t, main, path, ccgoArgs, nil, &tidy)
-			mutex.Lock()
-			workinOn[id] = ""
-			limiter <- id
-			if ret {
-				ok++
-				success = append(success, filepath.Base(path))
-			} else {
-				failed = append(failed, filepath.Base(path))
-			}
-			if *oTrace {
-				percent := (len(success) + len(failed)) * 100 / files
-				fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
-			}
-			mutex.Unlock()
-			wg.Done()
+			ret = testSingle(t, main, path, ccgoArgs, nil, &tidy)
 		}()
 		return nil
 	}); err != nil {
@@ -1512,7 +1488,6 @@ func TestBug(t *testing.T) {
 }
 
 func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
-	const main = "main.go"
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -1531,11 +1506,15 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		t.Fatal(err)
 	}
 
-	var tidy, moduleMode bool
+	var tidy sync.Once
+	var moduleMode bool
 	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
-		if out, err := Shell("go", "mod", "init", "example.com/gcc/v3/lib/bug"); err != nil {
+		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/bug"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
+	} else {
+		//if we spend the sync.Once now will we no longer use it in testOnce.
+		tidy.Do(func() {})
 	}
 
 	var re *regexp.Regexp
@@ -1543,6 +1522,12 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		re = regexp.MustCompile(s)
 	}
 
+	mutex := &sync.RWMutex{}
+	var wg sync.WaitGroup
+	failed := make([]string, 0, 0)
+	success := make([]string, 0, 0)
+	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
+	limiter := make(chan int, runtime.GOMAXPROCS(0))
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -1565,104 +1550,75 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			return nil
 		}
 
-		if *oTrace {
-			fmt.Fprintln(os.Stderr, files, ok, path)
+		main_file, err := ioutil.TempFile(temp, "*.go")
+		if err != nil {
+			return nil
 		}
-
-		if err := os.Remove(main); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-
-		ccgoArgs := []string{
-			"ccgo",
-
-			"-export-defines", "",
-			"-o", main,
-			"-verify-structs",
-		}
-		var args []string
-		if !func() (r bool) {
+		main := main_file.Name()
+		main_file.Close()
+		wg.Add(1)
+		go func() {
+			id := <-limiter
+			if *oTrace {
+				fmt.Fprintln(os.Stderr, path)
+			}
+			mutex.Lock()
+			workinOn[id] = filepath.Base(path)
+			mutex.Unlock()
+			var ret bool
 			defer func() {
-				if err := recover(); err != nil {
-					if *oStackTrace {
-						fmt.Printf("%s\n", stack())
-					}
-					if *oTrace {
-						fmt.Println(err)
-					}
-					t.Errorf("%s: %v", path, err)
-					r = false
+				mutex.Lock()
+				workinOn[id] = ""
+				limiter <- id
+				if ret {
+					ok++
+					success = append(success, filepath.Base(path))
+				} else {
+					failed = append(failed, filepath.Base(path))
 				}
-			}()
-
-			ccgoArgs = append(ccgoArgs, path)
-			if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 				if *oTrace {
-					fmt.Println(err)
+					percent := (len(success) + len(failed)) * 100 / files
+					fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
 				}
-				err = cpp(*oCpp, ccgoArgs, err)
-				t.Errorf("%s: %v", path, err)
-				return false
+				mutex.Unlock()
+				wg.Done()
+			}()
+			ccgoArgs := []string{
+				"ccgo",
+
+				"-export-defines", "",
+				"-o", main,
+				"-verify-structs",
 			}
 
-			return true
-		}() {
-			return nil
-		}
-
-		if moduleMode && !tidy {
-			tidy = true
-			if out, err := Shell("go", "mod", "tidy"); err != nil {
-				t.Fatalf("%s\n%s", err, out)
-			}
-		}
-
-		out, err := exec.Command("go", append([]string{"run", main}, args...)...).CombinedOutput()
-		if err != nil {
-			if *oTrace {
-				fmt.Println(err)
-			}
-			b, _ := ioutil.ReadFile(main)
-			t.Errorf("\n%s\n%v: %s\n%v", b, path, out, err)
-			return nil
-		}
-
-		if *oTraceF {
-			b, _ := ioutil.ReadFile(main)
-			fmt.Printf("\n----\n%s\n----\n", b)
-		}
-		if *oTraceO {
-			fmt.Printf("%s\n", out)
-		}
-		exp, err := ioutil.ReadFile(noExt(path) + ".expect")
-		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Fprintln(w, filepath.Base(path))
-				ok++
-				return nil
-			}
-
-			return err
-		}
-
-		out = trim(out)
-		exp = trim(exp)
-
-		if !bytes.Equal(out, exp) {
-			if *oTrace {
-				fmt.Println(err)
-			}
-			t.Errorf("%v: out\n%s\nexp\n%s", path, out, exp)
-			return nil
-		}
-
-		fmt.Fprintln(w, filepath.Base(path))
-		ok++
+			ret = testSingle(t, main, path, ccgoArgs, nil, &tidy)
+		}()
 		return nil
 	}); err != nil {
 		t.Errorf("%v", err)
 	}
-	return files, ok
+	//fill the limiter
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		limiter <- i
+	}
+
+	wg.Wait()
+	sort.Strings(failed)
+	sort.Strings(success)
+	if *writeFailed {
+		failedFile, _ := os.Create("FAILED")
+		for _, fpath := range failed {
+			failedFile.WriteString("\"")
+			failedFile.WriteString(fpath)
+			failedFile.WriteString("\": {},\n")
+		}
+	}
+	for _, fpath := range success {
+		w.Write([]byte(fpath))
+		w.Write([]byte{'\n'})
+	}
+
+	return len(failed) + len(success), len(success)
 }
 
 func TestCSmith(t *testing.T) {
