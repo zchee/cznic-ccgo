@@ -495,6 +495,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"fp-cmp-2.c":      {}, // sigfpe
 		"fp-cmp-3.c":      {}, // sigfpe
 		"pr15296.c":       {}, // union initializer designates non-first field (gcc extension)
+		"pr43783.c":       {}, // cannot align on 16 byte boundary
 		"pr53160.c":       {}, // unsupported volatile declarator size: 1
 		"pr71631.c":       {}, // unsupported volatile declarator size: 1
 		"pr83269.c":       {}, // unsupported volatile declarator size: 1

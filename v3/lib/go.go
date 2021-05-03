@@ -3909,7 +3909,7 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 		p.w("%s(", p.typ(n, to))
 		return ")"
 	case cc.Array:
-		if !force && from.Kind() == to.Kind() {
+		if from.Kind() == to.Kind() {
 			return ""
 		}
 
@@ -3918,7 +3918,7 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 			return ""
 		}
 
-		panic(todo("%q -> %q", from, to))
+		panic(todo("%q, %v -> %q, %v", from, from.Kind(), to.Kind()))
 	}
 
 	panic(todo("%q -> %q", from, to))
