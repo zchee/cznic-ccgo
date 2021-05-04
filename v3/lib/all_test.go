@@ -514,6 +514,8 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
 		"20000801-3.c":                 {}, //TODO designators
+		"20071029-1.c":                 {}, //TODO designators
+		"pr88739.c":                    {}, //TODO designators
 		"20010209-1.c":                 {}, //TODO
 		"20010605-1.c":                 {}, //TODO
 		"20010605-2.c":                 {}, //TODO
