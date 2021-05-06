@@ -11626,10 +11626,6 @@ func (p *project) charConst(n cc.Node, src string, op cc.Operand, to cc.Type, fl
 	var on uint64
 	switch x := op.Value().(type) {
 	case cc.Int64Value:
-		if x < 0 {
-			panic(todo("", p.pos(n)))
-		}
-
 		on = uint64(x)
 	case cc.Uint64Value:
 		on = uint64(x)
