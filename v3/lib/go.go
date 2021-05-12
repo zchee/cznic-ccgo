@@ -1904,7 +1904,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		// trc("%v: %q\n%s", p.pos(n), t.Tag(), info)
 		b.WriteString("struct {")
 		if info.NeedExplicitAlign {
-			fmt.Fprintf(b, "_[0]uint%d;", 8*t.Align())
+			fmt.Fprintf(b, "_[0]uint%d;", 8*p.align(t))
 		}
 		var max uintptr
 		for _, off := range info.Offsets {
@@ -2004,6 +2004,19 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		}
 	}
 	return r
+}
+
+func (p *project) align(t cc.Type) int {
+	switch n := t.Align(); {
+	case n <= 1:
+		return 1
+	case n <= 2:
+		return 2
+	case n <= 4:
+		return 4
+	default:
+		return 8
+	}
 }
 
 func (p *project) bitFieldName(n cc.Node, f cc.Field) string {
