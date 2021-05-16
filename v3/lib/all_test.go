@@ -227,6 +227,9 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		"94_generic.c":              {}, //TODO cc _Generic
 		"98_al_ax_extend.c":         {}, //TODO
 	}
+	if runtime.GOARCH == "s390x" {
+		blacklist["91_ptr_longlong_arith32.c"] = struct{}{} // invalid on big endian
+	}
 	if runtime.GOOS == "windows" {
 		blacklist["46_grep.c"] = struct{}{} //TODO
 	}
