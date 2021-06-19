@@ -497,14 +497,12 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"fp-cmp-1.c":      {}, // sigfpe
 		"fp-cmp-2.c":      {}, // sigfpe
 		"fp-cmp-3.c":      {}, // sigfpe
-		"pr15296.c":       {}, // union initializer designates non-first field (gcc extension)
 		"pr43783.c":       {}, // cannot align on 16 byte boundary
 		"pr53160.c":       {}, // unsupported volatile declarator size: 1
 		"pr71631.c":       {}, // unsupported volatile declarator size: 1
 		"pr83269.c":       {}, // unsupported volatile declarator size: 1
 		"pr89195.c":       {}, // unsupported volatile declarator size: 1
 		"rbug.c":          {}, // cannot pass on 386
-		"zero-struct-1.c": {}, // initializing zero sized fields not supported
 		"zero-struct-2.c": {}, // initializing zero sized fields not supported
 
 		"20010924-1.c": {}, //TODO flexible array member
@@ -517,8 +515,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
 		"20000801-3.c":                 {}, //TODO designators
-		"20071029-1.c":                 {}, //TODO designators
-		"pr88739.c":                    {}, //TODO designators
 		"20010209-1.c":                 {}, //TODO
 		"20010605-1.c":                 {}, //TODO
 		"20010605-2.c":                 {}, //TODO
