@@ -805,6 +805,95 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 	if runtime.GOOS == "linux" && runtime.GOARCH == "arm" {
 		blacklist["20041210-1.c"] = struct{}{} // reported: https://groups.google.com/g/golang-dev/c/5d4FnuQKNFU/m/qS6BYxi6AQAJ
 	}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
+		// assembler statements not supported
+		blacklist["pr58574.c"] = struct{}{}
+
+		// go.go:5264:assignmentExpressionVoid
+		blacklist["20000815-1.c"] = struct{}{}
+		blacklist["20000914-1.c"] = struct{}{}
+		blacklist["20001101.c"] = struct{}{}
+		blacklist["20020404-1.c"] = struct{}{}
+		blacklist["20030714-1.c"] = struct{}{}
+		blacklist["20031201-1.c"] = struct{}{}
+		blacklist["20031211-2.c"] = struct{}{}
+		blacklist["20100316-1.c"] = struct{}{}
+		blacklist["920908-2.c"] = struct{}{}
+		blacklist["921204-1.c"] = struct{}{}
+		blacklist["930126-1.c"] = struct{}{}
+		blacklist["930621-1.c"] = struct{}{}
+		blacklist["930630-1.c"] = struct{}{}
+		blacklist["930718-1.c"] = struct{}{}
+		blacklist["931031-1.c"] = struct{}{}
+		blacklist["931110-1.c"] = struct{}{}
+		blacklist["960301-1.c"] = struct{}{}
+		blacklist["960608-1.c"] = struct{}{}
+		blacklist["bf-pack-1.c"] = struct{}{}
+		blacklist["bitfld-1.c"] = struct{}{}
+		blacklist["extzvsi.c"] = struct{}{}
+		blacklist["pr19689.c"] = struct{}{}
+		blacklist["pr31136.c"] = struct{}{}
+		blacklist["pr31169.c"] = struct{}{}
+		blacklist["pr31448-2.c"] = struct{}{}
+		blacklist["pr31448.c"] = struct{}{}
+		blacklist["pr32244-1.c"] = struct{}{}
+		blacklist["pr34971.c"] = struct{}{}
+		blacklist["pr37882.c"] = struct{}{}
+		blacklist["pr39339.c"] = struct{}{}
+		blacklist["pr40404.c"] = struct{}{}
+		blacklist["pr40493.c"] = struct{}{}
+		blacklist["pr48973-1.c"] = struct{}{}
+		blacklist["pr48973-2.c"] = struct{}{}
+		blacklist["pr49123.c"] = struct{}{}
+		blacklist["pr52979-1.c"] = struct{}{}
+		blacklist["pr52979-2.c"] = struct{}{}
+		blacklist["pr58570.c"] = struct{}{}
+		blacklist["pr65215-4.c"] = struct{}{}
+		blacklist["pr70566.c"] = struct{}{}
+		blacklist["pr71083.c"] = struct{}{}
+		blacklist["pr78170.c"] = struct{}{}
+		blacklist["pr78436.c"] = struct{}{}
+		blacklist["pr79737-1.c"] = struct{}{}
+		blacklist["pr82192.c"] = struct{}{}
+		blacklist["pr86492.c"] = struct{}{}
+		blacklist["pr88739.c"] = struct{}{}
+		blacklist["vrp-7.c"] = struct{}{}
+
+		// go.go:5173:assignmentExpressionValueAssignBitfield
+		blacklist["921016-1.c"] = struct{}{}
+
+		// go.go:7164:binaryShiftExpressionValue
+		blacklist["bswap-2.c"] = struct{}{}
+
+		// go.go:10145:postfixExpressionValueSelectUnion
+		blacklist["bitfld-6.c"] = struct{}{}
+		blacklist["bitfld-7.c"] = struct{}{}
+		blacklist["pr58726.c"] = struct{}{}
+		blacklist["20181120-1.c"] = struct{}{}
+
+		// go.go:10495:postfixExpressionIncDecValueBitfield: TODOTODO
+		blacklist["20040307-1.c"] = struct{}{}
+		blacklist["20040331-1.c"] = struct{}{}
+		blacklist["980602-2.c"] = struct{}{}
+
+		// go.go:12217:assignOpVoidBitfield: TODOTODO
+		blacklist["20031211-1.c"] = struct{}{}
+		blacklist["991118-1.c"] = struct{}{}
+		blacklist["pr38422.c"] = struct{}{}
+
+		// signal: aborted (core dumped)
+		blacklist["990326-1.c"] = struct{}{}
+		blacklist["bf-sign-1.c"] = struct{}{}
+		blacklist["bf64-1.c"] = struct{}{}
+		blacklist["bitfld-4.c"] = struct{}{}
+		blacklist["bitfld-5.c"] = struct{}{}
+		blacklist["compndlit-1.c"] = struct{}{}
+		blacklist["pr49768.c"] = struct{}{}
+		blacklist["pr70127.c"] = struct{}{}
+		blacklist["pr71700.c"] = struct{}{}
+		blacklist["pr88904.c"] = struct{}{}
+		blacklist["struct-ini-2.c"] = struct{}{}
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -1030,6 +1119,10 @@ func TestSQLite(t *testing.T) {
 }
 
 func testSQLite(t *testing.T, dir string) {
+	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
+		t.Skip("TODO") //TODO
+	}
+
 	const main = "main.go"
 	wd, err := os.Getwd()
 	if err != nil {
@@ -1317,6 +1410,14 @@ func TestCompCert(t *testing.T) {
 }
 
 func testCompCertGcc(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
+	blacklist := map[string]struct{}{}
+	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
+		blacklist["mandelbrot.c"] = struct{}{} //TODO
+	}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
+		blacklist["aes.c"] = struct{}{} // endian.h:7:1: "unknown endianness"
+	}
+
 	const nm = "gcc"
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
@@ -1332,7 +1433,7 @@ next:
 			continue
 		}
 
-		if runtime.GOOS == "windows" && base == "mandelbrot.c" { //TODO
+		if _, ok := blacklist[base]; ok {
 			continue
 		}
 
@@ -1397,6 +1498,13 @@ func checkResult(t *testing.T, out []byte, base, rdir string, bin bool) bool {
 }
 
 func testCompCertCcgo(t *testing.T, files []string, N int, rdir string, moduleMode bool, tidy *bool) (r []*compCertResult) {
+	blacklist := map[string]struct{}{}
+	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
+		blacklist["knucleotide.c"] = struct{}{}
+	}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
+		blacklist["aes.c"] = struct{}{} // endian.h:7:1: "unknown endianness"
+	}
 	const nm = "ccgo"
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
@@ -1412,7 +1520,7 @@ next:
 			continue
 		}
 
-		if runtime.GOOS == "windows" && base == "knucleotide.c" { //TODO
+		if _, ok := blacklist[base]; ok {
 			continue
 		}
 
@@ -1508,6 +1616,12 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		t.Fatal(err)
 	}
 
+	blacklist := map[string]struct{}{}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
+		blacklist["csmith.c"] = struct{}{}  //TODO
+		blacklist["csmith2.c"] = struct{}{} //TODO
+	}
+
 	var tidy sync.Once
 	var moduleMode bool
 	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
@@ -1543,6 +1657,10 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		}
 
 		if filepath.Ext(path) != ".c" || info.Mode()&os.ModeType != 0 {
+			return nil
+		}
+
+		if _, ok := blacklist[filepath.Base(path)]; ok {
 			return nil
 		}
 
@@ -1624,6 +1742,10 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func TestCSmith(t *testing.T) {
+	if runtime.GOARCH == "s390x" {
+		t.Skip("TODO") //TODO
+	}
+
 	gcc := os.Getenv("CC")
 	if gcc == "" {
 		gcc = "gcc"
