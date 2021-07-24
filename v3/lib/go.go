@@ -10671,6 +10671,9 @@ func (p *project) bitFldOff(t cc.Type, tok cc.Token) {
 }
 
 func (p *project) fldOff(t cc.Type, tok cc.Token) {
+	if t.Kind() == cc.Ptr {
+		t = t.Elem()
+	}
 	var off uintptr
 	fld, ok := t.FieldByName(tok.Value)
 	switch {
