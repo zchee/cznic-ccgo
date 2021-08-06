@@ -370,6 +370,7 @@ type Task struct {
 	exportStructsValid    bool // -export-structs present
 	exportTypedefsValid   bool // -export-typedefs present
 	fullPathComments      bool // -full-path-comments
+	funcSig               bool // -func-sig
 	header                bool // -header
 	isScripted            bool
 	mingw                 bool
@@ -627,6 +628,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("cover-instrumentation-c", func(opt string) error { t.coverC = true; return nil })
 	opts.Opt("err-trace", func(opt string) error { t.errTrace = true; return nil })
 	opts.Opt("full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
+	opts.Opt("func-sig", func(opt string) error { t.funcSig = true; return nil })
 	opts.Opt("header", func(opt string) error { t.header = true; return nil })
 	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })

@@ -1221,6 +1221,7 @@ type project struct {
 	structs            map[cc.StringID]*taggedStruct // key: C tag
 	symtab             map[string]interface{}        // *tld or *imported
 	task               *Task
+	tldScope           scope
 	tlds               map[*cc.Declarator]*tld
 	ts                 bytes.Buffer // Text segment
 	tsName             string
@@ -1289,6 +1290,7 @@ func newProject(t *Task) (*project, error) {
 		wanted:           map[*cc.Declarator]struct{}{},
 		wcharSize:        t.asts[0].WideCharType.Size(),
 	}
+	p.tldScope = p.scope
 	p.scope.take(idCAPI)
 	for _, v := range t.imported {
 		var err error
@@ -4255,6 +4257,18 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 	}
 
 	if _, ok := p.wanted[d]; !ok && !staticLocal {
+		isFn := d.Type().Kind() == cc.Function
+		if isFn && p.task.header && p.task.funcSig {
+			if nm := d.Name().String(); !strings.HasPrefix(nm, "__") {
+				p.w("\n\n")
+				t := p.tlds[d]
+				if t == nil {
+					t = &tld{}
+					t.name = p.tldScope.take(d.Name())
+				}
+				p.functionSignature2(nil, d.Type(), t.name)
+			}
+		}
 		return
 	}
 
@@ -4303,7 +4317,7 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 
 func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	// DeclarationSpecifiers Declarator DeclarationList CompoundStatement
-	if p.task.header {
+	if p.task.header && !p.task.funcSig {
 		return
 	}
 
@@ -4362,6 +4376,10 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	p.pass1 = false
 	p.w("\n\n")
 	p.functionDefinitionSignature(f, tld)
+	if p.task.header && p.task.funcSig {
+		return
+	}
+
 	p.w(" ")
 	comment := fmt.Sprintf("/* %v: */", p.pos(d))
 	if p.task.panicStubs {
@@ -12793,6 +12811,34 @@ func (p *project) functionDefinitionSignature(f *function, tld *tld) {
 	default:
 		p.w("%s", tidyComment("\n", f.fndef))
 		p.functionSignature(f, f.fndef.Declarator.Type(), tld.name)
+	}
+}
+
+func (p *project) functionSignature2(f *function, t cc.Type, nm string) {
+	p.w("func %s", nm)
+	p.w("(_ *%sTLS", p.task.crt)
+	suffix := 1
+	for _, v := range t.Parameters() {
+		if v.Type().Kind() == cc.Void {
+			break
+		}
+
+		pn := "_"
+		if d := v.Declarator(); d != nil {
+			pn = d.Name().String()
+			if _, ok := reservedNames[pn]; ok {
+				pn += strconv.Itoa(suffix)
+				suffix++
+			}
+		}
+		p.w(", %s %s", pn, p.paramTyp(v.Declarator(), v.Type()))
+	}
+	if t.IsVariadic() {
+		p.w(", _ /* va_list */ uintptr")
+	}
+	p.w(")")
+	if rt := t.Result(); rt != nil && rt.Kind() != cc.Void {
+		p.w(" %s", p.typ(nil, rt))
 	}
 }
 

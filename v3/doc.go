@@ -286,6 +286,12 @@
 // Using this option suppresses producing of any function definitions. This is
 // possibly useful for producing Go files from C header files.
 //
+// Including function signatures with -header.
+//
+// -func-sig
+//
+// Add this option to include fucntion signature when compiling headers (using -header).
+//
 // Suppressing C stdlib include search paths
 //
 // -nostdinc
