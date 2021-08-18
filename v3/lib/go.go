@@ -700,9 +700,9 @@ func (f *function) staticAllocsAndPinned(n *cc.CompoundStatement) {
 			}
 		}
 		if need != 0 {
-			if f.project.task.mingw {
-				need += 8 // On windows the va list is prefixed with its length
-			}
+			//TODO- if f.project.task.mingw {
+			//TODO- 	need += 8 // On windows the va list is prefixed with its length
+			//TODO- }
 			va := roundup(f.off, 8)
 			f.vaLists[x] = va
 			f.off = va + need
