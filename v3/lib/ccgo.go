@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	Version = "3.9.2-20210323171250"
+	Version = "3.10.0-20210902144000"
 
 	experimentsEnvVar = "CCGO_EXPERIMENT"
 	maxSourceLine     = 1 << 20
