@@ -233,6 +233,10 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 	if runtime.GOOS == "windows" {
 		blacklist["46_grep.c"] = struct{}{} //TODO
 	}
+	if runtime.GOOS == "netbsd" {
+		blacklist["42_function_pointer.c"] = struct{}{} //TODO
+		blacklist["46_grep.c"] = struct{}{}             //TODO
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -272,6 +276,10 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 	success := make([]string, 0, 0)
 	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
 	limiter := make(chan int, runtime.GOMAXPROCS(0))
+	// fill the limiter
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		limiter <- i
+	}
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -305,8 +313,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		main := main_file.Name()
 		main_file.Close()
 		wg.Add(1)
-		go func() {
-			id := <-limiter
+		go func(id int) {
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, path)
 			}
@@ -323,10 +330,6 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 					success = append(success, filepath.Base(path))
 				} else {
 					failed = append(failed, filepath.Base(path))
-				}
-				if *oTrace {
-					percent := (len(success) + len(failed)) * 100 / files
-					fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
 				}
 				mutex.Unlock()
 				wg.Done()
@@ -353,14 +356,10 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			}
 
 			ret = testSingle(t, main, path, ccgoArgs, args, &tidy)
-		}()
+		}(<-limiter)
 		return nil
 	}); err != nil {
 		t.Errorf("%v", err)
-	}
-	//fill the limiter
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		limiter <- i
 	}
 
 	wg.Wait()
@@ -799,6 +798,17 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"widechar-3.c":                 {}, //TODO
 
 	}
+	if runtime.GOOS == "netbsd" {
+		blacklist["pr25737.c"] = struct{}{}
+		blacklist["pr34130.c"] = struct{}{}
+		blacklist["vrp-4.c"] = struct{}{}
+		blacklist["fprintf-1.c"] = struct{}{}
+		blacklist["fprintf-chk-1.c"] = struct{}{}
+		blacklist["gofast.c"] = struct{}{}
+		blacklist["vfprintf-1.c"] = struct{}{}
+		blacklist["vfprintf-chk-1.c"] = struct{}{}
+		blacklist["pr58831.c"] = struct{}{}
+	}
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
 		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
 	}
@@ -934,6 +944,10 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 	success := make([]string, 0, 0)
 	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
 	limiter := make(chan int, runtime.GOMAXPROCS(0))
+	// fill the limiter
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		limiter <- i
+	}
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -971,8 +985,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		main := main_file.Name()
 		main_file.Close()
 		wg.Add(1)
-		go func() {
-			id := <-limiter
+		go func(id int) {
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, path)
 			}
@@ -990,10 +1003,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 				} else {
 					failed = append(failed, filepath.Base(path))
 				}
-				if *oTrace {
-					percent := (len(success) + len(failed)) * 100 / files
-					fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
-				}
 				mutex.Unlock()
 				wg.Done()
 			}()
@@ -1007,14 +1016,10 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			}
 
 			ret = testSingle(t, main, path, ccgoArgs, nil, &tidy)
-		}()
+		}(<-limiter)
 		return nil
 	}); err != nil {
 		t.Errorf("%v", err)
-	}
-	//fill the limiter
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		limiter <- i
 	}
 
 	wg.Wait()
@@ -1119,6 +1124,10 @@ func TestSQLite(t *testing.T) {
 }
 
 func testSQLite(t *testing.T, dir string) {
+	if runtime.GOOS == "netbsd" {
+		t.Skip("TODO") //TODO
+	}
+
 	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
 		t.Skip("TODO") //TODO
 	}
@@ -1505,6 +1514,12 @@ func testCompCertCcgo(t *testing.T, files []string, N int, rdir string, moduleMo
 	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
 		blacklist["aes.c"] = struct{}{} // endian.h:7:1: "unknown endianness"
 	}
+	if runtime.GOOS == "netbsd" {
+		blacklist["bisect.c"] = struct{}{}
+		blacklist["chomp.c"] = struct{}{}
+		blacklist["knucleotide.c"] = struct{}{}
+		blacklist["mandelbrot.c"] = struct{}{}
+	}
 	const nm = "ccgo"
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
@@ -1644,6 +1659,10 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 	success := make([]string, 0, 0)
 	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
 	limiter := make(chan int, runtime.GOMAXPROCS(0))
+	// fill the limiter
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		limiter <- i
+	}
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -1677,8 +1696,7 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		main := main_file.Name()
 		main_file.Close()
 		wg.Add(1)
-		go func() {
-			id := <-limiter
+		go func(id int) {
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, path)
 			}
@@ -1696,10 +1714,6 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 				} else {
 					failed = append(failed, filepath.Base(path))
 				}
-				if *oTrace {
-					percent := (len(success) + len(failed)) * 100 / files
-					fmt.Fprintf(os.Stderr, "[%d/%d](%2d%%): %s\n", len(success), len(success)+len(failed), percent, formatCurrentFiles(workinOn))
-				}
 				mutex.Unlock()
 				wg.Done()
 			}()
@@ -1712,14 +1726,10 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			}
 
 			ret = testSingle(t, main, path, ccgoArgs, nil, &tidy)
-		}()
+		}(<-limiter)
 		return nil
 	}); err != nil {
 		t.Errorf("%v", err)
-	}
-	//fill the limiter
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		limiter <- i
 	}
 
 	wg.Wait()
@@ -1970,25 +1980,4 @@ func dumpInitializer(s []*cc.Initializer) string {
 		a = append(a, fmt.Sprintf("%v: off %#04x val %v %s", v.Position(), v.Offset, v.AssignmentExpression.Operand.Value(), s))
 	}
 	return strings.Join(a, "\n")
-}
-
-func formatCurrentFiles(slice []string) string {
-	i := 0
-	ret := ""
-	for i2, s := range slice {
-		if s != "" {
-			i = i2 + 1
-			ret += s
-			break
-		}
-	}
-	for _, s := range slice[i:] {
-		if s != "" {
-			ret += ", " + s
-		}
-	}
-	if ret == "" {
-		ret = "Done!"
-	}
-	return ret
 }
