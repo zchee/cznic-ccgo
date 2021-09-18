@@ -49,12 +49,14 @@ modernc.org/ccgo/v3 v3.9.5/go.mod h1:umuo2EP2oDSBnD3ckjaVUXMrmeAw8C8OSICVa0iFf60
 modernc.org/ccgo/v3 v3.10.0/go.mod h1:c0yBmkRFi7uW4J7fwx/JiijwOjeAeR2NoSaRVFPmjMw=
 modernc.org/ccgo/v3 v3.11.0/go.mod h1:dGNposbDp9TOZ/1KBxghxtUp/bzErD0/0QW4hhSaBMI=
 modernc.org/ccgo/v3 v3.11.1/go.mod h1:lWHxfsn13L3f7hgGsGlU28D9eUOf6y3ZYHKoPaKU0ag=
+modernc.org/ccgo/v3 v3.11.3/go.mod h1:0oHunRBMBiXOKdaglfMlRPBALQqsfrCKXgw9okQ3GEw=
 modernc.org/libc v1.9.8/go.mod h1:U1eq8YWr/Kc1RWCMFUWEdkTg8OTcfLw2kY8EDwl039w=
 modernc.org/libc v1.9.11/go.mod h1:NyF3tsA5ArIjJ83XB0JlqhjTabTCHm9aX4XMPHyQn0Q=
 modernc.org/libc v1.11.0/go.mod h1:2lOfPmj7cz+g1MrPNmX65QCzVxgNq2C5o0jdLY2gAYg=
 modernc.org/libc v1.11.2/go.mod h1:ioIyrl3ETkugDO3SGZ+6EOKvlP3zSOycUETe4XM4n8M=
-modernc.org/libc v1.11.5 h1:J3br0rL2+wHx9uFp1kL3X798QdfyWFEBf7SLGMxL+MI=
 modernc.org/libc v1.11.5/go.mod h1:k3HDCP95A6U111Q5TmG3nAyUcp3kR5YFZTeDS9v8vSU=
+modernc.org/libc v1.11.6 h1:DJEad5mCRuSnMfd8CStGtX2X/Sh+R76z1RDe7IgRt3I=
+modernc.org/libc v1.11.6/go.mod h1:ddqmzR6p5i4jIGK1d/EiSw97LBcE3dK24QEwCFvgNgE=
 modernc.org/mathutil v1.1.1/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
 modernc.org/mathutil v1.2.2/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
 modernc.org/mathutil v1.4.0/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
