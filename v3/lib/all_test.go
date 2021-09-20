@@ -233,10 +233,6 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 	if runtime.GOOS == "windows" {
 		blacklist["46_grep.c"] = struct{}{} //TODO
 	}
-	if runtime.GOOS == "netbsd" {
-		blacklist["42_function_pointer.c"] = struct{}{} //TODO
-		blacklist["46_grep.c"] = struct{}{}             //TODO
-	}
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -798,17 +794,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"widechar-3.c":                 {}, //TODO
 
 	}
-	if runtime.GOOS == "netbsd" {
-		blacklist["pr25737.c"] = struct{}{}
-		blacklist["pr34130.c"] = struct{}{}
-		blacklist["vrp-4.c"] = struct{}{}
-		blacklist["fprintf-1.c"] = struct{}{}
-		blacklist["fprintf-chk-1.c"] = struct{}{}
-		blacklist["gofast.c"] = struct{}{}
-		blacklist["vfprintf-1.c"] = struct{}{}
-		blacklist["vfprintf-chk-1.c"] = struct{}{}
-		blacklist["pr58831.c"] = struct{}{}
-	}
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
 		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
 	}
@@ -1124,7 +1109,7 @@ func TestSQLite(t *testing.T) {
 }
 
 func testSQLite(t *testing.T, dir string) {
-	if runtime.GOOS == "netbsd" {
+	if runtime.GOOS == "netbsd" && runtime.GOARCH == "amd64" {
 		t.Skip("TODO") //TODO
 	}
 
@@ -1513,12 +1498,6 @@ func testCompCertCcgo(t *testing.T, files []string, N int, rdir string, moduleMo
 	}
 	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
 		blacklist["aes.c"] = struct{}{} // endian.h:7:1: "unknown endianness"
-	}
-	if runtime.GOOS == "netbsd" {
-		blacklist["bisect.c"] = struct{}{}
-		blacklist["chomp.c"] = struct{}{}
-		blacklist["knucleotide.c"] = struct{}{}
-		blacklist["mandelbrot.c"] = struct{}{}
 	}
 	const nm = "ccgo"
 	var re *regexp.Regexp
