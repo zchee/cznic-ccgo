@@ -251,15 +251,14 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		t.Fatal(err)
 	}
 
-	var tidy sync.Once
-	var moduleMode bool
-	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+	if os.Getenv("GO111MODULE") != "off" {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/tcc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
-	} else {
-		//if we spend the sync.Once now will we no longer use it in testOnce.
-		tidy.Do(func() {})
+
+		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
 	}
 
 	var re *regexp.Regexp
@@ -351,7 +350,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 				args = []string{`[^* ]*[:a:d: ]+\:\*-/: $`, base}
 			}
 
-			ret = testSingle(t, main, path, ccgoArgs, args, &tidy)
+			ret = testSingle(t, main, path, ccgoArgs, args)
 		}(<-limiter)
 		return nil
 	}); err != nil {
@@ -907,15 +906,14 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		t.Fatal(err)
 	}
 
-	var tidy sync.Once
-	var moduleMode bool
-	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+	if os.Getenv("GO111MODULE") != "off" {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/gcc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
-	} else {
-		//if we spend the sync.Once now will we no longer use it in testOnce.
-		tidy.Do(func() {})
+
+		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
 	}
 
 	var re *regexp.Regexp
@@ -1000,7 +998,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 				"-verify-structs",
 			}
 
-			ret = testSingle(t, main, path, ccgoArgs, nil, &tidy)
+			ret = testSingle(t, main, path, ccgoArgs, nil)
 		}(<-limiter)
 		return nil
 	}); err != nil {
@@ -1025,7 +1023,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 	return len(failed) + len(success), len(success)
 }
-func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []string, tidy *sync.Once) bool {
+func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []string) bool {
 	if !func() (r bool) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -1054,11 +1052,6 @@ func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []st
 	}() {
 		return false
 	}
-	tidy.Do(func() {
-		if out, err := Shell("go", "mod", "tidy"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-	})
 	out, err := exec.Command("go", append([]string{"run", main}, runargs...)...).CombinedOutput()
 	if err != nil {
 		if *oTrace {
@@ -1202,7 +1195,7 @@ func testSQLite(t *testing.T, dir string) {
 			t.Fatalf("%v\n%s", err, out)
 		}
 
-		if out, err := Shell("go", "mod", "tidy"); err != nil {
+		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
 	}
@@ -1331,9 +1324,12 @@ func TestCompCert(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var tidy, moduleMode bool
-	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+	if os.Getenv("GO111MODULE") != "off" {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/compcert"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
 	}
@@ -1348,7 +1344,7 @@ func TestCompCert(t *testing.T) {
 
 	var r []*compCertResult
 	t.Run("gcc", func(t *testing.T) { r = append(r, testCompCertGcc(t, m, 5, rdir)...) })
-	t.Run("ccgo", func(t *testing.T) { r = append(r, testCompCertCcgo(t, m, 5, rdir, moduleMode, &tidy)...) })
+	t.Run("ccgo", func(t *testing.T) { r = append(r, testCompCertCcgo(t, m, 5, rdir)...) })
 	consider := map[string]struct{}{}
 	for _, v := range r {
 		consider[v.test] = struct{}{}
@@ -1491,7 +1487,7 @@ func checkResult(t *testing.T, out []byte, base, rdir string, bin bool) bool {
 	return false
 }
 
-func testCompCertCcgo(t *testing.T, files []string, N int, rdir string, moduleMode bool, tidy *bool) (r []*compCertResult) {
+func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*compCertResult) {
 	blacklist := map[string]struct{}{}
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
 		blacklist["knucleotide.c"] = struct{}{}
@@ -1547,13 +1543,6 @@ next:
 		if *oTraceF {
 			b, _ := ioutil.ReadFile(src)
 			fmt.Printf("\n----\n%s\n----\n", b)
-		}
-
-		if moduleMode && !*tidy {
-			*tidy = true
-			if out, err := Shell("go", "mod", "tidy"); err != nil {
-				t.Fatalf("%s\n%s", err, out)
-			}
 		}
 
 		if out, err := exec.Command("go", "build", "-o", bin, src).CombinedOutput(); err != nil {
@@ -1616,15 +1605,14 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		blacklist["csmith2.c"] = struct{}{} //TODO
 	}
 
-	var tidy sync.Once
-	var moduleMode bool
-	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+	if os.Getenv("GO111MODULE") != "off" {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/bug"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
-	} else {
-		//if we spend the sync.Once now will we no longer use it in testOnce.
-		tidy.Do(func() {})
+
+		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
 	}
 
 	var re *regexp.Regexp
@@ -1704,7 +1692,7 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 				"-verify-structs",
 			}
 
-			ret = testSingle(t, main, path, ccgoArgs, nil, &tidy)
+			ret = testSingle(t, main, path, ccgoArgs, nil)
 		}(<-limiter)
 		return nil
 	}); err != nil {
@@ -1770,9 +1758,12 @@ func TestCSmith(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var tidy, moduleMode bool
-	if moduleMode = os.Getenv("GO111MODULE") != "off"; moduleMode {
+	if os.Getenv("GO111MODULE") != "off" {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/csmith"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
 	}
@@ -1909,13 +1900,6 @@ out:
 				t.Fatal(err)
 			}
 		}()
-
-		if moduleMode && !tidy {
-			tidy = true
-			if out, err := Shell("go", "mod", "tidy"); err != nil {
-				t.Fatalf("%s\n%s", err, out)
-			}
-		}
 
 		binOutB, err := func() ([]byte, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)

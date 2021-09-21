@@ -32,17 +32,20 @@ import (
 	"github.com/kballard/go-shellquote"
 	"golang.org/x/tools/go/packages"
 	"modernc.org/cc/v3"
+	"modernc.org/libc"
 	"modernc.org/opt"
 )
 
 const (
-	Version = "3.11.4-20210920115503"
+	Version = "3.11.5-20210921133137"
 
 	experimentsEnvVar = "CCGO_EXPERIMENT"
 	maxSourceLine     = 1 << 20
 )
 
 var (
+	_ = libc.Xstdin
+
 	coverExperiment bool
 )
 
