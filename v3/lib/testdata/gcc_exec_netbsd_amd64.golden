@@ -711,7 +711,10 @@ floatunsisf-1.c
 fp-cmp-4e.c
 fp-cmp-6.c
 fp-cmp-8e.c
+fprintf-1.c
+fprintf-chk-1.c
 func-ptr-1.c
+gofast.c
 hugeval.c
 ifcvt-onecmpl-abs-1.c
 index-1.c
@@ -816,6 +819,7 @@ pr24142.c
 pr24716.c
 pr24851.c
 pr25125.c
+pr25737.c
 pr27073.c
 pr27260.c
 pr27285.c
@@ -858,6 +862,7 @@ pr34070-1.c
 pr34070-2.c
 pr34099-2.c
 pr34099.c
+pr34130.c
 pr34176.c
 pr34415.c
 pr34456.c
@@ -1025,6 +1030,7 @@ pr58640-2.c
 pr58640.c
 pr58662.c
 pr58726.c
+pr58831.c
 pr58943.c
 pr58984.c
 pr59014-2.c
@@ -1248,12 +1254,15 @@ va-arg-7.c
 va-arg-8.c
 va-arg-9.c
 va-arg-trap-1.c
+vfprintf-1.c
+vfprintf-chk-1.c
 vla-dealloc-1.c
 vprintf-1.c
 vprintf-chk-1.c
 vrp-1.c
 vrp-2.c
 vrp-3.c
+vrp-4.c
 vrp-5.c
 vrp-6.c
 vrp-7.c
