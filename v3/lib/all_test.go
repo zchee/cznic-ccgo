@@ -1095,10 +1095,6 @@ func TestSQLite(t *testing.T) {
 }
 
 func testSQLite(t *testing.T, dir string) {
-	if runtime.GOOS == "netbsd" && runtime.GOARCH == "amd64" {
-		t.Skip("TODO") //TODO
-	}
-
 	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
 		t.Skip("TODO") //TODO
 	}
