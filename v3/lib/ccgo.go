@@ -1402,6 +1402,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 		set.Opt("pedantic", func(opt string) error { return nil })
 		set.Opt("pipe", func(opt string) error { return nil })
 		set.Opt("pthread", func(opt string) error { return nil })
+		set.Opt("s", func(opt string) error { return nil })
 		if err := set.Parse(it.Arguments[1:], func(arg string) error {
 			switch {
 			case strings.HasSuffix(arg, ".c"):

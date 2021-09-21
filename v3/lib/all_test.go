@@ -75,7 +75,7 @@ func init() {
 var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
 	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
-	oCpp        = flag.Bool("cpp", false, "Amend compiler errors with proprocessor output")
+	oCpp        = flag.Bool("cpp", false, "Amend compiler errors with preprocessor output")
 	oDebug      = flag.Bool("debug", false, "")
 	oKeep       = flag.Bool("keep", false, "keep temp directories")
 	oRE         = flag.String("re", "", "")
@@ -265,11 +265,10 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 	if s := *oRE; s != "" {
 		re = regexp.MustCompile(s)
 	}
-	mutex := &sync.RWMutex{}
 	var wg sync.WaitGroup
+	var mu sync.Mutex
 	failed := make([]string, 0, 0)
 	success := make([]string, 0, 0)
-	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
 	limiter := make(chan int, runtime.GOMAXPROCS(0))
 	// fill the limiter
 	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
@@ -312,23 +311,21 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, path)
 			}
-			mutex.Lock()
-			workinOn[id] = filepath.Base(path)
-			mutex.Unlock()
 			var ret bool
+
 			defer func() {
-				mutex.Lock()
-				workinOn[id] = ""
-				limiter <- id
+				mu.Lock()
 				if ret {
 					ok++
 					success = append(success, filepath.Base(path))
 				} else {
 					failed = append(failed, filepath.Base(path))
 				}
-				mutex.Unlock()
+				mu.Unlock()
+				limiter <- id
 				wg.Done()
 			}()
+
 			ccgoArgs := []string{
 				"ccgo",
 
@@ -921,11 +918,10 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		re = regexp.MustCompile(s)
 	}
 
-	mutex := &sync.RWMutex{}
 	var wg sync.WaitGroup
+	var mu sync.Mutex
 	failed := make([]string, 0, 0)
 	success := make([]string, 0, 0)
-	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
 	limiter := make(chan int, runtime.GOMAXPROCS(0))
 	// fill the limiter
 	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
@@ -972,21 +968,18 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, path)
 			}
-			mutex.Lock()
-			workinOn[id] = filepath.Base(path)
-			mutex.Unlock()
 			var ret bool
+
 			defer func() {
-				mutex.Lock()
-				workinOn[id] = ""
-				limiter <- id
+				mu.Lock()
 				if ret {
 					ok++
 					success = append(success, filepath.Base(path))
 				} else {
 					failed = append(failed, filepath.Base(path))
 				}
-				mutex.Unlock()
+				mu.Unlock()
+				limiter <- id
 				wg.Done()
 			}()
 
@@ -1023,36 +1016,36 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 	return len(failed) + len(success), len(success)
 }
-func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []string) bool {
-	if !func() (r bool) {
-		defer func() {
-			if err := recover(); err != nil {
-				if *oStackTrace {
-					fmt.Printf("%s\n", stack())
-				}
-				if *oTrace {
-					fmt.Println(err)
-				}
-				t.Errorf("%s: %v", path, err)
-				r = false
+func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []string) (r bool) {
+	defer func() {
+		if err := recover(); err != nil {
+			if *oStackTrace {
+				fmt.Printf("%s\n", stack())
 			}
-		}()
-
-		ccgoArgs = append(ccgoArgs, path)
-		if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 			if *oTrace {
 				fmt.Println(err)
 			}
-			err = cpp(*oCpp, ccgoArgs, err)
 			t.Errorf("%s: %v", path, err)
-			return false
+			r = false
 		}
+	}()
 
-		return true
-	}() {
+	ccgoArgs = append(ccgoArgs, path)
+	if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
+		if *oTrace {
+			fmt.Println(err)
+		}
+		err = cpp(*oCpp, ccgoArgs, err)
+		t.Errorf("%s: %v", path, err)
 		return false
 	}
-	out, err := exec.Command("go", append([]string{"run", main}, runargs...)...).CombinedOutput()
+
+	out, err := func() ([]byte, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		return exec.CommandContext(ctx, "go", append([]string{"run", main}, runargs...)...).CombinedOutput()
+	}()
 	if err != nil {
 		if *oTrace {
 			fmt.Println(err)
@@ -1620,11 +1613,10 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		re = regexp.MustCompile(s)
 	}
 
-	mutex := &sync.RWMutex{}
 	var wg sync.WaitGroup
+	var mu sync.Mutex
 	failed := make([]string, 0, 0)
 	success := make([]string, 0, 0)
-	workinOn := make([]string, runtime.GOMAXPROCS(0), runtime.GOMAXPROCS(0))
 	limiter := make(chan int, runtime.GOMAXPROCS(0))
 	// fill the limiter
 	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
@@ -1667,23 +1659,21 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, path)
 			}
-			mutex.Lock()
-			workinOn[id] = filepath.Base(path)
-			mutex.Unlock()
 			var ret bool
+
 			defer func() {
-				mutex.Lock()
-				workinOn[id] = ""
-				limiter <- id
+				mu.Lock()
 				if ret {
 					ok++
 					success = append(success, filepath.Base(path))
 				} else {
 					failed = append(failed, filepath.Base(path))
 				}
-				mutex.Unlock()
+				mu.Unlock()
+				limiter <- id
 				wg.Done()
 			}()
+
 			ccgoArgs := []string{
 				"ccgo",
 
