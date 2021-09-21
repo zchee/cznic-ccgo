@@ -1400,9 +1400,6 @@ func testCompCertGcc(t *testing.T, files []string, N int, rdir string) (r []*com
 	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
 		blacklist["aes.c"] = struct{}{} // endian.h:7:1: "unknown endianness"
 	}
-	if runtime.GOOS == "netbsd" {
-		blacklist["knucleotide.c"] = struct{}{}
-	}
 	const nm = "gcc"
 	var re *regexp.Regexp
 	if s := *oRE; s != "" {
@@ -1489,9 +1486,6 @@ func testCompCertCcgo(t *testing.T, files []string, N int, rdir string) (r []*co
 	}
 	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
 		blacklist["aes.c"] = struct{}{} // endian.h:7:1: "unknown endianness"
-	}
-	if runtime.GOOS == "netbsd" {
-		blacklist["knucleotide.c"] = struct{}{}
 	}
 	const nm = "ccgo"
 	var re *regexp.Regexp
