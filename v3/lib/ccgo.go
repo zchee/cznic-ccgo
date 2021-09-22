@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	Version = "3.11.5-20210921133137"
+	Version = "3.12.6-20210922111124"
 
 	experimentsEnvVar = "CCGO_EXPERIMENT"
 	maxSourceLine     = 1 << 20
@@ -724,6 +724,20 @@ func (t *Task) Main() (err error) {
 	}
 
 	if t.version {
+		gobin, err := exec.LookPath("go")
+		var b []byte
+		if err == nil {
+			var bin string
+			bin, err = exec.LookPath(os.Args[0])
+			if err == nil {
+				b, err = exec.Command(gobin, "version", "-m", bin).CombinedOutput()
+			}
+		}
+		if err == nil {
+			fmt.Fprintf(t.stdout, "%s", b)
+			return nil
+		}
+
 		fmt.Fprintf(t.stdout, "%s\n", Version)
 		return nil
 	}
@@ -1215,8 +1229,8 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 	var cmd *exec.Cmd
 	var parser func(s string) ([]string, error)
 out:
-	switch {
-	case t.goos == "darwin", t.goos == "freebsd":
+	switch t.goos {
+	case "darwin", "freebsd", "netbsd":
 		if command[0] != "make" {
 			return fmt.Errorf("usupported build command: %s", command[0])
 		}
@@ -1229,7 +1243,7 @@ out:
 		command = append([]string{sh, "-c"}, join(" ", command[0], "SHELL='sh -x'", command[1:]))
 		cmd = exec.Command(command[0], command[1:]...)
 		parser = makeXParser
-	case t.goos == "windows":
+	case "windows":
 		if command[0] != "make" {
 			return fmt.Errorf("usupported build command: %s", command[0])
 		}
