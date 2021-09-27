@@ -5188,8 +5188,7 @@ func (p *project) assignmentExpressionValueAssignBitfield(f *function, n *cc.Ass
 	switch {
 	case bf.Type().IsSignedType():
 		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			p.todo(n, t)
-			break
+			panic(todo("", n.Position()))
 		}
 
 		p.w("%sAssignBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
@@ -5200,7 +5199,6 @@ func (p *project) assignmentExpressionValueAssignBitfield(f *function, n *cc.Ass
 	default:
 		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
 			p.todo(n, t)
-			break
 		}
 
 		p.w("%sAssignBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
@@ -5280,7 +5278,6 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 		case opBitfield:
 			if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
 				panic(todo("", n.Position()))
-				break
 			}
 
 			bf := lt.BitField()
@@ -7130,8 +7127,7 @@ func (p *project) binaryShiftExpressionBool(f *function, n *cc.ShiftExpression, 
 	switch {
 	case n.ShiftExpression.Operand.Type().IsBitFieldType():
 		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			p.todo(n, t)
-			return
+			panic(todo("", n.Position()))
 		}
 
 		p.w("(")
@@ -7179,8 +7175,7 @@ func (p *project) binaryShiftExpressionValue(f *function, n *cc.ShiftExpression,
 		p.w(")")
 	case n.ShiftExpression.Operand.Type().IsBitFieldType():
 		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			p.todo(n, t)
-			return
+			panic(todo("", n.Position()))
 		}
 
 		p.w("(")
@@ -9966,8 +9961,7 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 		switch pe.Kind() {
 		case cc.Array:
 			if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-				p.todo(n, t)
-				return
+				panic(todo("", n.Position()))
 			}
 
 			x := p.convertType(n, nil, fld.Promote(), flags)
@@ -9982,6 +9976,8 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			}
 		default:
 			if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
+				panic(todo("", n.Position()))
+
 				x := p.convertType(n, nil, fld.Promote(), flags)
 				p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 				p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
@@ -10160,8 +10156,7 @@ func (p *project) postfixExpressionValueSelectUnion(f *function, n *cc.PostfixEx
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			p.todo(n, t)
-			return
+			panic(todo("", n.Position()))
 		}
 
 		p.w("(")
@@ -10194,6 +10189,8 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
+			panic(todo("", n.Position()))
+
 			p.w("(")
 			defer p.w("%s)", p.convertType(n, fld.Promote(), t, flags))
 			x := p.convertType(n, nil, fld.Promote(), flags)

@@ -228,7 +228,7 @@ func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 		"98_al_ax_extend.c":         {}, //TODO
 	}
 	if runtime.GOARCH == "s390x" {
-		blacklist["91_ptr_longlong_arith32.c"] = struct{}{} // invalid on big endian
+		blacklist["91_ptr_longlong_arith32.c"] = struct{}{} // OK, invalid result on big endian
 	}
 	if runtime.GOOS == "windows" {
 		blacklist["46_grep.c"] = struct{}{} //TODO
@@ -800,7 +800,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		// assembler statements not supported
 		blacklist["pr58574.c"] = struct{}{}
 
-		// go.go:5264:assignmentExpressionVoid
+		// go.go:5282:assignmentExpressionVoid
 		blacklist["20000815-1.c"] = struct{}{}
 		blacklist["20000914-1.c"] = struct{}{}
 		blacklist["20001101.c"] = struct{}{}
@@ -850,24 +850,24 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		blacklist["pr88739.c"] = struct{}{}
 		blacklist["vrp-7.c"] = struct{}{}
 
-		// go.go:5173:assignmentExpressionValueAssignBitfield
+		// go.go:5191:assignmentExpressionValueAssignBitfield
 		blacklist["921016-1.c"] = struct{}{}
 
-		// go.go:7164:binaryShiftExpressionValue
+		// go.go:7182:binaryShiftExpressionValue
 		blacklist["bswap-2.c"] = struct{}{}
 
-		// go.go:10145:postfixExpressionValueSelectUnion
+		// go.go:10163:postfixExpressionValueSelectUnion
 		blacklist["bitfld-6.c"] = struct{}{}
 		blacklist["bitfld-7.c"] = struct{}{}
 		blacklist["pr58726.c"] = struct{}{}
 		blacklist["20181120-1.c"] = struct{}{}
 
-		// go.go:10495:postfixExpressionIncDecValueBitfield: TODOTODO
+		// go.go:10513:postfixExpressionIncDecValueBitfield: TODOTODO
 		blacklist["20040307-1.c"] = struct{}{}
 		blacklist["20040331-1.c"] = struct{}{}
 		blacklist["980602-2.c"] = struct{}{}
 
-		// go.go:12217:assignOpVoidBitfield: TODOTODO
+		// go.go:12238:assignOpVoidBitfield: TODOTODO
 		blacklist["20031211-1.c"] = struct{}{}
 		blacklist["991118-1.c"] = struct{}{}
 		blacklist["pr38422.c"] = struct{}{}
@@ -884,6 +884,19 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		blacklist["pr71700.c"] = struct{}{}
 		blacklist["pr88904.c"] = struct{}{}
 		blacklist["struct-ini-2.c"] = struct{}{}
+
+		// other
+		blacklist["20011113-1.c"] = struct{}{}
+		blacklist["20081117-1.c"] = struct{}{}
+		blacklist["bf-sign-2.c"] = struct{}{}
+		blacklist["pr52209.c"] = struct{}{}
+		blacklist["pr58984.c"] = struct{}{}
+		blacklist["pr59388.c"] = struct{}{}
+		blacklist["pr60017.c"] = struct{}{}
+		blacklist["pr65215-3.c"] = struct{}{}
+		blacklist["pr70602.c"] = struct{}{}
+		blacklist["struct-ini-3.c"] = struct{}{}
+
 	}
 	wd, err := os.Getwd()
 	if err != nil {
