@@ -6,7 +6,6 @@ package ccgo // import "modernc.org/ccgo/v3/lib"
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"go/scanner"
 	"go/token"
@@ -5185,28 +5184,11 @@ func (p *project) assignmentExpressionValueAssignBitfield(f *function, n *cc.Ass
 	lt := lhs.Operand.Type()
 	bf := lt.BitField()
 	defer p.w("%s", p.convertType(n, lt, t, flags))
-	switch {
-	case bf.Type().IsSignedType():
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo("", n.Position()))
-		}
-
-		p.w("%sAssignBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
-		p.unaryExpression(f, lhs, lt, exprAddrOf, flags)
-		p.w(", ")
-		p.assignmentExpression(f, n.AssignmentExpression, lt, exprValue, flags|fOutermost)
-		p.w(", %d, %d, %#x)", bf.BitFieldWidth(), bf.BitFieldOffset(), bf.Mask())
-	default:
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			p.todo(n, t)
-		}
-
-		p.w("%sAssignBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
-		p.unaryExpression(f, lhs, lt, exprAddrOf, flags)
-		p.w(", ")
-		p.assignmentExpression(f, n.AssignmentExpression, lt, exprValue, flags|fOutermost)
-		p.w(", %d, %d, %#x)", bf.BitFieldWidth(), bf.BitFieldOffset(), bf.Mask())
-	}
+	p.w("%sAssignBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
+	p.unaryExpression(f, lhs, lt, exprAddrOf, flags)
+	p.w(", ")
+	p.assignmentExpression(f, n.AssignmentExpression, lt, exprValue, flags|fOutermost)
+	p.w(", %d, %d, %#x)", bf.BitFieldWidth(), bf.BitFieldOffset(), bf.Mask())
 }
 
 func (p *project) assignmentExpressionValueAssignNormal(f *function, n *cc.AssignmentExpression, t cc.Type, mode exprMode, flags flags) {
@@ -5276,10 +5258,6 @@ func (p *project) assignmentExpressionVoid(f *function, n *cc.AssignmentExpressi
 				p.assignmentExpression(f, n.AssignmentExpression, lt, mode, flags|fOutermost)
 			}
 		case opBitfield:
-			if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-				panic(todo("", n.Position()))
-			}
-
 			bf := lt.BitField()
 			p.w("%sSetBitFieldPtr%d%s(", p.task.crt, bf.BitFieldBlockWidth(), p.bfHelperType(lt))
 			p.unaryExpression(f, lhs, lt, exprAddrOf, flags)
@@ -7126,10 +7104,6 @@ func (p *project) binaryShiftExpressionBool(f *function, n *cc.ShiftExpression, 
 	defer p.w("%s", p.artithmeticBinaryExpression(n, n.Operand, n.Operand.Type(), &mode, flags))
 	switch {
 	case n.ShiftExpression.Operand.Type().IsBitFieldType():
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo("", n.Position()))
-		}
-
 		p.w("(")
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
@@ -7174,10 +7148,6 @@ func (p *project) binaryShiftExpressionValue(f *function, n *cc.ShiftExpression,
 		p.additiveExpression(f, n.AdditiveExpression, p.intType, exprValue, flags|fOutermost)
 		p.w(")")
 	case n.ShiftExpression.Operand.Type().IsBitFieldType():
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo("", n.Position()))
-		}
-
 		p.w("(")
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
@@ -9960,10 +9930,6 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 		defer p.w("%s", p.convertType(n, fld.Promote(), t, flags))
 		switch pe.Kind() {
 		case cc.Array:
-			if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-				panic(todo("", n.Position()))
-			}
-
 			x := p.convertType(n, nil, fld.Promote(), flags)
 			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 			p.postfixExpression(f, n.PostfixExpression, pe, exprDecay, flags)
@@ -9975,20 +9941,6 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 				p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
 			}
 		default:
-			if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-				panic(todo("", n.Position()))
-
-				x := p.convertType(n, nil, fld.Promote(), flags)
-				p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
-				p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
-				p.bitFldOff(pe.Elem(), n.Token2)
-				p.w("))>>%d&%#x%s", fld.BitFieldBlockWidth()-fld.BitFieldOffset()-fld.BitFieldWidth(), uint64(1)<<fld.BitFieldWidth()-1, x)
-				if fld.Type().IsSignedType() {
-					p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
-				}
-				break
-			}
-
 			x := p.convertType(n, nil, fld.Promote(), flags)
 			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
@@ -10155,10 +10107,6 @@ func (p *project) postfixExpressionValueSelectUnion(f *function, n *cc.PostfixEx
 	}
 	switch {
 	case n.Operand.Type().IsBitFieldType():
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo("", n.Position()))
-		}
-
 		p.w("(")
 		defer p.w("%s)", p.convertType(n, fld.Promote(), t, flags))
 		x := p.convertType(n, nil, fld.Promote(), flags)
@@ -10188,22 +10136,6 @@ func (p *project) postfixExpressionValueSelectStruct(f *function, n *cc.PostfixE
 	fld := n.Field
 	switch {
 	case n.Operand.Type().IsBitFieldType():
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo("", n.Position()))
-
-			p.w("(")
-			defer p.w("%s)", p.convertType(n, fld.Promote(), t, flags))
-			x := p.convertType(n, nil, fld.Promote(), flags)
-			p.w("*(*uint%d)(unsafe.Pointer(", fld.BitFieldBlockWidth())
-			p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
-			p.bitFldOff(pe, n.Token2)
-			p.w("))>>%d&%#x%s", fld.BitFieldBlockWidth()-fld.BitFieldOffset()-fld.BitFieldWidth(), uint64(1)<<fld.BitFieldWidth()-1, x)
-			if fld.Type().IsSignedType() {
-				p.w("<<%d>>%[1]d", int(fld.Promote().Size()*8)-fld.BitFieldWidth())
-			}
-			break
-		}
-
 		p.w("(")
 		defer p.w("%s)", p.convertType(n, fld.Promote(), t, flags))
 		x := p.convertType(n, nil, fld.Promote(), flags)
@@ -10506,10 +10438,6 @@ func (p *project) postfixExpressionIncDecValueArrayParameter(f *function, n *cc.
 }
 
 func (p *project) postfixExpressionIncDecValueBitfield(f *function, n *cc.PostfixExpression, oper, oper2 string, t cc.Type, mode exprMode, flags flags) {
-	if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-		panic(todo("", n.Position()))
-	}
-
 	// PostfixExpression "++"
 	pe := n.PostfixExpression.Operand.Type()
 	defer p.w("%s", p.convert(n, n.PostfixExpression.Operand, t, flags))
@@ -12063,10 +11991,6 @@ func (p *project) assignOpValueBitfield(f *function, n *cc.AssignmentExpression,
 		panic(todo(""))
 	}
 
-	if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-		panic(todo("", n.Position()))
-	}
-
 	ot := n.Operand.Type()
 	lhs := n.UnaryExpression
 	bf := lhs.Operand.Type().BitField()
@@ -12096,10 +12020,6 @@ func (p *project) assignOpValueBitfield(f *function, n *cc.AssignmentExpression,
 }
 
 func (p *project) readBitfield(n cc.Node, ptr string, bf cc.Field, promote cc.Type) {
-	if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-		panic(todo("", n.Position()))
-	}
-
 	bw := bf.BitFieldBlockWidth()
 	m := bf.Mask()
 	o := bf.BitFieldOffset()
@@ -12231,10 +12151,6 @@ func (p *project) assignOpVoidArrayParameter(f *function, n *cc.AssignmentExpres
 }
 
 func (p *project) assignOpVoidBitfield(f *function, n *cc.AssignmentExpression, t cc.Type, oper, oper2 string, mode exprMode, flags flags) {
-	if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-		panic(todo("", n.Position()))
-	}
-
 	// UnaryExpression "*=" AssignmentExpression etc.
 	lhs := n.UnaryExpression
 	lt := lhs.Operand.Type()

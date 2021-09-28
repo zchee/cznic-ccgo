@@ -5,7 +5,6 @@
 package ccgo // import "modernc.org/ccgo/v3/lib"
 
 import (
-	"encoding/binary"
 	"fmt"
 	"sort"
 	"strings"
@@ -40,10 +39,6 @@ func (p *project) initializer(f *function, n *cc.Initializer, t cc.Type, sc cc.S
 
 		if a.Field == nil || b.Field == nil || !a.Field.IsBitField() || !b.Field.IsBitField() {
 			panic(todo("%v: internal error: off %#x, %v: off %#x, t %v", a.Position(), a.Offset, b.Position(), b.Offset, t))
-		}
-
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo("", n.Position()))
 		}
 
 		return a.Field.BitFieldOffset() < b.Field.BitFieldOffset()
@@ -251,10 +246,6 @@ func (p *project) initializerStruct(tag string, off uintptr, f *function, s []*c
 		ft := fld.Type()
 		switch {
 		case fld.IsBitField():
-			if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-				panic(todo("", parts[0].Position()))
-			}
-
 			first := true
 			for _, v := range parts {
 				if v.AssignmentExpression.Operand.IsZero() {
@@ -314,19 +305,11 @@ func (p *project) initializerStructField(off uintptr, s []*cc.Initializer, t cc.
 			continue
 		}
 
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo(""))
-		}
-
 		fld = fld2.BitFieldBlockFirst()
 	}
 	for len(s) != 0 {
 		if v := s[0]; v.Offset < nextOff || v.Type().Size() == 0 {
 			if v.Field != nil && v.Field.IsBitField() {
-				if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-					panic(todo("", v.Position()))
-				}
-
 				bits = true
 			}
 			s = s[1:]
@@ -397,10 +380,6 @@ func (p *project) initializerUnion(tag string, off uintptr, f *function, s []*cc
 	tag = fmt.Sprintf("%s:", p.fieldName2(parts[0], fld))
 	switch {
 	case fld.IsBitField():
-		if p.task.cfg.ABI.ByteOrder == binary.BigEndian {
-			panic(todo("", parts[0].Position()))
-		}
-
 		first := true
 		for _, v := range parts {
 			if v.AssignmentExpression.Operand.IsZero() {
