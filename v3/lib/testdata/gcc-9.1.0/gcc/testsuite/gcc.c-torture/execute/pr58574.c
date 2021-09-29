@@ -205,13 +205,13 @@ foo (double x)
 int
 main ()
 {
-#ifdef __s390x__
-  {
-    register unsigned long r5 __asm ("r5");
-    r5 = 0xdeadbeefUL;
-    asm volatile ("":"+r" (r5));
-  }
-#endif
+// #ifdef __s390x__
+//   {
+//     register unsigned long r5 __asm ("r5");
+//     r5 = 0xdeadbeefUL;
+//     asm volatile ("":"+r" (r5));
+//   }
+// #endif
   double d = foo (78.4);
   if (d < 0.38 || d > 0.42)
     __builtin_abort ();

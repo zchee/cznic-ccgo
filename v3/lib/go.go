@@ -7108,7 +7108,7 @@ func (p *project) binaryShiftExpressionBool(f *function, n *cc.ShiftExpression, 
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
-		p.w(")&%#x", n.ShiftExpression.Operand.Type().BitField().Mask())
+		p.w(")&%#x", bfValueMask(n.ShiftExpression.Operand.Type().BitField()))
 	case shiftOverflows(n, n.ShiftExpression.Operand, n.AdditiveExpression.Operand, oper, n.Operand.Type()):
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags|fForceRuntimeConv)
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
@@ -7136,6 +7136,11 @@ func shiftOp(s string) string {
 	}
 }
 
+
+func bfValueMask(bf cc.Field) uint64 {
+	return uint64(1)<<bf.BitFieldWidth()-1
+}
+
 func (p *project) binaryShiftExpressionValue(f *function, n *cc.ShiftExpression, oper string, t cc.Type, mode exprMode, flags flags) {
 	// ShiftExpression "<<" AdditiveExpression
 	flags &^= fOutermost
@@ -7152,7 +7157,7 @@ func (p *project) binaryShiftExpressionValue(f *function, n *cc.ShiftExpression,
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags)
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))
 		p.additiveExpression(f, n.AdditiveExpression, n.Promote(), exprValue, flags)
-		p.w(")&%#x", n.ShiftExpression.Operand.Type().BitField().Mask())
+		p.w(")&%#x", bfValueMask(n.ShiftExpression.Operand.Type().BitField()))
 	case shiftOverflows(n, n.ShiftExpression.Operand, n.AdditiveExpression.Operand, oper, n.Operand.Type()):
 		p.shiftExpression(f, n.ShiftExpression, n.Operand.Type(), exprValue, flags|fForceRuntimeConv)
 		p.w(" %s%s", oper, tidyComment(" ", &n.Token))

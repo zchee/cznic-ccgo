@@ -667,6 +667,8 @@ bitfld-1.c
 bitfld-2.c
 bitfld-4.c
 bitfld-5.c
+bitfld-6.c
+bitfld-7.c
 bswap-1.c
 bswap-2.c
 builtin-prefetch-1.c
@@ -1023,6 +1025,7 @@ pr58419.c
 pr58431.c
 pr58564.c
 pr58570.c
+pr58574.c
 pr58640-2.c
 pr58640.c
 pr58662.c
@@ -1125,6 +1128,7 @@ pr77718.c
 pr77766.c
 pr78170.c
 pr78378.c
+pr78436.c
 pr78477.c
 pr78586.c
 pr78617.c

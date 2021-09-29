@@ -796,15 +796,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 	if runtime.GOOS == "linux" && runtime.GOARCH == "arm" {
 		blacklist["20041210-1.c"] = struct{}{} // reported: https://groups.google.com/g/golang-dev/c/5d4FnuQKNFU/m/qS6BYxi6AQAJ
 	}
-	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
-		// assembler statements not supported
-		blacklist["pr58574.c"] = struct{}{}
-
-		//TODO
-		blacklist["pr78436.c"] = struct{}{}
-		blacklist["bitfld-6.c"] = struct{}{}
-		blacklist["bitfld-7.c"] = struct{}{}
-	}
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -1615,10 +1606,6 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 }
 
 func TestCSmith(t *testing.T) {
-	if runtime.GOARCH == "s390x" {
-		t.Skip("TODO") //TODO
-	}
-
 	gcc := os.Getenv("CC")
 	if gcc == "" {
 		gcc = "gcc"
