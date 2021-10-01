@@ -5,7 +5,7 @@
 
 #include <stdarg.h>
 
-extern __SIZE_TYPE__ strlen ();
+extern __SIZE_TYPE__ strlen (char *);
 
 int
 to_hex (unsigned int a)

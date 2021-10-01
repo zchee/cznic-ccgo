@@ -10,6 +10,7 @@
    we've got a 10 byte type stuffed into some amount of padding.  And
    the fact that -ffloat-store is going to stuff this value temporarily
    into some bit of stack frame that we've no control over and can't zero.  */
+#ifndef __ccgo_test__
 #if LDBL_MANT_DIG == 64
 # if defined(__i386__) || defined(__x86_64__) || defined (__ia64__)
 #  undef fpsizeofl
@@ -28,6 +29,7 @@
 #if LDBL_MANT_DIG == 106
 # undef fpsizeofl
 # define fpsizeofl	sizeof(double)
+#endif
 #endif
 
 

@@ -472,61 +472,124 @@ func TestGCCExec(t *testing.T) {
 
 func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
 	blacklist := map[string]struct{}{
-		"20000822-1.c":    {}, // nested func
-		"20001009-2.c":    {}, // asm
-		"20010122-1.c":    {}, // __builtin_return_address
-		"20010904-1.c":    {}, // __attribute__((aligned(32)))
-		"20010904-2.c":    {}, // __attribute__((aligned(32)))
-		"20021127-1.c":    {}, // gcc specific optimization
-		"20030128-1.c":    {}, // volatile short
-		"20030323-1.c":    {}, // __builtin_return_address
-		"20101011-1.c":    {}, // sigfpe
-		"960830-1.c":      {}, // assembler statements not supported
-		"991014-1.c":      {}, // Struct type too big
-		"align-3.c":       {}, // __attribute__((aligned(256)))
-		"eeprof-1.c":      {}, // requires instrumentation
-		"fp-cmp-1.c":      {}, // sigfpe
-		"fp-cmp-2.c":      {}, // sigfpe
-		"fp-cmp-3.c":      {}, // sigfpe
-		"pr43783.c":       {}, // cannot align on 16 byte boundary
-		"pr53160.c":       {}, // unsupported volatile declarator size: 1
-		"pr71631.c":       {}, // unsupported volatile declarator size: 1
-		"pr83269.c":       {}, // unsupported volatile declarator size: 1
-		"pr89195.c":       {}, // unsupported volatile declarator size: 1
-		"rbug.c":          {}, // cannot pass on 386
-		"zero-struct-2.c": {}, // initializing zero sized fields not supported
+		// nested func
+		"20000822-1.c": {}, // nested func
+		"20010209-1.c": {},
+		"20010605-1.c": {},
+		"20030501-1.c": {},
 
-		"20010924-1.c": {}, //TODO flexible array member
-		"20030109-1.c": {}, //TODO flexible array member
-		"20041124-1.c": {}, //TODO _Complex
-		"20041201-1.c": {}, //TODO _Complex
-		"20050613-1.c": {}, //TODO flexible array member
-		"pr28865.c":    {}, //TODO flexible array member
-		"pr33382.c":    {}, //TODO flexible array member
+		// asm
+		"20001009-2.c": {},
+		"20020107-1.c": {},
+		"20030222-1.c": {},
+		"960830-1.c":   {},
 
-		"20000113-1.c":                 {}, //TODO non-const bitfield initializer
-		"20000801-3.c":                 {}, //TODO designators
-		"20010209-1.c":                 {}, //TODO
-		"20010605-1.c":                 {}, //TODO
-		"20010605-2.c":                 {}, //TODO
-		"20020107-1.c":                 {}, //TODO
-		"20020206-2.c":                 {}, //TODO
-		"20020227-1.c":                 {}, //TODO
-		"20020314-1.c":                 {}, //TODO
-		"20020320-1.c":                 {}, //TODO
-		"20020411-1.c":                 {}, //TODO
-		"20020412-1.c":                 {}, //TODO
-		"20021113-1.c":                 {}, //TODO
-		"20021120-1.c":                 {}, //TODO 52:5: unsupported volatile declarator size: 256
-		"20030222-1.c":                 {}, //TODO
-		"20030501-1.c":                 {}, //TODO
-		"20030910-1.c":                 {}, //TODO
-		"20031003-1.c":                 {}, //TODO
-		"20040223-1.c":                 {}, //TODO
-		"20040302-1.c":                 {}, //TODO
-		"20040308-1.c":                 {}, //TODO
-		"20040411-1.c":                 {}, //TODO VLA
-		"20040423-1.c":                 {}, //TODO VLA
+		// unsupported alignment
+		"20010904-1.c": {},
+		"20010904-2.c": {},
+		"align-3.c":    {},
+
+		"20010122-1.c": {}, // __builtin_return_address
+		"20021127-1.c": {}, // gcc specific optimization
+		"20101011-1.c": {}, // sigfpe
+		"991014-1.c":   {}, // Struct type too big
+		"eeprof-1.c":   {}, // requires instrumentation
+
+		// unsupported volatile declarator size
+		"20021120-1.c": {},
+		"20030128-1.c": {},
+		"pr53160.c":    {},
+		"pr71631.c":    {},
+		"pr83269.c":    {},
+		"pr89195.c":    {},
+
+		// implementation defined conversion result
+		"20031003-1.c": {},
+
+		// goto * expr
+		"20040302-1.c": {},
+
+		//TODO initializing zero sized fields not supported
+		"zero-struct-2.c": {},
+
+		//TODO flexible array member
+		"20010924-1.c": {},
+		"20030109-1.c": {},
+		"20050613-1.c": {},
+		"pr28865.c":    {},
+		"pr33382.c":    {},
+
+		//TODO _Complex
+		"20041124-1.c": {},
+		"20041201-1.c": {},
+		"20010605-2.c": {},
+		"20020227-1.c": {},
+		"20020411-1.c": {},
+		"20030910-1.c": {},
+
+		//TODO bitfield
+		"20000113-1.c": {},
+
+		//TODO designator
+		"20000801-3.c": {},
+
+		//TODO __builtin_types_compatible_p
+		"20020206-2.c": {},
+
+		//TODO alloca
+		"20020314-1.c": {},
+		"20021113-1.c": {},
+		"20040223-1.c": {},
+
+		//TODO statement expression
+		"20020320-1.c": {},
+
+		//TODO VLA
+		"20040308-1.c": {},
+		"20040411-1.c": {},
+		"20040423-1.c": {},
+
+		//TODO link error
+		"fp-cmp-7.c": {},
+
+		//TODO __builtin_isunordered
+		"compare-fp-1.c": {},
+		"compare-fp-3.c": {}, //TODO
+		"compare-fp-4.c": {},
+		"fp-cmp-4.c":     {}, //TODO
+		"fp-cmp-4f.c":    {},
+		"fp-cmp-4l.c":    {},
+		"fp-cmp-5.c":     {},
+		"fp-cmp-8.c":     {},
+		"fp-cmp-8f.c":    {},
+		"fp-cmp-8l.c":    {},
+		"pr38016.c":      {},
+
+		//TODO __builtin_infl
+		"inf-1.c":   {},
+		"inf-2.c":   {},
+		"pr36332.c": {}, //TODO
+
+		//TODO __builtin_huge_vall
+		"inf-3.c": {},
+
+		//TODO undefined: tanf
+		"mzero4.c": {},
+
+		//TODO __builtin_isgreater
+		"pr50310.c": {},
+
+		//TODO convert: TODOTODO t1 -> t2
+		"pr72824-2.c": {},
+
+		//TODO struct var arg
+		"20020412-1.c": {},
+
+		//TODO undefined: tmpnam
+		"fprintf-2.c":   {},
+		"printf-2.c":    {},
+		"user-printf.c": {},
+
 		"20040520-1.c":                 {}, //TODO
 		"20040629-1.c":                 {}, //TODO
 		"20040705-1.c":                 {}, //TODO
@@ -608,62 +671,21 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"built-in-setjmp.c":            {}, //TODO
 		"builtin-bitops-1.c":           {}, //TODO
 		"builtin-constant.c":           {}, //TODO
-		"builtin-nan-1.c":              {}, //TODO
 		"builtin-prefetch-3.c":         {}, //TODO volatile struct
 		"builtin-types-compatible-p.c": {}, //TODO
 		"call-trap-1.c":                {}, //TODO
 		"comp-goto-1.c":                {}, //TODO
 		"comp-goto-2.c":                {}, //TODO
-		"compare-fp-1.c":               {}, //TODO
-		"compare-fp-3.c":               {}, //TODO
-		"compare-fp-4.c":               {}, //TODO
 		"complex-1.c":                  {}, //TODO
 		"complex-2.c":                  {}, //TODO
 		"complex-4.c":                  {}, //TODO
 		"complex-5.c":                  {}, //TODO
 		"complex-6.c":                  {}, //TODO
 		"complex-7.c":                  {}, //TODO
-		"copysign1.c":                  {}, //TODO
-		"copysign2.c":                  {}, //TODO
 		"ffs-1.c":                      {}, //TODO
 		"ffs-2.c":                      {}, //TODO
-		"fp-cmp-4.c":                   {}, //TODO
-		"fp-cmp-4f.c":                  {}, //TODO
-		"fp-cmp-4l.c":                  {}, //TODO
-		"fp-cmp-5.c":                   {}, //TODO
-		"fp-cmp-7.c":                   {}, //TODO
-		"fp-cmp-8.c":                   {}, //TODO
-		"fp-cmp-8f.c":                  {}, //TODO
-		"fp-cmp-8l.c":                  {}, //TODO
-		"fprintf-2.c":                  {}, //TODO
 		"frame-address.c":              {}, //TODO
-		"ieee/builtin-nan-1.c":         {}, //TODO
-		"ieee/compare-fp-1.c":          {}, //TODO
-		"ieee/compare-fp-3.c":          {}, //TODO
-		"ieee/compare-fp-4.c":          {}, //TODO
-		"ieee/copysign1.c":             {}, //TODO
-		"ieee/copysign2.c":             {}, //TODO
-		"ieee/fp-cmp-4.c":              {}, //TODO
-		"ieee/fp-cmp-4f.c":             {}, //TODO
-		"ieee/fp-cmp-4l.c":             {}, //TODO
-		"ieee/fp-cmp-5.c":              {}, //TODO
-		"ieee/fp-cmp-7.c":              {}, //TODO
-		"ieee/fp-cmp-8.c":              {}, //TODO
-		"ieee/fp-cmp-8f.c":             {}, //TODO
-		"ieee/fp-cmp-8l.c":             {}, //TODO
-		"ieee/inf-1.c":                 {}, //TODO
-		"ieee/inf-2.c":                 {}, //TODO
-		"ieee/inf-3.c":                 {}, //TODO
-		"ieee/mzero4.c":                {}, //TODO
-		"ieee/pr36332.c":               {}, //TODO
-		"ieee/pr38016.c":               {}, //TODO
-		"ieee/pr50310.c":               {}, //TODO
-		"ieee/pr72824-2.c":             {}, //TODO
-		"inf-1.c":                      {}, //TODO
-		"inf-2.c":                      {}, //TODO
-		"inf-3.c":                      {}, //TODO
 		"medce-1.c":                    {}, //TODO
-		"mzero4.c":                     {}, //TODO
 		"nest-align-1.c":               {}, //TODO
 		"nest-stdar-1.c":               {}, //TODO
 		"nestfunc-1.c":                 {}, //TODO
@@ -686,9 +708,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr34768-2.c":                  {}, //TODO
 		"pr35456.c":                    {}, //TODO
 		"pr36321.c":                    {}, //TODO
-		"pr36332.c":                    {}, //TODO
 		"pr37780.c":                    {}, //TODO
-		"pr38016.c":                    {}, //TODO
 		"pr38151.c":                    {}, //TODO
 		"pr38533.c":                    {}, //TODO
 		"pr38969.c":                    {}, //TODO
@@ -708,7 +728,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr49279.c":                    {}, //TODO
 		"pr49390.c":                    {}, //TODO
 		"pr49644.c":                    {}, //TODO
-		"pr50310.c":                    {}, //TODO
 		"pr51447.c":                    {}, //TODO
 		"pr51877.c":                    {}, //TODO
 		"pr51933.c":                    {}, //TODO
@@ -746,7 +765,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr71554.c":                    {}, //TODO
 		"pr71626-1.c":                  {}, //TODO
 		"pr71626-2.c":                  {}, //TODO
-		"pr72824-2.c":                  {}, //TODO
 		"pr77767.c":                    {}, //TODO VLA parameter
 		"pr78438.c":                    {}, //TODO
 		"pr78559.c":                    {}, //TODO
@@ -766,7 +784,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr85529-1.c":                  {}, //TODO :24:5: unsupported volatile declarator type: volatile struct S
 		"pr86528.c":                    {}, //TODO
 		"pr89434.c":                    {}, //TODO
-		"printf-2.c":                   {}, //TODO
 		"pushpop_macro.c":              {}, //TODO #pragma push_macro("_")
 		"scal-to-vec1.c":               {}, //TODO
 		"scal-to-vec2.c":               {}, //TODO
@@ -782,19 +799,16 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"strct-varg-1.c":               {}, //TODO
 		"string-opt-18.c":              {}, //TODO
 		"string-opt-5.c":               {}, //TODO
-		"user-printf.c":                {}, //TODO
-		"va-arg-2.c":                   {}, //TODO
 		"va-arg-22.c":                  {}, //TODO
 		"va-arg-pack-1.c":              {}, //TODO
-		"widechar-1.c":                 {}, //TODO
-		"widechar-3.c":                 {}, //TODO
 
 	}
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
 		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
 	}
-	if runtime.GOOS == "linux" && runtime.GOARCH == "arm" {
-		blacklist["20041210-1.c"] = struct{}{} // reported: https://groups.google.com/g/golang-dev/c/5d4FnuQKNFU/m/qS6BYxi6AQAJ
+	if runtime.GOARCH == "386" {
+		blacklist["rbug.c"] = struct{}{}     // cannot pass on 386
+		blacklist["960830-1.c"] = struct{}{} // assembler statements not supported
 	}
 	wd, err := os.Getwd()
 	if err != nil {
@@ -898,6 +912,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 				"ccgo",
 
 				"-D__FUNCTION__=__func__",
+				"-export-defines", "",
 				"-o", main,
 				"-verify-structs",
 			}
@@ -941,6 +956,7 @@ func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []st
 		}
 	}()
 
+	ccgoArgs = append(ccgoArgs, "-D__ccgo_test__")
 	ccgoArgs = append(ccgoArgs, path)
 	if err := NewTask(ccgoArgs, nil, nil).Main(); err != nil {
 		if *oTrace {

@@ -204,9 +204,11 @@ char *__builtin___strncpy_chk(char *dest, char *src, size_t n, size_t os);
 char *__builtin_strchr(const char *s, int c);
 char *__builtin_strcpy(char *dest, const char *src);
 double __builtin_copysign ( double x, double y );
+double __builtin_copysignl (long double x, long double y );
 double __builtin_fabs(double x);
 double __builtin_huge_val (void);
 double __builtin_inf (void);
+double __builtin_nan (const char *str);
 float __builtin_copysignf ( float x, float y );
 float __builtin_huge_valf (void);
 float __builtin_inff (void);
@@ -229,6 +231,7 @@ int __builtin_sprintf(char *str, const char *format, ...);
 int __builtin_strcmp(const char *s1, const char *s2);
 int __builtin_sub_overflow();
 long __builtin_expect (long exp, long c);
+long double __builtin_nanl (const char *str);
 long long __builtin_llabs(long long j);
 size_t __builtin_object_size (void * ptr, int type);
 size_t __builtin_strlen(const char *s);
@@ -636,8 +639,8 @@ func (t *Task) Main() (err error) {
 	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("panic-stubs", func(opt string) error { t.panicStubs = true; return nil })
-	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("trace-pinning", func(opt string) error { t.tracePinning = true; return nil })
+	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("version", func(opt string) error { t.version = true; return nil })
@@ -764,6 +767,7 @@ func (t *Task) Main() (err error) {
 		t.imported[len(t.imported)-1].used = true // crt is always imported
 	}
 	abi, err := cc.NewABI(t.goos, t.goarch)
+	abi.Types[cc.LongDouble] = abi.Types[cc.Double]
 	if err != nil {
 		return err
 	}

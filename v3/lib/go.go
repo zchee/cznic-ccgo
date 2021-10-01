@@ -7136,9 +7136,8 @@ func shiftOp(s string) string {
 	}
 }
 
-
 func bfValueMask(bf cc.Field) uint64 {
-	return uint64(1)<<bf.BitFieldWidth()-1
+	return uint64(1)<<bf.BitFieldWidth() - 1
 }
 
 func (p *project) binaryShiftExpressionValue(f *function, n *cc.ShiftExpression, oper string, t cc.Type, mode exprMode, flags flags) {
@@ -8144,7 +8143,7 @@ func (p *project) castExpressionValueNormal(f *function, n *cc.CastExpression, t
 		case cc.Void:
 			p.castExpression(f, n.CastExpression, tn, exprVoid, flags)
 		default:
-			panic(todo("", n.Position(), t, t.Kind()))
+			panic(todo("%s: %s %s -> %s %s -> %s %s", n.Position(), op.Type(), op.Type().Kind(), tn, tn.Kind(), t, t.Kind()))
 		}
 	}
 }
@@ -10680,8 +10679,12 @@ func (p *project) postfixExpressionCallBool(f *function, n *cc.PostfixExpression
 		}
 	}
 
+	var va uintptr
+	if f != nil {
+		va = f.vaLists[n]
+	}
 	p.postfixExpression(f, n.PostfixExpression, n.PostfixExpression.Operand.Type(), exprFunc, flags&^fOutermost)
-	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, f.vaLists[n])
+	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, va)
 }
 
 func (p *project) postfixExpressionCallValue(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
@@ -10726,8 +10729,12 @@ func (p *project) postfixExpressionCallValue(f *function, n *cc.PostfixExpressio
 			return
 		}
 	}
+	var va uintptr
+	if f != nil {
+		va = f.vaLists[n]
+	}
 	p.postfixExpression(f, n.PostfixExpression, n.PostfixExpression.Operand.Type(), exprFunc, flags&^fOutermost)
-	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, f.vaLists[n])
+	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, va)
 }
 
 // bool __builtin_mul_overflow (type1 a, type2 b, type3 *res)
@@ -10921,8 +10928,12 @@ func (p *project) postfixExpressionCallVoid(f *function, n *cc.PostfixExpression
 			return
 		}
 	}
+	var va uintptr
+	if f != nil {
+		va = f.vaLists[n]
+	}
 	p.postfixExpression(f, n.PostfixExpression, n.PostfixExpression.Operand.Type(), exprFunc, flags&^fOutermost)
-	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, f.vaLists[n])
+	p.argumentExpressionList(f, n.PostfixExpression, n.ArgumentExpressionList, va)
 }
 
 // void __atomic_store_n (type *ptr, type val, int memorder)
@@ -10987,7 +10998,12 @@ func (p *project) argList(n *cc.ArgumentExpressionList) (r []*cc.AssignmentExpre
 }
 
 func (p *project) argumentExpressionList(f *function, pe *cc.PostfixExpression, n *cc.ArgumentExpressionList, bpOff uintptr) {
-	p.w("(%s", f.tlsName)
+	switch {
+	case f == nil:
+		p.w("(nil")
+	default:
+		p.w("(%s", f.tlsName)
+	}
 	ft := funcType(pe.Operand.Type())
 	isVariadic := ft.IsVariadic()
 	params := ft.Parameters()
@@ -11298,7 +11314,7 @@ func (p *project) primaryExpressionBool(f *function, n *cc.PrimaryExpression, t 
 	case cc.PrimaryExpressionChar: // CHARCONST
 		panic(todo("", p.pos(n)))
 	case cc.PrimaryExpressionLChar: // LONGCHARCONST
-		panic(todo("", p.pos(n)))
+		p.charConst(n, n.Token.Src.String(), n.Operand, t, flags)
 	case cc.PrimaryExpressionString: // STRINGLITERAL
 		p.w(" 1 ")
 	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
@@ -11408,7 +11424,7 @@ func (p *project) primaryExpressionAddrOf(f *function, n *cc.PrimaryExpression, 
 	case cc.PrimaryExpressionString: // STRINGLITERAL
 		p.w("%s", p.stringLiteral(n.Operand.Value()))
 	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
-		panic(todo("", p.pos(n)))
+		p.w("%s", p.wideStringLiteral(n.Operand.Value(), 0))
 	case cc.PrimaryExpressionExpr: // '(' Expression ')'
 		p.expression(f, n.Expression, t, mode, flags)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'

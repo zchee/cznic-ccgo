@@ -6,6 +6,7 @@
 #define fpsizeof	sizeof(double)
 #define fpsizeofl	sizeof(long double)
 
+#ifndef __ccgo_test__
 /* Work around the fact that with the Intel double-extended precision,
    we've got a 10 byte type stuffed into some amount of padding.  And
    the fact that -ffloat-store is going to stuff this value temporarily
@@ -28,6 +29,7 @@
 #if LDBL_MANT_DIG == 106
 # undef fpsizeofl
 # define fpsizeofl	sizeof(double)
+#endif
 #endif
 
 
