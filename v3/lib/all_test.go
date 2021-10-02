@@ -804,11 +804,17 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 	}
 	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
-		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
+		blacklist["fp-cmp-1.c"] = struct{}{} // needs signal.h
+		blacklist["fp-cmp-2.c"] = struct{}{} // needs signal.h
+		blacklist["fp-cmp-3.c"] = struct{}{} // needs signal.h
+		blacklist["pr36339.c"] = struct{}{}  // typedef unsigned long my_uintptr_t;
 	}
 	if runtime.GOARCH == "386" {
 		blacklist["rbug.c"] = struct{}{}     // cannot pass on 386
 		blacklist["960830-1.c"] = struct{}{} // assembler statements not supported
+	}
+	if runtime.GOARCH == "386" {
+		blacklist["rbug.c"] = struct{}{}     // cannot pass on arm
 	}
 	wd, err := os.Getwd()
 	if err != nil {
