@@ -2,6 +2,7 @@ cpl_convert.c
 csmith.c
 csmith2.c
 enums.c
+esc_e.c
 fp.c
 func.c
 objv.c

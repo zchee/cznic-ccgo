@@ -45,8 +45,9 @@ modernc.org/cc/v3 v3.33.11/go.mod h1:iPJg1pkwXqAV16SNgFBVYmggfMg6xhs+2oiO0vclK3g
 modernc.org/cc/v3 v3.34.0/go.mod h1:iPJg1pkwXqAV16SNgFBVYmggfMg6xhs+2oiO0vclK3g=
 modernc.org/cc/v3 v3.35.0/go.mod h1:iPJg1pkwXqAV16SNgFBVYmggfMg6xhs+2oiO0vclK3g=
 modernc.org/cc/v3 v3.35.4/go.mod h1:iPJg1pkwXqAV16SNgFBVYmggfMg6xhs+2oiO0vclK3g=
-modernc.org/cc/v3 v3.35.5 h1:Lm1UiCy8bj3sjs+X+isHYbvzKCKd/ubUsYqbVHtHu7s=
 modernc.org/cc/v3 v3.35.5/go.mod h1:iPJg1pkwXqAV16SNgFBVYmggfMg6xhs+2oiO0vclK3g=
+modernc.org/cc/v3 v3.35.6 h1:+7f3tY9ag8lYEiEn1ARXTzUwE1MhnR49iYfywqJENyY=
+modernc.org/cc/v3 v3.35.6/go.mod h1:iPJg1pkwXqAV16SNgFBVYmggfMg6xhs+2oiO0vclK3g=
 modernc.org/ccgo/v3 v3.9.5/go.mod h1:umuo2EP2oDSBnD3ckjaVUXMrmeAw8C8OSICVa0iFf60=
 modernc.org/ccgo/v3 v3.10.0/go.mod h1:c0yBmkRFi7uW4J7fwx/JiijwOjeAeR2NoSaRVFPmjMw=
 modernc.org/ccgo/v3 v3.11.0/go.mod h1:dGNposbDp9TOZ/1KBxghxtUp/bzErD0/0QW4hhSaBMI=
