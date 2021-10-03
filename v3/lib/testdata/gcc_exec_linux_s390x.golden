@@ -201,6 +201,7 @@
 20030307-1.c
 20030313-1.c
 20030316-1.c
+20030323-1.c
 20030330-1.c
 20030331-1.c
 20030401-1.c
@@ -671,6 +672,7 @@ bitfld-6.c
 bitfld-7.c
 bswap-1.c
 bswap-2.c
+builtin-nan-1.c
 builtin-prefetch-1.c
 builtin-prefetch-2.c
 builtin-prefetch-4.c
@@ -689,6 +691,8 @@ complex-3.c
 compndlit-1.c
 const-addr-expr-1.c
 conversion.c
+copysign1.c
+copysign2.c
 cvt-1.c
 dbra-1.c
 divcmp-1.c
@@ -708,6 +712,9 @@ enum-3.c
 extzvsi.c
 float-floor.c
 floatunsisf-1.c
+fp-cmp-1.c
+fp-cmp-2.c
+fp-cmp-3.c
 fp-cmp-4e.c
 fp-cmp-6.c
 fp-cmp-8e.c
@@ -933,6 +940,7 @@ pr43236.c
 pr43269.c
 pr43438.c
 pr43629.c
+pr43783.c
 pr43784.c
 pr43835.c
 pr43987.c
@@ -1191,6 +1199,7 @@ pta-field-1.c
 pta-field-2.c
 ptr-arith-1.c
 pure-1.c
+rbug.c
 regstack-1.c
 restrict-1.c
 scope-1.c
@@ -1242,6 +1251,7 @@ va-arg-16.c
 va-arg-17.c
 va-arg-18.c
 va-arg-19.c
+va-arg-2.c
 va-arg-20.c
 va-arg-21.c
 va-arg-23.c
@@ -1267,7 +1277,9 @@ vrp-5.c
 vrp-6.c
 vrp-7.c
 wchar_t-1.c
+widechar-1.c
 widechar-2.c
+widechar-3.c
 zero-struct-1.c
 zerolen-1.c
 zerolen-2.c
