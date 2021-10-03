@@ -249,6 +249,7 @@ void __builtin_free(void *ptr);
 void __builtin_prefetch (const void *addr, ...);
 void __builtin_trap (void);
 void __builtin_unreachable (void);
+void __ccgo_dmesg(char*, ...);
 void __ccgo_va_end(__builtin_va_list ap);
 void __ccgo_va_start(__builtin_va_list ap);
 
