@@ -810,11 +810,11 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		blacklist["pr36339.c"] = struct{}{}  // typedef unsigned long my_uintptr_t;
 	}
 	if runtime.GOARCH == "386" {
-		blacklist["rbug.c"] = struct{}{}     // cannot pass on 386
+		blacklist["rbug.c"] = struct{}{}     // https://github.com/golang/go/issues/48807
 		blacklist["960830-1.c"] = struct{}{} // assembler statements not supported
 	}
-	if runtime.GOARCH == "386" {
-		blacklist["rbug.c"] = struct{}{}     // cannot pass on arm
+	if runtime.GOARCH == "arm" {
+		blacklist["rbug.c"] = struct{}{}     // https://github.com/golang/go/issues/48807
 	}
 	wd, err := os.Getwd()
 	if err != nil {
