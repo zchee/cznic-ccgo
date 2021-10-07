@@ -226,6 +226,7 @@ int __builtin_isnan(double);
 int __builtin_memcmp(const void *s1, const void *s2, size_t n);
 int __builtin_mul_overflow();
 int __builtin_popcount (unsigned int x);
+int __builtin_popcountl (unsigned long x);
 int __builtin_printf(const char *format, ...);
 int __builtin_snprintf(char *str, size_t size, const char *format, ...);
 int __builtin_sprintf(char *str, const char *format, ...);
