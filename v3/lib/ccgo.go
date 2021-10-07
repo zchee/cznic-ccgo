@@ -221,6 +221,7 @@ int __builtin_abs(int j);
 int __builtin_add_overflow();
 int __builtin_clzll (unsigned long long);
 int __builtin_constant_p_impl(int, ...);
+int __builtin_getentropy(void*, size_t);
 int __builtin_isnan(double);
 int __builtin_memcmp(const void *s1, const void *s2, size_t n);
 int __builtin_mul_overflow();
@@ -1279,7 +1280,9 @@ out:
 	}
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	cw := t.newCdbMakeWriter(cwr, cwd, parser)
-	cmd.Stdout = io.MultiWriter(cw, os.Stdout)
+	//TODO Put behind some verbose flag
+	//TODO cmd.Stdout = io.MultiWriter(cw, os.Stdout)
+	cmd.Stdout = cw
 	cmd.Stderr = cmd.Stdout
 	if dmesgs {
 		dmesg("%v: %v", origin(1), cmd.Args)
