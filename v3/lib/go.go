@@ -8287,7 +8287,22 @@ func (p *project) unaryExpressionFunc(f *function, n *cc.UnaryExpression, t cc.T
 			case cc.Ptr:
 				switch et2 := et.Elem(); et2.Kind() {
 				case cc.Function:
-					p.w("(**(**")
+					switch rt := et2.Result(); rt.Kind() {
+					case cc.Ptr:
+						//	sqlite3.c:39121:23:
+						//	unary:	pointer to function(pointer to const char, pointer to unixFile) returning pointer to const sqlite3_io_methods
+						//	cast:	pointer to finder_type
+						//	elem:	pointer to function(pointer to const char, pointer to unixFile) returning pointer to const sqlite3_io_methods
+						//	elem2:	function(pointer to const char, pointer to unixFile) returning pointer to const sqlite3_io_methods
+						p.w("(**(**")
+					default:
+						//	testdata/bug/incfp.c:69:7:
+						//	unary:	pointer to function(int) returning int
+						//	cast:	pointer to intf
+						//	elem:	pointer to function(int) returning int
+						//	elem2:	function(int) returning int
+						p.w("(*(*")
+					}
 					p.functionSignature(f, et2, "")
 					p.w(")(unsafe.Pointer(")
 					p.castExpression(f, n.CastExpression, ot, exprAddrOf, flags|fAddrOfFuncPtrOk)
@@ -9545,7 +9560,7 @@ func (p *project) postfixExpressionAddrOf(f *function, n *cc.PostfixExpression, 
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
 		p.postfixExpressionAddrOfPSelect(f, n, t, mode, flags)
 	case cc.PostfixExpressionInc: // PostfixExpression "++"
-		panic(todo("", p.pos(n)))
+		p.postfixExpressionIncDec(f, n, "++", "+=", t, exprLValue, flags)
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'

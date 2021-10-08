@@ -6,6 +6,8 @@ enums.c
 esc_e.c
 fp.c
 func.c
+incfp.c
+incfp2.c
 objv.c
 ovf.c
 paramarray.c
