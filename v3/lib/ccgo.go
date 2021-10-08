@@ -219,6 +219,8 @@ int __builtin___vsnprintf_chk (char *s, size_t maxlen, int flag, size_t os, cons
 int __builtin__snprintf_chk(char * str, size_t maxlen, int flag, size_t strlen, const char * format);
 int __builtin_abs(int j);
 int __builtin_add_overflow();
+int __builtin_clz (unsigned);
+int __builtin_clzl (unsigned long);
 int __builtin_clzll (unsigned long long);
 int __builtin_constant_p_impl(int, ...);
 int __builtin_getentropy(void*, size_t);
