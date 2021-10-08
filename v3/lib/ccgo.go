@@ -1420,6 +1420,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 		set.Arg("std", true, func(opt, arg string) error { return nil })
 		set.Opt("MD", func(opt string) error { return nil })
 		set.Opt("MP", func(opt string) error { return nil })
+		set.Opt("ansi", func(opt string) error { return nil })
 		set.Opt("c", func(opt string) error { return nil })
 		set.Opt("g", func(opt string) error { return nil })
 		set.Opt("pedantic", func(opt string) error { return nil })
