@@ -1,6 +1,7 @@
 cpl_convert.c
 csmith.c
 csmith2.c
+dereffp.c
 dmesg.c
 enums.c
 esc_e.c

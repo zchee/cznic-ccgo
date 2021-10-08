@@ -8564,6 +8564,8 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 				et.Kind() == cc.Union:
 
 				p.unaryExpressionDeref(f, n, t, mode, flags)
+			case et.Kind() == cc.Function:
+				p.castExpression(f, n.CastExpression, t, mode, flags)
 			default:
 				panic(todo("", p.pos(n), et, et.Kind()))
 			}
