@@ -74,7 +74,7 @@ func init() {
 
 var (
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
-	oCSmith     = flag.Duration("csmith", 3*time.Minute, "")
+	oCSmith     = flag.Duration("csmith", 15*time.Minute, "")
 	oCpp        = flag.Bool("cpp", false, "Amend compiler errors with preprocessor output")
 	oDebug      = flag.Bool("debug", false, "")
 	oKeep       = flag.Bool("keep", false, "keep temp directories")
@@ -1638,6 +1638,10 @@ func TestCSmith(t *testing.T) {
 		return
 	}
 
+	if testing.Short() {
+		t.Skip("skipped: -short")
+	}
+
 	csmith, err := exec.LookPath("csmith")
 	if err != nil {
 		t.Skip(err)
@@ -1703,9 +1707,11 @@ func TestCSmith(t *testing.T) {
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4058772172",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 2273393378",
 		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3100949894",
-		//TODO reported "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 963985971",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3363122597",
-		//TODO "--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4146870674",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 15739796933983044010", //TODO fails on linux/s390x
+
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 963985971",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 3363122597",
+		"--bitfields --max-nested-struct-level 10 --no-const-pointers --no-consts --no-packed-struct --no-volatile-pointers --no-volatiles --paranoid -s 4146870674",
 	}
 	ch := time.After(*oCSmith)
 	t0 := time.Now()

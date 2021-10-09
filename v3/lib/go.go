@@ -3642,6 +3642,7 @@ func (p *project) declaratorAddrOfArray(n cc.Node, f *function, d *cc.Declarator
 }
 
 func (p *project) convertType(n cc.Node, from, to cc.Type, flags flags) string {
+	// trc("%v: %v: %v -> %v %v", n.Position(), origin(1), from, to, flags) //TODO- DBG
 	if from != nil {
 		switch from.Kind() {
 		case cc.Int128:
@@ -3925,8 +3926,14 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 
 		panic(todo("%q -> %q", from, to))
 	case cc.Double, cc.Float:
-		p.w("%s(", p.typ(n, to))
-		return ")"
+		switch {
+		case to.IsIntegerType():
+			p.w("%s(", p.helperType2(n, from, to))
+			return ")"
+		default:
+			p.w("%s(", p.typ(n, to))
+			return ")"
+		}
 	case cc.Array:
 		if from.Kind() == to.Kind() {
 			return ""
@@ -8237,6 +8244,10 @@ func (p *project) unaryExpressionSelect(f *function, n *cc.UnaryExpression, t cc
 			default:
 				panic(todo("", p.pos(n), et, et.Kind()))
 			}
+		case cc.Array:
+			p.w("(*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
+			p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprAddrOf, flags)
+			p.w(")))")
 		default:
 			panic(todo("", p.pos(n), ot, ot.Kind()))
 		}
@@ -9409,7 +9420,12 @@ func (p *project) postfixExpressionSelectPSelectStruct(f *function, n *cc.Postfi
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
 		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
-		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		switch {
+		case pe.Kind() == cc.Array:
+			p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
+		default:
+			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+		}
 		p.w(")).%s", p.fieldName(n, n.Token2.Value))
 	}
 }
