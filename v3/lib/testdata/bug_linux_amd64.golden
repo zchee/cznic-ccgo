@@ -1,4 +1,5 @@
 arr.c
+condfn.c
 cpl_convert.c
 csmith.c
 csmith2.c
@@ -11,6 +12,7 @@ func.c
 incfp.c
 incfp2.c
 int.c
+null.c
 objv.c
 ovf.c
 paramarray.c

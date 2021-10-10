@@ -5543,7 +5543,34 @@ func (p *project) conditionalExpressionFunc(f *function, n *cc.ConditionalExpres
 	case cc.ConditionalExpressionLOr: // LogicalOrExpression
 		p.logicalOrExpression(f, n.LogicalOrExpression, t, mode, flags)
 	case cc.ConditionalExpressionCond: // LogicalOrExpression '?' Expression ':' ConditionalExpression
-		panic(todo("", p.pos(n)))
+		switch ot := n.Operand.Type(); ot.Kind() {
+		case cc.Function:
+			if t.Kind() != cc.Function {
+				panic(todo("", n.Position()))
+			}
+		default:
+			panic(todo("", ot.Kind()))
+		}
+
+		p.w(" func() ")
+		p.functionSignature(f, t, "")
+		p.w("{ if ")
+		p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), exprBool, flags|fOutermost)
+		p.w(" { return ")
+		switch d := n.Expression.Declarator(); {
+		case d != nil:
+			p.declaratorDefault(n, d)
+		default:
+			panic(todo("", n.Position()))
+		}
+		p.w("}; return ")
+		switch d := n.ConditionalExpression.Declarator(); {
+		case d != nil:
+			p.declaratorDefault(n, d)
+		default:
+			panic(todo("", n.Position()))
+		}
+		p.w("}()")
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
@@ -11704,6 +11731,7 @@ func (p *project) charConst(n cc.Node, src string, op cc.Operand, to cc.Type, fl
 		defer p.w("%s", p.convert(n, op, to, flags))
 	case to.Kind() == cc.Ptr && op.IsZero():
 		p.w(" 0 ")
+		return
 	default:
 		panic(todo("%v: t %v, to %v, to.Alias() %v", n.Position(), op.Type(), to, to.Alias()))
 	}
