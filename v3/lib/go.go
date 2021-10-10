@@ -1901,7 +1901,17 @@ func (p *project) structType(n cc.Node, t cc.Type) string {
 	}
 }
 
+func (p *project) padName(n *int) string {
+	if !p.task.exportFieldsValid {
+		return "_"
+	}
+
+	*n++
+	return fmt.Sprintf("%s__ccgo_pad%d", p.task.exportFields, *n)
+}
+
 func (p *project) structLiteral(n cc.Node, t cc.Type) string {
+	var npad int
 	b := bytesBufferPool.Get().(*bytes.Buffer)
 	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
 	switch t.Kind() {
@@ -1910,7 +1920,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		// trc("%v: %q\n%s", p.pos(n), t.Tag(), info)
 		b.WriteString("struct {")
 		if info.NeedExplicitAlign {
-			fmt.Fprintf(b, "_[0]uint%d;", 8*p.align(t))
+			fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*p.align(t))
 		}
 		var max uintptr
 		for _, off := range info.Offsets {
@@ -1936,7 +1946,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			case pad < 0:
 				continue
 			case pad > 0:
-				fmt.Fprintf(b, "_ [%d]byte;", pad)
+				fmt.Fprintf(b, "%s [%d]byte;", p.padName(&npad), pad)
 			}
 			switch {
 			case f.IsBitField():
@@ -1967,7 +1977,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			}
 		}
 		if info.PaddingAfter != 0 {
-			fmt.Fprintf(b, "_ [%d]byte;", info.PaddingAfter)
+			fmt.Fprintf(b, "%s [%d]byte;", p.padName(&npad), info.PaddingAfter)
 		}
 		b.WriteByte('}')
 	case cc.Union:
