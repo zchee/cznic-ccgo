@@ -24,11 +24,13 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
+	"golang.org/x/sys/unix"
 	"modernc.org/cc/v3"
 )
 
@@ -948,6 +950,10 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 
 	return len(failed) + len(success), len(success)
 }
+
+// See the discussion at https://groups.google.com/g/golang-nuts/c/U1BLt5JM8F0/m/x9pQVq5RDwAJ
+//
+// Thanks to Brian Candler for fixing the code of this function.
 func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []string) (r bool) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -977,7 +983,9 @@ func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []st
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
-		return exec.CommandContext(ctx, "go", append([]string{"run", main}, runargs...)...).CombinedOutput()
+		execcmd := exec.Command("go", append([]string{"run", main}, runargs...)...)
+		return testSingleCombinedoutput(ctx, execcmd)
+
 	}()
 	if err != nil {
 		if *oTrace {
@@ -1022,6 +1030,34 @@ func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []st
 
 	return true
 }
+
+func testSingleCombinedoutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	var b bytes.Buffer
+	cmd.Stdout = &b
+	cmd.Stderr = &b
+
+	err := testSingleRun(ctx, cmd)
+	return b.Bytes(), err
+}
+
+func testSingleRun(ctx context.Context, cmd *exec.Cmd) error {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	err := cmd.Start()
+	if err == nil {
+		waitDone := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				unix.Kill(-cmd.Process.Pid, os.Kill.(syscall.Signal))
+			case <-waitDone:
+			}
+		}()
+		err = cmd.Wait()
+		close(waitDone)
+	}
+	return err
+}
+
 func TestSQLite(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(sqliteDir))
 	testSQLite(t, root)
