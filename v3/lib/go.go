@@ -8335,26 +8335,8 @@ func (p *project) unaryExpressionFunc(f *function, n *cc.UnaryExpression, t cc.T
 			case cc.Ptr:
 				switch et2 := et.Elem(); et2.Kind() {
 				case cc.Function:
-					switch rt := et2.Result(); rt.Kind() {
-					case cc.Ptr:
-						//	sqlite3.c:39121:23:
-						//	unary:	pointer to function(pointer to const char, pointer to unixFile) returning pointer to const sqlite3_io_methods
-						//	cast:	pointer to finder_type
-						//	elem:	pointer to function(pointer to const char, pointer to unixFile) returning pointer to const sqlite3_io_methods
-						//	elem2:	function(pointer to const char, pointer to unixFile) returning pointer to const sqlite3_io_methods
-						p.w("(**(**")
-					default:
-						//	testdata/bug/incfp.c:69:7:
-						//	unary:	pointer to function(int) returning int
-						//	cast:	pointer to intf
-						//	elem:	pointer to function(int) returning int
-						//	elem2:	function(int) returning int
-						p.w("(*(*")
-					}
-					p.functionSignature(f, et2, "")
-					p.w(")(unsafe.Pointer(")
-					p.castExpression(f, n.CastExpression, ot, exprAddrOf, flags|fAddrOfFuncPtrOk)
-					p.w(")))")
+					// C: (**)()
+					p.fnVal(n, f, func() { p.castExpression(f, n.CastExpression, p.ptrType, exprValue, flags|fAddrOfFuncPtrOk) }, n.CastExpression.Declarator(), n.CastExpression.Operand.Type(), 1, mode, flags)
 				default:
 					panic(todo("", p.pos(n), et2, et2.Kind()))
 				}
@@ -9773,11 +9755,7 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 			case cc.Ptr:
 				switch et := n.Operand.Type().Elem(); et.Kind() {
 				case cc.Function:
-					p.w("(*(*")
-					p.functionSignature(f, n.Operand.Type().Elem(), "")
-					p.w(")(unsafe.Pointer(")
-					p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
-					p.w(")))")
+					p.fnVal(n, f, func() { p.postfixExpression(f, n, p.ptrType, exprValue, flags) }, nil, n.Operand.Type(), 0, mode, flags)
 				default:
 					panic(todo("", p.pos(n), et, et.Kind()))
 				}
@@ -9788,26 +9766,7 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 			panic(todo("", n.Position(), n.Operand.Type()))
 		}
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
-		switch n.Operand.Type().Kind() {
-		case cc.Ptr:
-			switch n.Operand.Type().Kind() {
-			case cc.Ptr:
-				switch et := n.Operand.Type().Elem(); et.Kind() {
-				case cc.Function:
-					p.w("(*(*")
-					p.functionSignature(f, n.Operand.Type().Elem(), "")
-					p.w(")(unsafe.Pointer(")
-					p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
-					p.w(")))")
-				default:
-					panic(todo("", p.pos(n), et, et.Kind()))
-				}
-			default:
-				panic(todo("", p.pos(n), n.Operand.Type(), n.Operand.Type().Kind()))
-			}
-		default:
-			panic(todo("", n.Position(), n.Operand.Type()))
-		}
+		p.fnVal(n, f, func() { p.postfixExpression(f, n, p.ptrType, exprValue, flags) }, nil, n.Operand.Type(), 0, mode, flags)
 	case cc.PostfixExpressionInc: // PostfixExpression "++"
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
@@ -11507,28 +11466,7 @@ func (p *project) primaryExpressionAddrOf(f *function, n *cc.PrimaryExpression, 
 func (p *project) primaryExpressionFunc(f *function, n *cc.PrimaryExpression, t cc.Type, mode exprMode, flags flags) {
 	switch n.Case {
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
-		switch d := n.Declarator(); {
-		case d != nil:
-			switch d.Type().Kind() {
-			case cc.Function:
-				p.declarator(n, f, d, t, mode, flags)
-			case cc.Ptr:
-				switch et := d.Type().Elem(); et.Kind() {
-				case cc.Function:
-					p.w("(*(*")
-					p.functionSignature(f, et, "")
-					p.w(")(unsafe.Pointer(&")
-					p.primaryExpression(f, n, n.Operand.Type(), exprValue, flags)
-					p.w(")))")
-				default:
-					panic(todo("", p.pos(n), p.pos(d), d.Type(), d.Type().Kind()))
-				}
-			default:
-				panic(todo("", p.pos(n), p.pos(d), d.Type(), d.Type().Kind()))
-			}
-		default:
-			panic(todo("", p.pos(n)))
-		}
+		p.fnVal(n, f, func() { p.primaryExpression(f, n, n.Operand.Type(), exprValue, flags) }, n.Declarator(), n.Operand.Type(), 0, mode, flags)
 	case cc.PrimaryExpressionInt: // INTCONST
 		panic(todo("", p.pos(n)))
 	case cc.PrimaryExpressionFloat: // FLOATCONST
@@ -12907,4 +12845,64 @@ func (p *project) paramTyp(n cc.Node, t cc.Type) string {
 
 func (p *project) dbg(a ...interface{}) {
 	p.w("/*DBG.%v %v */", a, origin(2))
+}
+
+func (p *project) fnVal(n cc.Node, f *function, expr func(), exprDecl *cc.Declarator, exprType cc.Type, deref int, mode exprMode, flags flags) {
+	//  C type		Go type
+	//  fn			N/A: produce name from exprDecl
+	//  (*)()		func()
+	//  (**)()		*func()
+
+	if deref < 0 || deref > 1 {
+		panic(todo(""))
+	}
+
+	switch exprType.Kind() {
+	case cc.Function:
+		// C: fn
+		switch deref {
+		case 0:
+			p.declarator(n, f, exprDecl, exprType, mode, flags)
+		default:
+			panic(todo("", n.Position()))
+		}
+	case cc.Ptr:
+		switch et := exprType.Elem(); et.Kind() {
+		case cc.Function:
+			// C: (*)()
+			switch deref {
+			case 0:
+				// (*struct{ f func()})(unsafe.Pointer(&struct{uintptr}{fprintfptr})).f()
+				p.w("(*struct{ f ")
+				p.functionSignature(f, et, "")
+				p.w("})(unsafe.Pointer(&struct{uintptr}{")
+				expr()
+				p.w("})).f")
+			default:
+				p.declarator(n, f, exprDecl, et, mode, flags)
+			}
+		case cc.Ptr:
+			switch et2 := et.Elem(); et2.Kind() {
+			case cc.Function:
+				// C: (**)()
+				switch deref {
+				case 0:
+					panic(todo("", n.Position()))
+				default:
+					// (*struct{ f func()})(unsafe.Pointer(&struct{uintptr}{fprintfptr})).f()
+					p.w("(*(**struct{ f ")
+					p.functionSignature(f, et2, "")
+					p.w("})(unsafe.Pointer(&struct{uintptr}{")
+					expr()
+					p.w("}))).f")
+				}
+			default:
+				panic(todo("", n.Position(), et2.Kind(), deref))
+			}
+		default:
+			panic(todo("", n.Position(), et.Kind(), deref))
+		}
+	default:
+		panic(todo("", n.Position(), exprType.Kind(), deref))
+	}
 }

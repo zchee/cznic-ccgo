@@ -704,8 +704,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr24135.c":                    {}, //TODO
 		"pr28289.c":                    {}, //TODO
 		"pr34154.c":                    {}, //TODO
-		"pr34768-1.c":                  {}, //TODO
-		"pr34768-2.c":                  {}, //TODO
 		"pr35456.c":                    {}, //TODO
 		"pr36321.c":                    {}, //TODO
 		"pr37780.c":                    {}, //TODO

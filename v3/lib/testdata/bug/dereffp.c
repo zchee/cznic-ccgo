@@ -31,6 +31,10 @@ int h2(void (**proc)(int)) {
 	return 0;
 }
 
+int (**gfpp)(int);
+int (*gfp)(int);
+int x2(int i) { return 2*i; }
+
 int main() {
 	if (h(f) != 'f') {
 		return __LINE__;
@@ -67,6 +71,43 @@ int main() {
 
 	p = &g;
 	if (h2(q) != 'g') {
+		return __LINE__;
+	}
+
+	// ----
+
+	gfpp = &gfp;
+	gfp = x2;
+	if ((**gfpp)(__LINE__) != 2*__LINE__) {
+		return __LINE__;
+	}
+
+	gfp = &x2;
+	if ((**gfpp)(__LINE__) != 2*__LINE__) {
+		return __LINE__;
+	}
+
+	int (*fp)(int);
+	gfpp = &fp;
+	fp = x2;
+	if ((**gfpp)(__LINE__) != 2*__LINE__) {
+		return __LINE__;
+	}
+
+	int (**fpp)(int) = &gfp;
+	gfp = x2;
+	if ((**fpp)(__LINE__) != 2*__LINE__) {
+		return __LINE__;
+	}
+
+	gfp = &x2;
+	if ((**fpp)(__LINE__) != 2*__LINE__) {
+		return __LINE__;
+	}
+
+	fpp = &fp;
+	fp = x2;
+	if ((**fpp)(__LINE__) != 2*__LINE__) {
 		return __LINE__;
 	}
 }
