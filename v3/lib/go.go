@@ -3918,6 +3918,10 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 		return p.convertInt(n, op, to, flags)
 	}
 
+	if from == to {
+		return ""
+	}
+
 	switch from.Kind() {
 	case cc.Ptr:
 		if !force && from.Kind() == to.Kind() {
@@ -3929,13 +3933,18 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 			return ")"
 		}
 
+		if to.Kind() == cc.Ptr {
+			return ""
+		}
+
 		panic(todo("%v: force %v, %q %v -> %q %v", p.pos(n), force, from, from.Kind(), to, to.Kind()))
 	case cc.Function, cc.Struct, cc.Union:
 		if !force && from.Kind() == to.Kind() {
 			return ""
 		}
 
-		panic(todo("%q -> %q", from, to))
+		trc("%p %p", from, to)
+		panic(todo("%q %v -> %q %v", from, from.Kind(), to, to.Kind()))
 	case cc.Double, cc.Float:
 		switch {
 		case to.IsIntegerType():
@@ -12534,14 +12543,41 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		}
 		p.statement(f, n.Statement, true, false, false, 0)
 	case cc.IterationStatementForDecl: // "for" '(' Declaration Expression ';' Expression ')' Statement
-		if f.hasJumps {
-			panic(todo("", p.pos(n)))
-		}
-
 		var ids []*cc.InitDeclarator
 		for list := n.Declaration.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
 			ids = append(ids, list.InitDeclarator)
 		}
+
+		if f.hasJumps {
+			//	declaration
+			// a:	if !expr goto c
+			//	stmt
+			// b: 	expr2 // label for continue
+			//	goto a
+			// c:
+			a := f.flatLabel()
+			b := f.flatLabel()
+			f.continueCtx = b
+			c := f.flatLabel()
+			f.breakCtx = c
+			p.declaration(f, n.Declaration, false)
+			p.w(";")
+			p.w("__%d:", a)
+			if n.Expression != nil {
+				p.w("if !(")
+				p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
+				p.w(") { goto __%d }", c)
+			}
+			p.w(";")
+			p.statement(f, n.Statement, false, false, false, 0)
+			p.w(";goto __%d; __%[1]d:", b)
+			if n.Expression2 != nil {
+				p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
+			}
+			p.w("; goto __%d; goto __%d;__%[2]d:", a, c)
+			break
+		}
+
 		p.w("for ")
 		for i, id := range ids {
 			d := id.Declarator
