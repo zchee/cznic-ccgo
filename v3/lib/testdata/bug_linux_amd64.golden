@@ -7,6 +7,7 @@ dereffp.c
 dmesg.c
 enums.c
 esc_e.c
+for.c
 fp.c
 func.c
 incfp.c

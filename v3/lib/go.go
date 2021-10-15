@@ -12513,15 +12513,22 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 		for list := n.Declaration.InitDeclaratorList; list != nil; list = list.InitDeclaratorList {
 			ids = append(ids, list.InitDeclarator)
 		}
-		if len(ids) != 1 {
-			panic(todo(""))
+		p.w("for ")
+		for i, id := range ids {
+			d := id.Declarator
+			local := f.locals[d]
+			if i != 0 {
+				p.w(", ")
+			}
+			p.w("%s", local.name)
 		}
-
-		id := ids[0]
-		d := id.Declarator
-		local := f.locals[d]
-		p.w("for %s := ", local.name)
-		p.assignmentExpression(f, id.Initializer.AssignmentExpression, d.Type(), exprValue, fForceConv)
+		p.w(" := ")
+		for i, id := range ids {
+			if i != 0 {
+				p.w(", ")
+			}
+			p.assignmentExpression(f, id.Initializer.AssignmentExpression, id.Declarator.Type(), exprValue, fForceConv)
+		}
 		p.w(";")
 		if n.Expression != nil {
 			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
