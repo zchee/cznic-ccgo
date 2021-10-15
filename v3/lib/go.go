@@ -5116,7 +5116,6 @@ func (p *project) assignmentExpressionValueAssignStructAddrof(f *function, n *cc
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
 				if !p.pass1 {
-					//TODO possibly incorrect code produced when the RHS is a function call.
 					p.w("%sXmemmove(tls, ", p.task.crt)
 					p.unaryExpression(f, n.UnaryExpression, lhs, exprAddrOf, flags|fOutermost)
 					p.w(", ")
@@ -9602,7 +9601,8 @@ func (p *project) postfixExpressionAddrOf(f *function, n *cc.PostfixExpression, 
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
 		p.postfixExpressionAddrOfIndex(f, n, t, mode, flags)
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-		switch n.Operand.Type().Kind() {
+		ot := n.Operand.Type()
+		switch ot.Kind() {
 		case cc.Struct, cc.Union:
 			// ok
 		default:
@@ -9610,9 +9610,17 @@ func (p *project) postfixExpressionAddrOf(f *function, n *cc.PostfixExpression, 
 			return
 		}
 
-		p.w("func() uintptr { v := ")
-		p.postfixExpressionValue(f, n, n.Operand.Type(), exprValue, flags)
-		p.w("; return uintptr(unsafe.Pointer(&v)) }()")
+		if p.pass1 {
+			off := roundup(f.off, uintptr(ot.Align()))
+			f.complits[n] = off
+			f.off += ot.Size()
+			return
+		}
+
+		off := f.complits[n]
+		p.w("func() uintptr { *(*%s)(unsafe.Pointer(%s%s)) = ", p.typ(n, ot), f.bpName, nonZeroUintptr(off))
+		p.postfixExpressionValue(f, n, ot, exprValue, flags)
+		p.w("; return %s%s }()", f.bpName, nonZeroUintptr(off))
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 		p.postfixExpressionAddrOfSelect(f, n, t, mode, flags)
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
