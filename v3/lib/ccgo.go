@@ -1421,6 +1421,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 		set.Arg("o", true, func(opt, arg string) error { return nil })
 		set.Arg("std", true, func(opt, arg string) error { return nil })
 		set.Opt("MD", func(opt string) error { return nil })
+		set.Opt("MMD", func(opt string) error { return nil })
 		set.Opt("MP", func(opt string) error { return nil })
 		set.Opt("ansi", func(opt string) error { return nil })
 		set.Opt("c", func(opt string) error { return nil })
@@ -1441,7 +1442,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 
 				// nop
 			default:
-				return fmt.Errorf("unknown/unsupported option: %s", arg)
+				return fmt.Errorf("unknown/unsupported CC option: %s", arg)
 			}
 
 			return nil

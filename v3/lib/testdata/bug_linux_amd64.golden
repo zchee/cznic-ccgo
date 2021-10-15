@@ -1,4 +1,5 @@
 arr.c
+atomic.c
 condfn.c
 cpl_convert.c
 csmith.c

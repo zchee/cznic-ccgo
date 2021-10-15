@@ -765,7 +765,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr71626-2.c":                  {}, //TODO
 		"pr77767.c":                    {}, //TODO VLA parameter
 		"pr78438.c":                    {}, //TODO
-		"pr78559.c":                    {}, //TODO
 		"pr78726.c":                    {}, //TODO
 		"pr79354.c":                    {}, //TODO
 		"pr79737-2.c":                  {}, //TODO
