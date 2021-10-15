@@ -83,6 +83,7 @@ const (
 	exprSelect              // foo in foo.bar
 	exprValue               // foo in bar = foo
 	exprVoid                //
+	exprGoPtr
 )
 
 const (
@@ -9591,7 +9592,17 @@ func (p *project) postfixExpressionAddrOf(f *function, n *cc.PostfixExpression, 
 	case cc.PostfixExpressionIndex: // PostfixExpression '[' Expression ']'
 		p.postfixExpressionAddrOfIndex(f, n, t, mode, flags)
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-		panic(todo("", p.pos(n)))
+		switch n.Operand.Type().Kind() {
+		case cc.Struct, cc.Union:
+			// ok
+		default:
+			p.err(n, "cannot take address of value of type %v", n.Operand.Type())
+			return
+		}
+
+		p.w("func() *%s { v := ", p.typ(n, n.Operand.Type()))
+		p.postfixExpressionValue(f, n, n.Operand.Type(), exprValue, flags)
+		p.w("; return &v }()")
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 		p.postfixExpressionAddrOfSelect(f, n, t, mode, flags)
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER

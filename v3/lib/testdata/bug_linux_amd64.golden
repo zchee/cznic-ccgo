@@ -18,6 +18,7 @@ objv.c
 ovf.c
 paramarray.c
 paramarray2.c
+select.c
 sizeof.c
 sizeof2.c
 sqlite.c
