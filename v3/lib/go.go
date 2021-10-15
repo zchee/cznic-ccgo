@@ -3929,7 +3929,7 @@ func (p *project) convert(n cc.Node, op cc.Operand, to cc.Type, flags flags) str
 			return ")"
 		}
 
-		panic(todo("%v: %q -> %q", p.pos(n), from, to))
+		panic(todo("%v: force %v, %q %v -> %q %v", p.pos(n), force, from, from.Kind(), to, to.Kind()))
 	case cc.Function, cc.Struct, cc.Union:
 		if !force && from.Kind() == to.Kind() {
 			return ""
@@ -5097,7 +5097,7 @@ func (p *project) assignmentExpressionValueAddrOf(f *function, n *cc.AssignmentE
 
 	lhs := n.UnaryExpression
 	switch k := p.opKind(f, lhs, lhs.Operand.Type()); k {
-	case opStruct:
+	case opStruct, opUnion:
 		p.assignmentExpressionValueAssignStructAddrof(f, n, n.Operand.Type(), mode, flags)
 	default:
 		panic(todo("", n.Position(), k))
@@ -5115,10 +5115,20 @@ func (p *project) assignmentExpressionValueAssignStructAddrof(f *function, n *cc
 	if d := n.UnaryExpression.Declarator(); d != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				panic(todo("", p.pos(n)))
+				if !p.pass1 {
+					//TODO possibly incorrect code produced when the RHS is a function call.
+					p.w("%sXmemmove(tls, ", p.task.crt)
+					p.unaryExpression(f, n.UnaryExpression, lhs, exprAddrOf, flags|fOutermost)
+					p.w(", ")
+					p.assignmentExpression(f, n.AssignmentExpression, rhs, exprAddrOf, flags|fOutermost)
+					p.w(", %d)", lhs.Size())
+					return
+				}
 			}
 
-			panic(todo("", p.pos(n)))
+			if !p.pass1 {
+				panic(todo("", p.pos(n)))
+			}
 		}
 	}
 
@@ -9600,9 +9610,9 @@ func (p *project) postfixExpressionAddrOf(f *function, n *cc.PostfixExpression, 
 			return
 		}
 
-		p.w("func() *%s { v := ", p.typ(n, n.Operand.Type()))
+		p.w("func() uintptr { v := ")
 		p.postfixExpressionValue(f, n, n.Operand.Type(), exprValue, flags)
-		p.w("; return &v }()")
+		p.w("; return uintptr(unsafe.Pointer(&v)) }()")
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 		p.postfixExpressionAddrOfSelect(f, n, t, mode, flags)
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
