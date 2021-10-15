@@ -9802,7 +9802,30 @@ func (p *project) postfixExpressionVoid(f *function, n *cc.PostfixExpression, t 
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
 		p.postfixExpressionIncDec(f, n, "--", "-=", t, mode, flags)
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
-		panic(todo("", p.pos(n)))
+		tn := n.TypeName.Type()
+		switch tn.Decay().Kind() {
+		case cc.Ptr:
+			switch tn.Kind() {
+			case cc.Array:
+				switch {
+				case p.pass1:
+					off := roundup(f.off, uintptr(tn.Elem().Align()))
+					f.complits[n] = off
+					f.off += tn.Size()
+				default:
+					off := f.complits[n]
+					p.w("*(*%s)(unsafe.Pointer(%s%s)) = ", p.typ(n, tn), f.bpName, nonZeroUintptr(off))
+					p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
+				}
+				return
+			default:
+				panic(todo("%v: %v", n.Position(), tn))
+			}
+		}
+
+		defer p.w("%s", p.convertType(n, tn, t, flags))
+		p.w("_ = ")
+		p.initializer(f, &cc.Initializer{Case: cc.InitializerInitList, InitializerList: n.InitializerList}, tn, cc.Automatic, nil)
 	case cc.PostfixExpressionTypeCmp: // "__builtin_types_compatible_p" '(' TypeName ',' TypeName ')'
 		panic(todo("", p.pos(n)))
 	case cc.PostfixExpressionChooseExpr:

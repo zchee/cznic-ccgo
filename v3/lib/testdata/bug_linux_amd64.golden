@@ -22,4 +22,5 @@ sizeof2.c
 sqlite.c
 sqlite2.c
 struct.c
+struct2.c
 tk.c
