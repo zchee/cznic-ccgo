@@ -147,7 +147,7 @@ func (p *project) initializerInner(tag string, off uintptr, f *function, s []*cc
 	case cc.Union:
 		p.initializerUnion(tag, off, f, s, t, sc, tld, lm, tm)
 	default:
-		panic(todo("%v: internal error: %v %v", s[0].Position(), t, len(s)))
+		panic(todo("%v: internal error: %v alias %v %v", s[0].Position(), t, t.Alias(), len(s)))
 	}
 }
 
