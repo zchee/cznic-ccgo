@@ -9962,6 +9962,39 @@ func (p *project) postfixExpressionValue(f *function, n *cc.PostfixExpression, t
 		// Note: This construct is only available for C.
 		p.w(" %d ", n.Operand.Value())
 	case cc.PostfixExpressionChooseExpr: // "__builtin_choose_expr" '(' AssignmentExpression ',' AssignmentExpression ',' AssignmentExpression ')'
+		// You can use the built-in function __builtin_choose_expr to evaluate code
+		// depending on the value of a constant expression. This built-in function
+		// returns exp1 if const_exp, which is an integer constant expression, is
+		// nonzero. Otherwise it returns exp2.
+		//
+		// This built-in function is analogous to the ‘? :’ operator in C, except that
+		// the expression returned has its type unaltered by promotion rules. Also, the
+		// built-in function does not evaluate the expression that is not chosen. For
+		// example, if const_exp evaluates to true, exp2 is not evaluated even if it
+		// has side effects.
+		//
+		// This built-in function can return an lvalue if the chosen argument is an
+		// lvalue.
+		//
+		// If exp1 is returned, the return type is the same as exp1’s type. Similarly,
+		// if exp2 is returned, its return type is the same as exp2.
+		//
+		// Example:
+		//
+		// 	#define foo(x)                                                \
+		// 	  __builtin_choose_expr (                                     \
+		// 	    __builtin_types_compatible_p (typeof (x), double),        \
+		// 	    foo_double (x),                                           \
+		// 	    __builtin_choose_expr (                                   \
+		// 	      __builtin_types_compatible_p (typeof (x), float),       \
+		// 	      foo_float (x),                                          \
+		// 	      /* The void expression results in a compile-time error  \
+		// 	         when assigning the result to something.  */          \
+		// 	      (void)0))
+		//
+		// Note: This construct is only available for C. Furthermore, the unused
+		// expression (exp1 or exp2 depending on the value of const_exp) may still
+		// generate syntax errors. This may change in future revisions.
 		switch op := n.AssignmentExpression.Operand; {
 		case op.IsNonZero():
 			p.assignmentExpression(f, n.AssignmentExpression2, t, mode, flags)

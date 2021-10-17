@@ -257,6 +257,28 @@ void __ccgo_dmesg(char*, ...);
 void __ccgo_va_end(__builtin_va_list ap);
 void __ccgo_va_start(__builtin_va_list ap);
 
+#define __sync_add_and_fetch(ptr, val) \
+	__builtin_choose_expr(	\
+		__builtin_types_compatible_p(typeof(*ptr), unsigned),	\
+		__sync_add_and_fetch_uint32(ptr, val),	\
+		__TODO__	\
+	)
+
+#define __sync_fetch_and_add(ptr, val) \
+	(*(typeof(ptr)*)0) /* abort */
+
+#define __sync_sub_and_fetch(ptr, val) \
+	__builtin_choose_expr(	\
+		__builtin_types_compatible_p(typeof(*ptr), unsigned),	\
+		__sync_sub_and_fetch_uint32(ptr, val),	\
+		__TODO__	\
+	)
+
+
+
+unsigned __sync_add_and_fetch_uint32(unsigned*, unsigned);
+unsigned __sync_sub_and_fetch_uint32(unsigned*, unsigned);
+
 `
 	defaultCrt = "modernc.org/libc"
 )
