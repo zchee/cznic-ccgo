@@ -257,7 +257,7 @@ func (p *project) initializerStruct(tag string, off uintptr, f *function, s []*c
 				}
 				first = false
 				bitFld := v.Field
-				bft := p.bitFileType(bitFld.BitFieldBlockWidth())
+				bft := p.bitFileType(v, bitFld.BitFieldBlockWidth())
 				p.w("%s%s", tidyComment("", v.AssignmentExpression), tag)
 				tag = ""
 				p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
@@ -339,6 +339,11 @@ func (p *project) initializerUnion(tag string, off uintptr, f *function, s []*cc
 		return
 	}
 
+	if t.HasFlexibleMember() {
+		p.err(s[0], "flexible array members not supported")
+		return
+	}
+
 	s0 := s[0]
 	var parts []*cc.Initializer
 	var isZero bool
@@ -391,7 +396,7 @@ func (p *project) initializerUnion(tag string, off uintptr, f *function, s []*cc
 			}
 			first = false
 			bitFld := v.Field
-			bft := p.bitFileType(bitFld.BitFieldBlockWidth())
+			bft := p.bitFileType(v, bitFld.BitFieldBlockWidth())
 			p.w("%s%s", tidyComment("", v.AssignmentExpression), tag)
 			tag = ""
 			p.assignmentExpression(f, v.AssignmentExpression, bft, exprValue, fOutermost)
@@ -494,7 +499,7 @@ func compatibleType(t1, t2 cc.Type) bool {
 	return true
 }
 
-func (p *project) bitFileType(bits int) cc.Type {
+func (p *project) bitFileType(n cc.Node, bits int) cc.Type {
 	switch bits {
 	case 8:
 		return p.task.cfg.ABI.Type(cc.UChar)
@@ -505,7 +510,7 @@ func (p *project) bitFileType(bits int) cc.Type {
 	case 64:
 		return p.task.cfg.ABI.Type(cc.ULongLong)
 	default:
-		panic(todo("%v: internal error: %v", bits))
+		panic(todo("%v: internal error: %v", n.Position(), bits))
 	}
 }
 

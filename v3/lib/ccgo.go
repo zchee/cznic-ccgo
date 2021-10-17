@@ -265,7 +265,7 @@ void __ccgo_va_start(__builtin_va_list ap);
 	)
 
 #define __sync_fetch_and_add(ptr, val) \
-	(*(typeof(ptr)*)0) /* abort */
+	__TODO__	\
 
 #define __sync_sub_and_fetch(ptr, val) \
 	__builtin_choose_expr(	\
@@ -273,8 +273,6 @@ void __ccgo_va_start(__builtin_va_list ap);
 		__sync_sub_and_fetch_uint32(ptr, val),	\
 		__TODO__	\
 	)
-
-
 
 unsigned __sync_add_and_fetch_uint32(unsigned*, unsigned);
 unsigned __sync_sub_and_fetch_uint32(unsigned*, unsigned);
@@ -329,8 +327,7 @@ func trc(s string, args ...interface{}) string { //TODO-
 	default:
 		s = fmt.Sprintf(s, args...)
 	}
-	_, fn, fl, _ := runtime.Caller(1)
-	r := fmt.Sprintf("%s:%d: TRC %s", fn, fl, s)
+	r := fmt.Sprintf("%s: TRC %s", origin(2), s)
 	fmt.Fprintf(os.Stdout, "%s\n", r)
 	os.Stdout.Sync()
 	return r
