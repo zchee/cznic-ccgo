@@ -10090,10 +10090,33 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 			p.err(&n.Token2, "internal error, wrong function for accessing a bit field: %s", n.Token2.Value)
 		}
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
-		p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
-		p.w(")).%s", p.fieldName(n, n.Token2.Value))
+		et := pe.Elem()
+		fld, path, ok := et.FieldByName2(n.Token2.Value)
+		switch {
+		case !ok:
+			panic(todo(""))
+		case fld.InUnion():
+			p.w("*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
+			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+			p.w("%s))", nonZeroUintptr(pathOff(et, path)))
+		case len(path) != 1:
+			panic(todo(""))
+		default:
+			p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
+			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+			p.w(")).%s", p.fieldName(n, n.Token2.Value))
+		}
 	}
+}
+
+func pathOff(t cc.Type, path []int) (r uintptr) {
+	for len(path) != 0 {
+		f := t.FieldByIndex(path[:1])
+		r += f.Offset()
+		path = path[1:]
+		t = f.Type()
+	}
+	return r
 }
 
 func (p *project) postfixExpressionValueIndex(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
