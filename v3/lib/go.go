@@ -3255,7 +3255,7 @@ func (p *project) declaratorValueNormal(n cc.Node, f *function, d *cc.Declarator
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				if p.isVolatileOrAtomic(d) {
+				if p.isVolatileOrAtomic(d) && d.IsParameter && d.Write != 0 {
 					p.w("%sAtomicLoadP%s(%s%s/* %s */)", p.task.crt, p.helperType(n, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
 					return
 				}
@@ -3264,7 +3264,7 @@ func (p *project) declaratorValueNormal(n cc.Node, f *function, d *cc.Declarator
 				return
 			}
 
-			if p.isVolatileOrAtomic(d) {
+			if p.isVolatileOrAtomic(d) && d.IsParameter && d.Write != 0 {
 				p.atomicLoadNamedAddr(n, d.Type(), local.name)
 				return
 			}
