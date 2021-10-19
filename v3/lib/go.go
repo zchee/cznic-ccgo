@@ -12618,61 +12618,33 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			ids = append(ids, list.InitDeclarator)
 		}
 
-		if f.hasJumps {
-			//	declaration
-			// a:	if !expr goto c
-			//	stmt
-			// b: 	expr2 // label for continue
-			//	goto a
-			// c:
-			a := f.flatLabel()
-			b := f.flatLabel()
-			f.continueCtx = b
-			c := f.flatLabel()
-			f.breakCtx = c
-			p.declaration(f, n.Declaration, false)
-			p.w(";")
-			p.w("__%d:", a)
-			if n.Expression != nil {
-				p.w("if !(")
-				p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
-				p.w(") { goto __%d }", c)
-			}
-			p.w(";")
-			p.statement(f, n.Statement, false, false, false, 0)
-			p.w(";goto __%d; __%[1]d:", b)
-			if n.Expression2 != nil {
-				p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
-			}
-			p.w("; goto __%d; goto __%d;__%[2]d:", a, c)
-			break
-		}
-
-		p.w("for ")
-		for i, id := range ids {
-			d := id.Declarator
-			local := f.locals[d]
-			if i != 0 {
-				p.w(", ")
-			}
-			p.w("%s", local.name)
-		}
-		p.w(" := ")
-		for i, id := range ids {
-			if i != 0 {
-				p.w(", ")
-			}
-			p.assignmentExpression(f, id.Initializer.AssignmentExpression, id.Declarator.Type(), exprValue, fForceConv)
+		//	declaration
+		// a:	if !expr goto c
+		//	stmt
+		// b: 	expr2 // label for continue
+		//	goto a
+		// c:
+		a := f.flatLabel()
+		b := f.flatLabel()
+		f.continueCtx = b
+		c := f.flatLabel()
+		f.breakCtx = c
+		p.w("{")
+		p.declaration(f, n.Declaration, false)
+		p.w(";")
+		p.w("__%d:", a)
+		if n.Expression != nil {
+			p.w("if !(")
+			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
+			p.w(") { goto __%d }", c)
 		}
 		p.w(";")
-		if n.Expression != nil {
-			p.expression(f, n.Expression, n.Expression.Operand.Type(), exprBool, fOutermost)
-		}
-		p.w("; ")
+		p.statement(f, n.Statement, false, false, false, 0)
+		p.w(";goto __%d; __%[1]d:", b)
 		if n.Expression2 != nil {
 			p.expression(f, n.Expression2, n.Expression2.Operand.Type(), exprVoid, fOutermost|fNoCondAssignment)
 		}
-		p.statement(f, n.Statement, true, false, false, 0)
+		p.w("; goto __%d; goto __%d;__%[2]d:\n}", a, c)
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}

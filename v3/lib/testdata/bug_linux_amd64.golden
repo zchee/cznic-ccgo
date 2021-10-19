@@ -10,6 +10,7 @@ enums.c
 esc_e.c
 for.c
 for2.c
+for3.c
 fp.c
 func.c
 incfp.c
