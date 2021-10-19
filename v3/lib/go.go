@@ -9215,6 +9215,7 @@ func (p *project) postfixExpressionBool(f *function, n *cc.PostfixExpression, t 
 }
 
 func (p *project) postfixExpressionPSelect(f *function, n *cc.PostfixExpression, t cc.Type, mode exprMode, flags flags) {
+	// PostfixExpression "->" IDENTIFIER
 	switch n.Case {
 	case cc.PostfixExpressionPrimary: // PrimaryExpression
 		p.primaryExpression(f, n.PrimaryExpression, t, mode, flags)
@@ -9457,14 +9458,27 @@ func (p *project) postfixExpressionSelectPSelectStruct(f *function, n *cc.Postfi
 		}
 		pe := n.PostfixExpression.Operand.Type()
 		defer p.w("%s", p.convert(n, n.Operand, t, flags))
-		p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
+		et := n.PostfixExpression.Operand.Type().Elem()
+		fld, path, ok := et.FieldByName2(n.Token2.Value)
 		switch {
-		case pe.Kind() == cc.Array:
-			p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
-		default:
+		case !ok:
+			panic(todo("", n.Token.Position()))
+		case fld.InUnion():
+			p.w("(*(*%s)(unsafe.Pointer(", p.typ(n, n.Operand.Type()))
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+			p.w("%s)))", nonZeroUintptr(pathOff(et, path)))
+		case len(path) != 1:
+			panic(todo("", n.Token.Position()))
+		default:
+			p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
+			switch {
+			case pe.Kind() == cc.Array:
+				p.postfixExpression(f, n.PostfixExpression, pe, exprAddrOf, flags)
+			default:
+				p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
+			}
+			p.w(")).%s", p.fieldName(n, n.Token2.Value))
 		}
-		p.w(")).%s", p.fieldName(n, n.Token2.Value))
 	}
 }
 
