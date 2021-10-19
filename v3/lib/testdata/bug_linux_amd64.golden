@@ -14,6 +14,8 @@ fp.c
 func.c
 incfp.c
 incfp2.c
+init.c
+init2.c
 int.c
 null.c
 objv.c

@@ -507,7 +507,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20031003-1.c": {},
 
 		// goto * expr
-		"20040302-1.c": {},
+		"20040302-1.c":  {},
+		"comp-goto-1.c": {},
+		"comp-goto-2.c": {},
 
 		//TODO initializing zero sized fields not supported
 		"zero-struct-2.c": {},
@@ -674,8 +676,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"builtin-prefetch-3.c":         {}, //TODO volatile struct
 		"builtin-types-compatible-p.c": {}, //TODO
 		"call-trap-1.c":                {}, //TODO
-		"comp-goto-1.c":                {}, //TODO
-		"comp-goto-2.c":                {}, //TODO
 		"complex-1.c":                  {}, //TODO
 		"complex-2.c":                  {}, //TODO
 		"complex-4.c":                  {}, //TODO
