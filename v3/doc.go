@@ -73,6 +73,13 @@
 // Add path to the list of include files search path. The option is a capital
 // letter I (India), not a lowercase letter l (Lima).
 //
+// Linking with other ccgo-generated packages
+//
+// -limport-path
+//
+// The package at <import-path> must have been produced without using the
+// -nocapi option.
+//
 // Undefine a preprocessor macro
 //
 // -Ufoo
