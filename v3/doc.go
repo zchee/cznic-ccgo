@@ -78,7 +78,9 @@
 // -limport-path
 //
 // The package at <import-path> must have been produced without using the
-// -nocapi option.
+// -nocapi option, ie. the package must have a proper capi_$GOOS_$GOARCH.go
+// file.  The option is a lowercase letter l (Lima), not a capital letter I
+// (India).
 //
 // Undefine a preprocessor macro
 //
