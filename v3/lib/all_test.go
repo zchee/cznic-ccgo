@@ -1442,6 +1442,7 @@ func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
 
 	blacklist := map[string]struct{}{
 		"init3.c": {}, //TODO tree-sitter-json/parser.c:804:
+		"init4.c": {}, //TODO
 	}
 	if os.Getenv("GO111MODULE") != "off" {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/bug"); err != nil {
