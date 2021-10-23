@@ -3430,6 +3430,7 @@ func (p *project) declaratorLValueDefault(n cc.Node, d *cc.Declarator) {
 				}
 			}
 		}
+
 		panic(todo("%v: %v: %q", n.Position(), p.pos(d), d.Name()))
 	}
 }
