@@ -1037,7 +1037,8 @@ type cdb struct {
 	outputIndex map[string][]*cdbItem
 }
 
-func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace bool, path []string, cc, ar string) error {
+func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, path []string, cc, ar string) error {
+	// trc("%v: nm %q ver %v seqLimit %v path %q cc %q ar %q", origin(1), nm, ver, seqLimit, path, cc, ar)
 	var item *cdbItem
 	var k string
 	switch {
@@ -1106,7 +1107,7 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, trace
 	obj[k] = item
 	var errs []string
 	for _, v := range item.sources(cc, ar) {
-		if err := db.find(obj, v, -1, item.seq, trace, append(path, nm), cc, ar); err != nil {
+		if err := db.find(obj, v, -1, item.seq, append(path, nm), cc, ar); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -1184,7 +1185,7 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	notFound := false
 	for _, v := range args {
 		v, ver := suffixNum(v, 0)
-		if err := cdb.find(obj, v, ver, -1, t.traceTranslationUnits, nil, t.ccLookPath, t.arLookPath); err != nil {
+		if err := cdb.find(obj, v, ver, -1, nil, t.ccLookPath, t.arLookPath); err != nil {
 			notFound = true
 			fmt.Fprintln(os.Stderr, err)
 		}
@@ -1549,7 +1550,7 @@ func (it *cdbItem) sources(cc, ar string) (r []string) {
 		return nil
 	}
 
-	switch it.Arguments[0] {
+	switch arg0 := it.Arguments[0]; arg0 {
 	case
 		"libtool",
 		ar,
@@ -1557,8 +1558,14 @@ func (it *cdbItem) sources(cc, ar string) (r []string) {
 
 		var prev string
 		for _, v := range it.Arguments {
-			if prev != "-o" && strings.HasSuffix(v, ".o") {
-				r = append(r, filepath.Join(it.Directory, v))
+			switch prev {
+			case "-o", "-MT", "-MF":
+				// nop
+			default:
+				if strings.HasSuffix(v, ".o") ||
+					arg0 == cc && strings.HasSuffix(v, ".a") {
+					r = append(r, filepath.Join(it.Directory, v))
+				}
 			}
 			prev = v
 		}
