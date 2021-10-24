@@ -38,9 +38,11 @@
 38_multiple_array_index.c
 39_typedef.c
 41_hashif.c
+42_function_pointer.c
 43_void_param.c
 44_scoped_declarations.c
 45_empty_for.c
+46_grep.c
 47_switch_return.c
 48_nested_break.c
 49_bracket_evaluation.c
@@ -54,6 +56,9 @@
 70_floating_point_literals.c
 71_macro_empty_arg.c
 72_long_long_constant.c
+75_array_in_struct_init.c
+78_vla_label.c
+79_vla_continue.c
 82_attribs_position.c
 83_utf8_in_identifiers.c
 84_hex-float.c

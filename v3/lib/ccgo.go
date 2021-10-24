@@ -376,6 +376,7 @@ type Task struct {
 	stderr                          io.Writer
 	stdout                          io.Writer
 	symSearchOrder                  []int                    // >= 0: asts[i], < 0 : imported[-i-1]
+	verboseCompiledb                bool                     // -verbose-compiledb
 	volatiles                       map[cc.StringID]struct{} // -volatile
 
 	// Path to a binary that will be called instead of executing
@@ -666,6 +667,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("trace-pinning", func(opt string) error { t.tracePinning = true; return nil })
 	opts.Opt("trace-translation-units", func(opt string) error { t.traceTranslationUnits = true; return nil })
 	opts.Opt("unexported-by-default", func(opt string) error { t.defaultUnExport = true; return nil })
+	opts.Opt("verbose-compiledb", func(opt string) error { t.verboseCompiledb = true; return nil })
 	opts.Opt("verify-structs", func(opt string) error { t.verifyStructs = true; return nil })
 	opts.Opt("version", func(opt string) error { t.version = true; return nil })
 	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
@@ -1259,7 +1261,10 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 out:
 	switch t.goos {
 	case "darwin", "freebsd", "netbsd":
-		if command[0] != "make" {
+		switch command[0] {
+		case "make", "gmake":
+			// ok
+		default:
 			return fmt.Errorf("usupported build command: %s", command[0])
 		}
 
@@ -1302,9 +1307,12 @@ out:
 	}
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	cw := t.newCdbMakeWriter(cwr, cwd, parser)
-	//TODO Put behind some verbose flag
-	//TODO cmd.Stdout = io.MultiWriter(cw, os.Stdout)
-	cmd.Stdout = cw
+	switch {
+	case t.verboseCompiledb:
+		cmd.Stdout = io.MultiWriter(cw, os.Stdout)
+	default:
+		cmd.Stdout = cw
+	}
 	cmd.Stderr = cmd.Stdout
 	if dmesgs {
 		dmesg("%v: %v", origin(1), cmd.Args)
@@ -1364,12 +1372,32 @@ func isCreateArchive(s string) bool {
 	return false
 }
 
-func makeXParser(s string) ([]string, error) {
-	if !strings.HasPrefix(s, "+ ") {
+func hasPlusPrefix(s string) (n int, r string) {
+	for strings.HasPrefix(s, "+") {
+		n++
+		s = s[1:]
+	}
+	return n, s
+}
+
+func makeXParser(s string) (r []string, err error) {
+	n, s := hasPlusPrefix(s)
+	if n == 0 {
 		return nil, nil
 	}
 
-	return shellquote.Split(s[2:])
+	if !strings.HasPrefix(s, " ") {
+		return nil, nil
+	}
+
+	s = s[1:]
+	r, err = shellquote.Split(s)
+	if err != nil {
+		if strings.Contains(err.Error(), "Unterminated single-quoted string") {
+			return nil, nil // ignore
+		}
+	}
+	return r, err
 }
 
 func straceParser(s string) ([]string, error) {
@@ -1449,6 +1477,7 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 		set.Opt("pipe", func(opt string) error { return nil })
 		set.Opt("pthread", func(opt string) error { return nil })
 		set.Opt("s", func(opt string) error { return nil })
+		set.Opt("w", func(opt string) error { return nil })
 		if err := set.Parse(it.Arguments[1:], func(arg string) error {
 			switch {
 			case strings.HasSuffix(arg, ".c"):
@@ -1567,7 +1596,7 @@ func (t *Task) newCdbMakeWriter(w *cdbWriter, dir string, parser func(s string) 
 
 func (w *cdbMakeWriter) fail(err error) {
 	if w.err == nil {
-		w.err = err
+		w.err = fmt.Errorf("%v (%v)", err, origin(2))
 	}
 }
 

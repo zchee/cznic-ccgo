@@ -321,9 +321,17 @@
 // This option will print the positions and names of local declarators that are
 // being pinned.
 //
+// Obtaining version information
+//
 // -version
 //
 // Ignore all other options, print version and exit.
+//
+// Verbose compile DB generation
+//
+// -verbose-compiledb
+//
+// Enable verbose output when -compiledb is present.
 //
 // Undocumented options
 //
