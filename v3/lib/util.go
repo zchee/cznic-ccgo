@@ -389,6 +389,25 @@ func MustCompile(stackTrace bool, args ...string) []byte {
 	return MustShell(stackTrace, "ccgo", args...)
 }
 
+// Run is like Compile, but executes in-process.
+func Run(args ...string) ([]byte, error) {
+	var b bytes.Buffer
+	t := NewTask(append([]string{"ccgo"}, args...), &b, &b)
+	err := t.Main()
+	return b.Bytes(), err
+}
+
+// MustRun is like Run but if executes Fatal(stackTrace, err) if it fails.
+func MustRun(stackTrace bool, args ...string) []byte {
+	var b bytes.Buffer
+	t := NewTask(append([]string{"ccgo"}, args...), &b, &b)
+	if err := t.Main(); err != nil {
+		Fatalf(stackTrace, "%s\n%s", b.Bytes(), err)
+	}
+
+	return b.Bytes()
+}
+
 // AbsCwd returns the absolute working directory.
 func AbsCwd() (string, error) {
 	wd, err := os.Getwd()
