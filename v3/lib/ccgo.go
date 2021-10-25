@@ -1562,8 +1562,7 @@ func (it *cdbItem) sources(cc, ar string) (r []string) {
 			case "-o", "-MT", "-MF":
 				// nop
 			default:
-				if strings.HasSuffix(v, ".o") ||
-					arg0 == cc && strings.HasSuffix(v, ".a") {
+				if strings.HasSuffix(v, ".o") {
 					r = append(r, filepath.Join(it.Directory, v))
 				}
 			}
