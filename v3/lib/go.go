@@ -1996,7 +1996,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			al0 = f.BitFieldBlockWidth() >> 3
 		}
 		if al != uintptr(al0) {
-			fmt.Fprintf(b, "_ [0]uint%d;", 8*al)
+			fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*al)
 		}
 		fsz := ft.Size()
 		switch {
@@ -2008,7 +2008,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, ft))
 		}
 		if pad := sz - fsz; pad != 0 {
-			fmt.Fprintf(b, "_ [%d]byte;", pad)
+			fmt.Fprintf(b, "%s [%d]byte;", p.padName(&npad), pad)
 		}
 		b.WriteByte('}')
 	default:
