@@ -333,6 +333,16 @@
 //
 // Enable verbose output when -compiledb is present.
 //
+// Ignore undefined functions
+//
+// -ignore-undefined
+//
+// This option tells the linker to not insist on finding definitions for
+// declarators that are not implicitly declared and used - but not defined.
+// This might be useful when the intent is to define the missing function in Go
+// functions manually. Name conflict resolution for such declarator names may
+// or may not be applied.
+//
 // Undocumented options
 //
 // There may exist other options not listed above. Those should be considered

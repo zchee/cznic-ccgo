@@ -3225,6 +3225,31 @@ func (p *project) declaratorDefault(n cc.Node, d *cc.Declarator) {
 			return
 		}
 
+		if !d.IsImplicit() {
+			nm := d.Name()
+			name := nm.String()
+			switch d.Linkage {
+			case cc.External:
+				name = p.task.exportExterns + name
+				tld := &tld{name: name}
+				p.externs[nm] = tld
+				p.w("%s", name)
+				return
+			case cc.Internal:
+				if token.IsExported(name) {
+					name = "s" + name
+				}
+				tld := &tld{name: p.scope.take(cc.String(name))}
+				for _, v := range p.ast.Scope[nm] {
+					if d, ok := v.(*cc.Declarator); ok {
+						p.tlds[d] = tld
+					}
+				}
+				p.w("%s", name)
+				return
+			}
+		}
+
 		p.err(n, "back-end: undefined: %s", d.Name())
 	}
 }

@@ -403,6 +403,7 @@ type Task struct {
 	fullPathComments      bool // -full-path-comments
 	funcSig               bool // -func-sig
 	header                bool // -header
+	ignoreUndefined       bool // -ignoreUndefined
 	isScripted            bool
 	mingw                 bool
 	noCapi                bool // -nocapi
@@ -661,6 +662,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
 	opts.Opt("func-sig", func(opt string) error { t.funcSig = true; return nil })
 	opts.Opt("header", func(opt string) error { t.header = true; return nil })
+	opts.Opt("ignore-undefined", func(opt string) error { t.ignoreUndefined = true; return nil })
 	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("panic-stubs", func(opt string) error { t.panicStubs = true; return nil })
