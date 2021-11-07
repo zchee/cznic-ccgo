@@ -18,6 +18,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -343,6 +344,8 @@ type Task struct {
 	args                            []string
 	asts                            []*cc.AST
 	capif                           string
+	saveConfig                      string // -save-config
+	saveConfigErr                   error
 	cc                              string // $CC, default "gcc"
 	ccLookPath                      string // LookPath(cc)
 	cdb                             string // foo.json, use compile DB
@@ -361,9 +364,14 @@ type Task struct {
 	hide                            map[string]struct{} // -hide
 	hostConfigCmd                   string              // -host-config-cmd
 	hostConfigOpts                  string              // -host-config-opts
-	ignoredIncludes                 string              // -ignored-includes
+	hostIncludes                    []string
+	hostPredefined                  string
+	hostSysIncludes                 []string
+	ignoredIncludes                 string // -ignored-includes
 	imported                        []*imported
+	includedFiles                   map[string]struct{}
 	l                               []string // -l
+	loadConfig                      string   // --load-config
 	o                               string   // -o
 	out                             io.Writer
 	pkgName                         string // -pkgname
@@ -390,6 +398,8 @@ type Task struct {
 	E                     bool // -E
 	allErrors             bool // -all-errors
 	compiledbValid        bool // -compiledb present
+	configSaved           bool
+	configured            bool // hostPredefined, hostIncludes, hostSysIncludes are valid
 	cover                 bool // -cover-instrumentation
 	coverC                bool // -cover-instrumentation-c
 	defaultUnExport       bool // -unexported-by-default
@@ -607,14 +617,23 @@ func (t *Task) capi2(files []string) (pkgName string, exports map[string]struct{
 
 // Main executes task.
 func (t *Task) Main() (err error) {
+	// trc("%p: %q", t, t.args)
 	if dmesgs {
 		defer func() {
 			if err != nil {
+				// trc("FAIL %p: %q: %v", t, t.args, err)
 				dmesg("%v: returning from Task.Main: %v", origin(1), err)
 			}
 		}()
 
 	}
+
+	defer func() {
+		if t.saveConfigErr != nil && err == nil {
+			err = t.saveConfigErr
+		}
+	}()
+
 	if !t.isScripted && coverExperiment {
 		defer func() {
 			fmt.Fprintf(os.Stderr, "cover report:\n%s\n", coverReport())
@@ -675,13 +694,92 @@ func (t *Task) Main() (err error) {
 	opts.Opt("watch-instrumentation", func(opt string) error { t.watch = true; return nil })
 	opts.Opt("windows", func(opt string) error { t.windows = true; return nil })
 
+	opts.Opt("trace-included-files", func(opt string) error {
+		if t.includedFiles == nil {
+			t.includedFiles = map[string]struct{}{}
+		}
+		prev := t.cfg.IncludeFileHandler
+		t.cfg.IncludeFileHandler = func(pos token.Position, pathName string) {
+			if prev != nil {
+				prev(pos, pathName)
+			}
+			if _, ok := t.includedFiles[pathName]; !ok {
+				t.includedFiles[pathName] = struct{}{}
+				fmt.Fprintf(os.Stderr, "#include %s\n", pathName)
+			}
+		}
+		return nil
+	})
+	opts.Arg("save-config", false, func(arg, value string) error {
+		if value == "" {
+			return nil
+		}
+
+		abs, err := filepath.Abs(value)
+		if err != nil {
+			return err
+		}
+
+		t.saveConfig = abs
+		if t.includedFiles == nil {
+			t.includedFiles = map[string]struct{}{}
+		}
+		prev := t.cfg.IncludeFileHandler
+		t.cfg.IncludeFileHandler = func(pos token.Position, pathName string) {
+			if prev != nil {
+				prev(pos, pathName)
+			}
+			if _, ok := t.includedFiles[pathName]; !ok {
+				t.includedFiles[pathName] = struct{}{}
+				full := filepath.Join(abs, pathName)
+				switch _, err := os.Stat(full); {
+				case err != nil && os.IsNotExist(err):
+					// ok
+				case err != nil:
+					t.saveConfigErr = err
+					return
+				default:
+					return
+				}
+
+				b, err := ioutil.ReadFile(pathName)
+				if err != nil {
+					t.saveConfigErr = err
+					return
+				}
+
+				dir, _ := filepath.Split(full)
+				if err := os.MkdirAll(dir, 0700); err != nil {
+					t.saveConfigErr = err
+					return
+				}
+
+				if err := ioutil.WriteFile(full, b, 0600); err != nil {
+					t.saveConfigErr = err
+				}
+			}
+		}
+		return nil
+	})
+	opts.Arg("-load-config", false, func(arg, value string) error {
+		if value == "" {
+			return nil
+		}
+
+		abs, err := filepath.Abs(value)
+		if err != nil {
+			return err
+		}
+
+		t.loadConfig = abs
+		return nil
+	})
 	opts.Arg("volatile", false, func(arg, value string) error {
 		for _, v := range strings.Split(strings.TrimSpace(value), ",") {
 			t.volatiles[cc.String(v)] = struct{}{}
 		}
 		return nil
 	})
-
 	opts.Opt("nostdlib", func(opt string) error {
 		t.nostdlib = true
 		t.crt = ""
@@ -745,6 +843,10 @@ func (t *Task) Main() (err error) {
 
 				return t.createCompileDB(cmd)
 			case t.cdb != "": // foo.json ..., use DB
+				if err := t.configure(); err != nil {
+					return err
+				}
+
 				return t.useCompileDB(t.cdb, x)
 			}
 
@@ -794,6 +896,11 @@ func (t *Task) Main() (err error) {
 		}
 		t.imported[len(t.imported)-1].used = true // crt is always imported
 	}
+
+	if err := t.configure(); err != nil {
+		return err
+	}
+
 	abi, err := cc.NewABI(t.goos, t.goarch)
 	abi.Types[cc.LongDouble] = abi.Types[cc.Double]
 	if err != nil {
@@ -815,25 +922,17 @@ func (t *Task) Main() (err error) {
 	t.cfg.Config3.NoFieldAndBitfieldOverlap = true
 	t.cfg.Config3.PreserveWhiteSpace = true
 	t.cfg.Config3.UnsignedEnums = true
-	hostConfigOpts := strings.Split(t.hostConfigOpts, ",")
-	if t.hostConfigOpts == "" {
-		hostConfigOpts = nil
-	}
-	hostPredefined, hostIncludes, hostSysIncludes, err := cc.HostConfig(t.hostConfigCmd, hostConfigOpts...)
-	if err != nil {
-		return err
-	}
 
-	if t.mingw = detectMingw(hostPredefined); t.mingw {
+	if t.mingw = detectMingw(t.hostPredefined); t.mingw {
 		t.windows = true
 	}
 	if t.nostdinc {
-		hostIncludes = nil
-		hostSysIncludes = nil
+		t.hostIncludes = nil
+		t.hostSysIncludes = nil
 	}
 	var sources []cc.Source
-	if hostPredefined != "" {
-		sources = append(sources, cc.Source{Name: "<predefined>", Value: hostPredefined})
+	if t.hostPredefined != "" {
+		sources = append(sources, cc.Source{Name: "<predefined>", Value: t.hostPredefined})
 	}
 	sources = append(sources, cc.Source{Name: "<builtin>", Value: builtin})
 	if len(t.D) != 0 {
@@ -865,12 +964,12 @@ func (t *Task) Main() (err error) {
 	// line, then in directories named in -I options, and last in the usual
 	// places
 	includePaths := append([]string{"@"}, t.I...)
-	includePaths = append(includePaths, hostIncludes...)
-	includePaths = append(includePaths, hostSysIncludes...)
+	includePaths = append(includePaths, t.hostIncludes...)
+	includePaths = append(includePaths, t.hostSysIncludes...)
 	// For headers whose names are enclosed in angle brackets ( "<>" ), the
 	// header shall be searched for only in directories named in -I options
 	// and then in the usual places.
-	sysIncludePaths := append(t.I, hostSysIncludes...)
+	sysIncludePaths := append(t.I, t.hostSysIncludes...)
 	if t.traceTranslationUnits {
 		fmt.Printf("target: %s/%s\n", t.goos, t.goarch)
 		if t.hostConfigCmd != "" {
@@ -879,9 +978,14 @@ func (t *Task) Main() (err error) {
 	}
 	for i, v := range t.sources {
 		tuSources := append(sources, v)
+		out := t.stdout
+		if t.saveConfig != "" {
+			out = io.Discard
+			t.E = true
+		}
 		if t.E {
 			t.cfg.PreprocessOnly = true
-			if err := cc.Preprocess(t.cfg, includePaths, sysIncludePaths, tuSources, t.stdout); err != nil {
+			if err := cc.Preprocess(t.cfg, includePaths, sysIncludePaths, tuSources, out); err != nil {
 				return err
 			}
 			continue
@@ -908,6 +1012,81 @@ func (t *Task) Main() (err error) {
 	}
 
 	return t.link()
+}
+
+func (t *Task) configure() (err error) {
+	if t.configured {
+		return nil
+	}
+
+	type jsonConfig struct {
+		Predefined      string
+		IncludePaths    []string
+		SysIncludePaths []string
+		OS              string
+		Arch            string
+	}
+
+	t.configured = true
+	if t.loadConfig != "" {
+		path := filepath.Join(t.loadConfig, "config.json")
+		// trc("%p: LOAD_CONFIG(%s)", t, path)
+		b, err := ioutil.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		loadConfig := &jsonConfig{}
+		if err := json.Unmarshal(b, loadConfig); err != nil {
+			return err
+		}
+
+		t.goos = loadConfig.OS
+		t.goarch = loadConfig.Arch
+		for _, v := range loadConfig.IncludePaths {
+			t.hostIncludes = append(t.hostIncludes, filepath.Join(t.loadConfig, v))
+		}
+		for _, v := range loadConfig.SysIncludePaths {
+			t.hostSysIncludes = append(t.hostSysIncludes, filepath.Join(t.loadConfig, v))
+		}
+		t.hostPredefined = loadConfig.Predefined
+		return nil
+	}
+
+	hostConfigOpts := strings.Split(t.hostConfigOpts, ",")
+	if t.hostConfigOpts == "" {
+		hostConfigOpts = nil
+	}
+	if t.hostPredefined, t.hostIncludes, t.hostSysIncludes, err = cc.HostConfig(t.hostConfigCmd, hostConfigOpts...); err != nil {
+		return err
+	}
+
+	if t.saveConfig != "" && !t.configSaved {
+		t.configSaved = true
+		// trc("%p: SAVE_CONFIG(%s)", t, t.saveConfig)
+		cfg := &jsonConfig{
+			Predefined:      t.hostPredefined,
+			IncludePaths:    t.hostIncludes,
+			SysIncludePaths: t.hostSysIncludes,
+			OS:              t.goos,
+			Arch:            t.goarch,
+		}
+		b, err := json.Marshal(cfg)
+		if err != nil {
+			return err
+		}
+
+		full := filepath.Join(t.saveConfig, "config.json")
+		if err := os.MkdirAll(t.saveConfig, 0700); err != nil {
+			return err
+		}
+
+		if err := ioutil.WriteFile(full, b, 0600); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (t *Task) setLookPaths() (err error) {
@@ -1004,11 +1183,20 @@ func (t *Task) scriptBuild2(script [][]string) error {
 			fmt.Printf("%s\n", cmd)
 		}
 		t2 := NewTask(append(ccgo, args...), t.stdout, t.stderr)
+		t2.cfg.IncludeFileHandler = t.cfg.IncludeFileHandler
 		t2.cfg.SharedFunctionDefinitions = t.cfg.SharedFunctionDefinitions
+		t2.configSaved = t.configSaved
+		t2.configured = t.configured
+		t2.hostIncludes = t.hostIncludes
+		t2.hostPredefined = t.hostPredefined
+		t2.hostSysIncludes = t.hostSysIncludes
+		t2.includedFiles = t.includedFiles
+		t2.isScripted = true
+		t2.loadConfig = t.loadConfig
 		t2.replaceFdZero = t.replaceFdZero
 		t2.replaceTclDefaultDoubleRounding = t.replaceTclDefaultDoubleRounding
 		t2.replaceTclIeeeDoubleRounding = t.replaceTclIeeeDoubleRounding
-		t2.isScripted = true
+		t2.saveConfig = t.saveConfig
 		if err := inDir(dir, t2.Main); err != nil {
 			return err
 		}
@@ -1031,6 +1219,10 @@ func (t *Task) scriptBuild2(script [][]string) error {
 		}
 		t.imported[len(t.imported)-1].used = true // crt is always imported
 	}
+	if t.saveConfig != "" {
+		return nil
+	}
+
 	return t.link()
 }
 

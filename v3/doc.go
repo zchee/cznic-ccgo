@@ -18,13 +18,14 @@
 // Environment variables
 //
 // CCGO_CPP selects which command is used by the C front end to obtain target
-// configuration. Defaults to `cpp`.
+// configuration. Defaults to `cpp`. Ignored when --load-config <path> is used.
 //
 // TARGET_GOARCH selects the GOARCH of the resulting Go code. Defaults to
-// $GOARCH or runtime.GOARCH if $GOARCH is not set.
+// $GOARCH or runtime.GOARCH if $GOARCH is not set. Ignored when --load-config
+// <path> is used.
 //
 // TARGET_GOOS selects the GOOS of the resulting Go code. Defaults to $GOOS or
-// runtime.GOOS if $GOOS is not set.
+// runtime.GOOS if $GOOS is not set. Ignored when --load-config <path> is used.
 //
 // Compiling
 //
@@ -92,9 +93,10 @@
 //
 // -compiledb name
 //
-// When this option appears anywhere, all preceding options are ignored and all
-// following command line arguments are interpreted as a command with arguments
-// that will be executed to produce the compilation database. For example:
+// When this option appears anywhere, most preceding options are ignored and
+// all following command line arguments are interpreted as a command with
+// arguments that will be executed to produce the compilation database. For
+// example:
 //
 //	ccgo -compiledb compile_commands.json make -DFOO -w
 //
@@ -270,9 +272,79 @@
 // bytes are supported. Other types/sizes will ignore both the volatile
 // specifier and the -volatile option.
 //
+// Capturing host configuration
+//
+// -save-config path
+//
+// This option copies every header included during compilation or compile
+// database generation to a file under the path argument.  Additionally the
+// host configuration, ie. predefined macros, include search paths, os and
+// architecture is stored in path/config.json.
+//
+// When this option is used, no Go code is generated, meaning no link phase
+// occurs and thus the memory consumption should stay low.
+//
+// Passing an empty string as an argument of -save-config is the same as if the
+// option is not present at all. Possibly useful when the option set is
+// generated in code.
+//
+// This option is ignored when -compiledb <path> is used.
+//
+// Using captured configuration
+//
+// --load-config path
+//
+// Note that this option must have the double dash prefix to distinguish it
+// from -lfoo, the [traditional] short form of `-l foo`.
+//
+// This option configures the compiler using path/config.json. The include
+// paths are adjusted to be relative to path. For example:
+//
+// Assume on machine A the default C preprocessor reports a system include
+// search path "/usr/include".  Running ccgo on A with -save-config /tmp/foo to
+// compile foo.c that #includes <stdlib.h>, which is found in
+// /usr/include/stdlib.h on the host results in
+//
+// 	- /tmp/foo/config.json having an element "/usr/include" in the SysIncludePaths array.
+//	- Host's /usr/include/stdlib.h is copied to /tmp/foo/usr/include/stdlib.h.
+//
+// Assume /tmp/foo from machine A will be recursively copied to machine B, that
+// may run a different operating system and/or architecture. Let the copy be
+// for example in /tmp/bar.  Using --load-config /tmp/bar will instruct ccgo to
+// configure its preprocessor with a system include path /tmp/bar/usr/include
+// and thus use the original machine A stdlib.h found there.  When the
+// --load-config is used, no host configuration from a machine B cross C
+// preprocessor/compiler is needed to transpile the foo.c source on machine B
+// as if the compiler would be running on machine A.
+//
+// The particular usefulness of this mechanism is for transpiling big projects
+// for 32 bit architectures. There the lack if ccgo having an object format and
+// thus linking everything in RAM can need too much memory for the system to
+// handle. The way around this is possibly to run something like
+//
+//	$ ./configure
+//	$ ccgo -compiledb cdb.json make libfoo.a
+//	$ ccgo -save-config path config.json libfoo.a
+//
+// on machine A, transfer path/* to machine B and run the link phase there with
+// eg.
+//
+//	$ ccgo --load-config path config.json libfoo.a
+//
+// Note that the C sources for the project must be in the same path on both
+// machines because the compile database stores absolute paths. It might be
+// convenient to put the sources in path/src, the config in path/config, for
+// example, and transfer the [archive of] path/ to the same directory on the
+// second machine. That also solves the issue when ./configure generates files
+// and the result differs per operating system or architecture.
+//
+// Passing an empty string as an argument of -load-config is the same as if the
+// option is not present at all. Possibly useful when the option set is
+// generated in code.
+//
 // Boolean options
 //
-// Command line options not allowing arguments.
+// These command line options don't take arguments.
 //
 // Preprocessing
 //
@@ -342,6 +414,14 @@
 // This might be useful when the intent is to define the missing function in Go
 // functions manually. Name conflict resolution for such declarator names may
 // or may not be applied.
+//
+// Tracing included files
+//
+// -trace-included-files
+//
+// This option outputs the path names of all included files.
+//
+// This option is ignored when -compiledb <path> is used.
 //
 // Undocumented options
 //
