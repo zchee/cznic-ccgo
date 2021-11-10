@@ -920,7 +920,7 @@ func (t *Task) Main() (err error) {
 	t.cfg.ReplaceMacroTclIeeeDoubleRounding = t.replaceTclIeeeDoubleRounding
 	t.cfg.Config3.IgnoreInclude = re
 	t.cfg.Config3.NoFieldAndBitfieldOverlap = true
-	t.cfg.Config3.PreserveWhiteSpace = true
+	t.cfg.Config3.PreserveWhiteSpace = t.saveConfig == ""
 	t.cfg.Config3.UnsignedEnums = true
 
 	if t.mingw = detectMingw(t.hostPredefined); t.mingw {
@@ -988,6 +988,7 @@ func (t *Task) Main() (err error) {
 			if err := cc.Preprocess(t.cfg, includePaths, sysIncludePaths, tuSources, out); err != nil {
 				return err
 			}
+			memGuard(i, t.isScripted)
 			continue
 		}
 
