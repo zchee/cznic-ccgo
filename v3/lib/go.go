@@ -10292,9 +10292,6 @@ func (p *project) postfixExpressionValueSelectUnion(f *function, n *cc.PostfixEx
 	// PostfixExpression '.' IDENTIFIER
 	pe := n.PostfixExpression.Operand.Type()
 	fld := n.Field
-	if fld.Offset() != 0 {
-		p.err(&n.Token2, "internal error, union field with non-zero offset: %s %v", n.Token2.Value, fld.Offset())
-	}
 	switch {
 	case n.Operand.Type().IsBitFieldType():
 		p.w("(")
