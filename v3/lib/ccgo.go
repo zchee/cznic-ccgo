@@ -1417,6 +1417,13 @@ func (t *Task) cdbBuild(obj map[string]*cdbItem, list []string) error {
 			return err
 		}
 
+		for _, v := range t.D {
+			args = append(args, "-D"+v)
+		}
+		for _, v := range t.U {
+			args = append(args, "-U"+v)
+		}
+
 		line := append([]string{it.Directory}, args...)
 		script = append(script, line)
 	}
