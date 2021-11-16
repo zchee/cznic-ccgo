@@ -798,13 +798,14 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"string-opt-5.c":               {}, //TODO
 		"va-arg-22.c":                  {}, //TODO
 		"va-arg-pack-1.c":              {}, //TODO
-
 	}
-	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
+	if runtime.GOOS == "windows" {
 		blacklist["fp-cmp-1.c"] = struct{}{} // needs signal.h
 		blacklist["fp-cmp-2.c"] = struct{}{} // needs signal.h
 		blacklist["fp-cmp-3.c"] = struct{}{} // needs signal.h
-		blacklist["pr36339.c"] = struct{}{}  // typedef unsigned long my_uintptr_t;
+	}
+	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
+		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
 	}
 	if runtime.GOARCH == "386" {
 		blacklist["rbug.c"] = struct{}{}     // https://github.com/golang/go/issues/48807
