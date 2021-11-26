@@ -1843,142 +1843,65 @@ func TestCompCert(t *testing.T) {
 	}
 }
 
-func TestGCCExec(t *testing.T) {
-	root := filepath.Join(testWD, filepath.FromSlash(gccDir))
+func TestGCCExecute(t *testing.T) {
+	const root = "/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute"
 	g := newGolden(t, fmt.Sprintf("testdata/gcc_exec_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
 
 	defer g.close()
 
-	var files, ok int
-	const dir = "gcc/testsuite/gcc.c-torture/execute"
-	f, o := testGCCExec(g.w, t, filepath.Join(root, filepath.FromSlash(dir)), false)
-	files += f
-	ok += o
-	t.Logf("files %s, ok %s", h(files), h(ok))
-}
+	mustEmptyDir(t, tempDir, keep)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int) {
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// Prepare testdata
+	needFiles(t, root, []string{
+		"20040709-2.c",
+	})
 	blacklist := map[string]struct{}{
-		// nested func
-		"20000822-1.c": {}, // nested func
-		"20010209-1.c": {},
-		"20010605-1.c": {},
-		"20030501-1.c": {},
-
-		// asm
-		"20001009-2.c": {},
-		"20020107-1.c": {},
-		"20030222-1.c": {},
-		"960830-1.c":   {},
-
-		// unsupported alignment
-		"20010904-1.c": {},
-		"20010904-2.c": {},
-		"align-3.c":    {},
-
-		"20010122-1.c": {}, // __builtin_return_address
-		"20021127-1.c": {}, // gcc specific optimization
-		"20101011-1.c": {}, // sigfpe
-		"991014-1.c":   {}, // Struct type too big
-		"eeprof-1.c":   {}, // requires instrumentation
-
-		// unsupported volatile declarator size
-		"20021120-1.c": {},
-		"20030128-1.c": {},
-		"pr53160.c":    {},
-		"pr71631.c":    {},
-		"pr83269.c":    {},
-		"pr89195.c":    {},
-
-		// implementation defined conversion result
-		"20031003-1.c": {},
-
-		// goto * expr
-		"20040302-1.c":  {},
-		"comp-goto-1.c": {},
-		"comp-goto-2.c": {},
-
-		//TODO initializing zero sized fields not supported
-		"zero-struct-2.c": {},
-
-		//TODO flexible array member
-		"20010924-1.c": {},
-		"20030109-1.c": {},
-		"20050613-1.c": {},
-		"pr28865.c":    {},
-		"pr33382.c":    {},
-
-		//TODO _Complex
-		"20041124-1.c": {},
-		"20041201-1.c": {},
-		"20010605-2.c": {},
-		"20020227-1.c": {},
-		"20020411-1.c": {},
-		"20030910-1.c": {},
-
-		//TODO bitfield
-		"20000113-1.c": {},
-
-		//TODO designator
-		"20000801-3.c": {},
-
-		//TODO __builtin_types_compatible_p
-		"20020206-2.c": {},
-
-		//TODO alloca
-		"20020314-1.c": {},
-		"20021113-1.c": {},
-		"20040223-1.c": {},
-
-		//TODO statement expression
-		"20020320-1.c": {},
-
-		//TODO VLA
-		"20040308-1.c": {},
-		"20040411-1.c": {},
-		"20040423-1.c": {},
-
-		//TODO link error
-		"fp-cmp-7.c": {},
-
-		//TODO __builtin_isunordered
-		"compare-fp-1.c": {},
-		"compare-fp-3.c": {}, //TODO
-		"compare-fp-4.c": {},
-		"fp-cmp-4.c":     {}, //TODO
-		"fp-cmp-4f.c":    {},
-		"fp-cmp-4l.c":    {},
-		"fp-cmp-5.c":     {},
-		"fp-cmp-8.c":     {},
-		"fp-cmp-8f.c":    {},
-		"fp-cmp-8l.c":    {},
-		"pr38016.c":      {},
-
-		//TODO __builtin_infl
-		"inf-1.c":   {},
-		"inf-2.c":   {},
-		"pr36332.c": {}, //TODO
-
-		//TODO __builtin_huge_vall
-		"inf-3.c": {},
-
-		//TODO undefined: tanf
-		"mzero4.c": {},
-
-		//TODO __builtin_isgreater
-		"pr50310.c": {},
-
-		//TODO convert: TODOTODO t1 -> t2
-		"pr72824-2.c": {},
-
-		//TODO struct var arg
-		"20020412-1.c": {},
-
-		//TODO undefined: tmpnam
-		"fprintf-2.c":   {},
-		"printf-2.c":    {},
-		"user-printf.c": {},
-
+		"20000113-1.c":                 {}, //TODO
+		"20000801-3.c":                 {}, //TODO
+		"20000822-1.c":                 {}, //TODO
+		"20001009-2.c":                 {}, //TODO
+		"20010122-1.c":                 {}, //TODO
+		"20010209-1.c":                 {}, //TODO
+		"20010605-1.c":                 {}, //TODO
+		"20010605-2.c":                 {}, //TODO
+		"20010904-1.c":                 {}, //TODO
+		"20010904-2.c":                 {}, //TODO
+		"20010924-1.c":                 {}, //TODO
+		"20020107-1.c":                 {}, //TODO
+		"20020206-2.c":                 {}, //TODO
+		"20020227-1.c":                 {}, //TODO
+		"20020314-1.c":                 {}, //TODO
+		"20020320-1.c":                 {}, //TODO
+		"20020411-1.c":                 {}, //TODO
+		"20020412-1.c":                 {}, //TODO
+		"20021113-1.c":                 {}, //TODO
+		"20021120-1.c":                 {}, //TODO
+		"20021127-1.c":                 {}, //TODO
+		"20030109-1.c":                 {}, //TODO
+		"20030128-1.c":                 {}, //TODO
+		"20030222-1.c":                 {}, //TODO
+		"20030501-1.c":                 {}, //TODO
+		"20030910-1.c":                 {}, //TODO
+		"20031003-1.c":                 {}, //TODO
+		"20040223-1.c":                 {}, //TODO
+		"20040302-1.c":                 {}, //TODO
+		"20040308-1.c":                 {}, //TODO
+		"20040411-1.c":                 {}, //TODO
+		"20040423-1.c":                 {}, //TODO
 		"20040520-1.c":                 {}, //TODO
 		"20040629-1.c":                 {}, //TODO
 		"20040705-1.c":                 {}, //TODO
@@ -1987,7 +1910,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20040709-1.c":                 {}, //TODO
 		"20040709-2.c":                 {}, //TODO
 		"20040709-3.c":                 {}, //TODO
-		"20041011-1.c":                 {}, //TODO 48:1: unsupported volatile declarator size: 128
+		"20041011-1.c":                 {}, //TODO
+		"20041124-1.c":                 {}, //TODO
+		"20041201-1.c":                 {}, //TODO
 		"20041214-1.c":                 {}, //TODO
 		"20041218-2.c":                 {}, //TODO
 		"20050121-1.c":                 {}, //TODO
@@ -1996,9 +1921,10 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20050316-3.c":                 {}, //TODO
 		"20050604-1.c":                 {}, //TODO
 		"20050607-1.c":                 {}, //TODO
+		"20050613-1.c":                 {}, //TODO
 		"20050929-1.c":                 {}, //TODO
 		"20051012-1.c":                 {}, //TODO
-		"20060420-1.c":                 {}, //TODO sizeof vector
+		"20060420-1.c":                 {}, //TODO
 		"20061220-1.c":                 {}, //TODO
 		"20070614-1.c":                 {}, //TODO
 		"20070824-1.c":                 {}, //TODO
@@ -2009,7 +1935,9 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"20071220-2.c":                 {}, //TODO
 		"20080502-1.c":                 {}, //TODO
 		"20090219-1.c":                 {}, //TODO
-		"20100430-1.c":                 {}, //TODO unsupported attribute: packed
+		"20100430-1.c":                 {}, //TODO
+		"20101011-1.c":                 {}, //TODO
+		"20121108-1.c":                 {}, //TODO
 		"20180921-1.c":                 {}, //TODO
 		"920302-1.c":                   {}, //TODO
 		"920415-1.c":                   {}, //TODO
@@ -2041,36 +1969,41 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"960312-1.c":                   {}, //TODO
 		"960416-1.c":                   {}, //TODO
 		"960512-1.c":                   {}, //TODO
-		"970217-1.c":                   {}, //TODO VLA paramater
+		"970217-1.c":                   {}, //TODO
 		"980526-1.c":                   {}, //TODO
 		"990130-1.c":                   {}, //TODO
 		"990208-1.c":                   {}, //TODO
 		"990413-2.c":                   {}, //TODO
 		"990524-1.c":                   {}, //TODO
+		"991014-1.c":                   {}, //TODO
 		"991112-1.c":                   {}, //TODO
 		"991227-1.c":                   {}, //TODO
 		"alias-2.c":                    {}, //TODO
 		"alias-3.c":                    {}, //TODO
 		"alias-4.c":                    {}, //TODO
+		"align-3.c":                    {}, //TODO
 		"align-nest.c":                 {}, //TODO
 		"alloca-1.c":                   {}, //TODO
-		"anon-1.c":                     {}, //TODO nested field access
-		"bcp-1.c":                      {}, //TODO
+		"anon-1.c":                     {}, //TODO
 		"bitfld-3.c":                   {}, //TODO
 		"built-in-setjmp.c":            {}, //TODO
 		"builtin-bitops-1.c":           {}, //TODO
 		"builtin-constant.c":           {}, //TODO
-		"builtin-prefetch-3.c":         {}, //TODO volatile struct
+		"builtin-prefetch-3.c":         {}, //TODO
 		"builtin-types-compatible-p.c": {}, //TODO
 		"call-trap-1.c":                {}, //TODO
+		"comp-goto-1.c":                {}, //TODO
+		"comp-goto-2.c":                {}, //TODO
 		"complex-1.c":                  {}, //TODO
 		"complex-2.c":                  {}, //TODO
 		"complex-4.c":                  {}, //TODO
 		"complex-5.c":                  {}, //TODO
 		"complex-6.c":                  {}, //TODO
 		"complex-7.c":                  {}, //TODO
+		"eeprof-1.c":                   {}, //TODO
 		"ffs-1.c":                      {}, //TODO
 		"ffs-2.c":                      {}, //TODO
+		"fprintf-2.c":                  {}, //TODO
 		"frame-address.c":              {}, //TODO
 		"medce-1.c":                    {}, //TODO
 		"nest-align-1.c":               {}, //TODO
@@ -2090,6 +2023,8 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr23467.c":                    {}, //TODO
 		"pr24135.c":                    {}, //TODO
 		"pr28289.c":                    {}, //TODO
+		"pr28865.c":                    {}, //TODO
+		"pr33382.c":                    {}, //TODO
 		"pr34154.c":                    {}, //TODO
 		"pr35456.c":                    {}, //TODO
 		"pr36321.c":                    {}, //TODO
@@ -2103,7 +2038,6 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr41239.c":                    {}, //TODO
 		"pr41935.c":                    {}, //TODO
 		"pr42248.c":                    {}, //TODO
-		"pr42570":                      {}, //TODO uint8_t foo[1][0];
 		"pr43385.c":                    {}, //TODO
 		"pr43560.c":                    {}, //TODO
 		"pr44575.c":                    {}, //TODO
@@ -2117,6 +2051,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr51877.c":                    {}, //TODO
 		"pr51933.c":                    {}, //TODO
 		"pr52286.c":                    {}, //TODO
+		"pr53160.c":                    {}, //TODO
 		"pr53645-2.c":                  {}, //TODO
 		"pr53645.c":                    {}, //TODO
 		"pr55750.c":                    {}, //TODO
@@ -2138,7 +2073,7 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr65427.c":                    {}, //TODO
 		"pr65648.c":                    {}, //TODO
 		"pr65956.c":                    {}, //TODO
-		"pr66556.c":                    {}, //TODO unsupported volatile declarator size: 237
+		"pr66556.c":                    {}, //TODO
 		"pr67037.c":                    {}, //TODO
 		"pr68249.c":                    {}, //TODO
 		"pr68328.c":                    {}, //TODO
@@ -2150,7 +2085,8 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr71554.c":                    {}, //TODO
 		"pr71626-1.c":                  {}, //TODO
 		"pr71626-2.c":                  {}, //TODO
-		"pr77767.c":                    {}, //TODO VLA parameter
+		"pr71631.c":                    {}, //TODO
+		"pr77767.c":                    {}, //TODO
 		"pr78438.c":                    {}, //TODO
 		"pr78726.c":                    {}, //TODO
 		"pr79354.c":                    {}, //TODO
@@ -2161,14 +2097,39 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"pr82210.c":                    {}, //TODO
 		"pr82954.c":                    {}, //TODO
 		"pr84478.c":                    {}, //TODO
+		"pr84521.c":                    {}, //TODO
 		"pr84524.c":                    {}, //TODO
 		"pr85156.c":                    {}, //TODO
 		"pr85169.c":                    {}, //TODO
 		"pr85331.c":                    {}, //TODO
-		"pr85529-1.c":                  {}, //TODO :24:5: unsupported volatile declarator type: volatile struct S
+		"pr85529-1.c":                  {}, //TODO
 		"pr86528.c":                    {}, //TODO
+		"pr89195.c":                    {}, //TODO
 		"pr89434.c":                    {}, //TODO
-		"pushpop_macro.c":              {}, //TODO #pragma push_macro("_")
+		"pr90311.c":                    {}, //TODO
+		"pr91450-1.c":                  {}, //TODO
+		"pr91450-2.c":                  {}, //TODO
+		"pr91635.c":                    {}, //TODO
+		"pr92618.c":                    {}, //TODO
+		"pr92904.c":                    {}, //TODO
+		"pr93213.c":                    {}, //TODO
+		"pr93249.c":                    {}, //TODO
+		"pr93434.c":                    {}, //TODO
+		"pr93494.c":                    {}, //TODO
+		"pr93744-1.c":                  {}, //TODO
+		"pr93945.c":                    {}, //TODO
+		"pr94130.c":                    {}, //TODO
+		"pr94412.c":                    {}, //TODO
+		"pr94524-1.c":                  {}, //TODO
+		"pr94524-2.c":                  {}, //TODO
+		"pr94591.c":                    {}, //TODO
+		"pr97325.c":                    {}, //TODO
+		"pr98366.c":                    {}, //TODO
+		"pr98474.c":                    {}, //TODO
+		"pr98681.c":                    {}, //TODO
+		"printf-2.c":                   {}, //TODO
+		"pushpop_macro.c":              {}, //TODO
+		"return-addr.c":                {}, //TODO
 		"scal-to-vec1.c":               {}, //TODO
 		"scal-to-vec2.c":               {}, //TODO
 		"scal-to-vec3.c":               {}, //TODO
@@ -2183,155 +2144,100 @@ func testGCCExec(w io.Writer, t *testing.T, dir string, opt bool) (files, ok int
 		"strct-varg-1.c":               {}, //TODO
 		"string-opt-18.c":              {}, //TODO
 		"string-opt-5.c":               {}, //TODO
+		"user-printf.c":                {}, //TODO
+		"va-arg-2.c":                   {}, //TODO
 		"va-arg-22.c":                  {}, //TODO
 		"va-arg-pack-1.c":              {}, //TODO
+		"zero-struct-2.c":              {}, //TODO
 	}
-	if runtime.GOOS == "windows" {
-		blacklist["fp-cmp-1.c"] = struct{}{} // needs signal.h
-		blacklist["fp-cmp-2.c"] = struct{}{} // needs signal.h
-		blacklist["fp-cmp-3.c"] = struct{}{} // needs signal.h
-	}
-	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
-		blacklist["pr36339.c"] = struct{}{} // typedef unsigned long my_uintptr_t;
-	}
-	if runtime.GOARCH == "386" {
-		blacklist["rbug.c"] = struct{}{}     // https://github.com/golang/go/issues/48807
-		blacklist["960830-1.c"] = struct{}{} // assembler statements not supported
-	}
-	if runtime.GOARCH == "arm" {
-		blacklist["rbug.c"] = struct{}{} // https://github.com/golang/go/issues/48807
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer os.Chdir(wd)
-
-	temp, err := ioutil.TempDir("", "ccgo-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer os.RemoveAll(temp)
-
-	if err := os.Chdir(temp); err != nil {
-		t.Fatal(err)
-	}
-
-	if os.Getenv("GO111MODULE") != "off" {
-		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/gcc"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-
-		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-	}
-
-	var re *regexp.Regexp
-	if s := *oRE; s != "" {
-		re = regexp.MustCompile(s)
-	}
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	failed := make([]string, 0, 0)
+	binary := map[string]bool{}
+	var rq, res, ok int
+	limit := runtime.GOMAXPROCS(0)
+	limiter := make(chan struct{}, limit)
 	success := make([]string, 0, 0)
-	limiter := make(chan int, runtime.GOMAXPROCS(0))
-	// fill the limiter
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		limiter <- i
-	}
-	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				err = nil
+	results := make(chan *runResult, limit)
+	failed := map[string]struct{}{}
+	err = walk(root, func(pth string, fi os.FileInfo) error {
+		if strings.Contains(pth, "/ieee/") || !strings.HasSuffix(pth, ".c") {
+			return nil
+		}
+
+		switch {
+		case re != nil:
+			if !re.MatchString(pth) {
+				return nil
 			}
-			return err
+		default:
+			if _, ok := blacklist[filepath.Base(pth)]; ok {
+				return nil
+			}
 		}
 
-		if info.IsDir() {
-			return nil
-		}
-
-		if strings.Contains(filepath.ToSlash(path), "/builtins/") {
-			return nil
-		}
-
-		if filepath.Ext(path) != ".c" || info.Mode()&os.ModeType != 0 {
-			return nil
-		}
-
-		if _, ok := blacklist[filepath.Base(path)]; ok {
-			return nil
-		}
-
-		files++
-
-		if re != nil && !re.MatchString(path) {
-			return nil
-		}
-
-		main_file, err := ioutil.TempFile(temp, "*.go")
-		if err != nil {
-			return nil
-		}
-		main := main_file.Name()
-		main_file.Close()
-		wg.Add(1)
-		go func(id int) {
+	more:
+		select {
+		case r := <-results:
+			res++
+			<-limiter
+			switch r.err.(type) {
+			case nil:
+				ok++
+				success = append(success, filepath.Base(r.name))
+				delete(failed, r.name)
+			case skipErr:
+				delete(failed, r.name)
+				t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+			default:
+				t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+			}
+			goto more
+		case limiter <- struct{}{}:
+			rq++
 			if *oTrace {
-				fmt.Fprintln(os.Stderr, path)
+				fmt.Fprintf(os.Stderr, "%v: %s\n", rq, pth)
 			}
-			var ret bool
-
-			defer func() {
-				mu.Lock()
-				if ret {
-					ok++
-					success = append(success, filepath.Base(path))
-				} else {
-					failed = append(failed, filepath.Base(path))
-				}
-				mu.Unlock()
-				limiter <- id
-				wg.Done()
-			}()
-
-			ccgoArgs := []string{
-				"ccgo",
-
-				"-D__FUNCTION__=__func__",
-				"-export-defines", "",
-				"-o", main,
-				"-verify-structs",
-			}
-
-			ret = testSingle(t, main, path, ccgoArgs, nil)
-		}(<-limiter)
+			base := filepath.Base(pth)
+			failed[pth] = struct{}{}
+			go run(pth, binary[base], true, false, results)
+		}
 		return nil
-	}); err != nil {
-		t.Errorf("%v", err)
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	wg.Wait()
-	sort.Strings(failed)
-	sort.Strings(success)
-	if *writeFailed {
-		failedFile, _ := os.Create("FAILED")
-		for _, fpath := range failed {
-			failedFile.WriteString("\"")
-			failedFile.WriteString(fpath)
-			failedFile.WriteString("\": {},\n")
+	for res != rq {
+		r := <-results
+		res++
+		<-limiter
+		switch r.err.(type) {
+		case nil:
+			ok++
+			success = append(success, filepath.Base(r.name))
+			delete(failed, r.name)
+		case skipErr:
+			delete(failed, r.name)
+			t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+		default:
+			t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
 		}
 	}
+	t.Logf("files %v, ok %v, failed %v", rq, ok, len(failed))
+	sort.Strings(success)
 	for _, fpath := range success {
-		w.Write([]byte(fpath))
-		w.Write([]byte{'\n'})
+		g.w.Write([]byte(fpath))
+		g.w.Write([]byte{'\n'})
+	}
+	if len(failed) == 0 {
+		return
 	}
 
-	return len(failed) + len(success), len(success)
+	var a []string
+	for k := range failed {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		t.Logf("FAIL %s", v)
+	}
 }
 
 func TestSQLite(t *testing.T) {
