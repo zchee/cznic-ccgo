@@ -1433,6 +1433,165 @@ func TestMirAndrewChambers(t *testing.T) {
 	}
 }
 
+func TestMirLacc(t *testing.T) {
+	const root = "/github.com/vnmakarov/mir/c-tests/lacc"
+	g := newGolden(t, fmt.Sprintf("testdata/mir_lacc_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
+	mustEmptyDir(t, tempDir, keep)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	needFiles(t, root, []string{
+		"hello.c",
+		"header.h",
+	})
+	blacklist := map[string]struct{}{
+		"anonymous-struct.c":       {}, //TODO
+		"array-registers.c":        {}, //TODO
+		"bitfield-basic.c":         {}, //TODO
+		"bitfield-extend.c":        {}, //TODO
+		"bitfield-pack-next.c":     {}, //TODO
+		"bitfield-trailing-zero.c": {}, //TODO
+		"bitfield-types-init.c":    {}, //TODO
+		"bitfield.c":               {}, //TODO
+		"conditional-void.c":       {}, //TODO
+		"declarator-complex.c":     {}, //TODO
+		"duffs-device.c":           {}, //TODO
+		"function-incomplete.c":    {}, //TODO
+		"function-pointer-call.c":  {}, //TODO
+		"function-pointer.c":       {}, //TODO
+		"function.c":               {}, //TODO
+		"hello.c":                  {}, //TODO
+		"immediate-expr.c":         {}, //TODO
+		"include.c":                {}, //TODO
+		"ldouble-load-direct.c":    {}, //TODO
+		"long-double-arithmetic.c": {}, //TODO
+		"long-double-compare.c":    {}, //TODO
+		"long-double-function.c":   {}, //TODO
+		"long-double-load.c":       {}, //TODO
+		"long-double-struct.c":     {}, //TODO
+		"long-double-union.c":      {}, //TODO
+		"macro-paste.c":            {}, //TODO
+		"macro.c":                  {}, //TODO
+		"pointer.c":                {}, //TODO
+		"string-addr.c":            {}, //TODO
+		"string-concat.c":          {}, //TODO
+		"string-escape.c":          {}, //TODO
+		"string-index.c":           {}, //TODO
+		"string-length.c":          {}, //TODO
+		"stringify.c":              {}, //TODO
+		"strings.c":                {}, //TODO
+		"token.c":                  {}, //TODO
+		"typedef.c":                {}, //TODO
+		"union-bitfield.c":         {}, //TODO
+		"vararg-complex-1.c":       {}, //TODO
+		"vararg-complex-2.c":       {}, //TODO
+		"vararg.c":                 {}, //TODO
+		"whitespace.c":             {}, //TODO
+	}
+	binary := map[string]bool{}
+	var rq, res, ok int
+	limit := runtime.GOMAXPROCS(0)
+	limiter := make(chan struct{}, limit)
+	success := make([]string, 0, 0)
+	results := make(chan *runResult, limit)
+	failed := map[string]struct{}{}
+	err = walk(root, func(pth string, fi os.FileInfo) error {
+		if !strings.HasSuffix(pth, ".c") {
+			return nil
+		}
+
+		switch {
+		case re != nil:
+			if !re.MatchString(pth) {
+				return nil
+			}
+		default:
+			if _, ok := blacklist[filepath.Base(pth)]; ok {
+				return nil
+			}
+		}
+
+	more:
+		select {
+		case r := <-results:
+			res++
+			<-limiter
+			switch r.err.(type) {
+			case nil:
+				ok++
+				success = append(success, filepath.Base(r.name))
+				delete(failed, r.name)
+			case skipErr:
+				delete(failed, r.name)
+				t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+			default:
+				t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+			}
+			goto more
+		case limiter <- struct{}{}:
+			rq++
+			if *oTrace {
+				fmt.Fprintf(os.Stderr, "%v: %s\n", rq, pth)
+			}
+			failed[pth] = struct{}{}
+			go run(pth, binary[filepath.Base(pth)], false, false, results)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for res != rq {
+		r := <-results
+		res++
+		<-limiter
+		switch r.err.(type) {
+		case nil:
+			ok++
+			success = append(success, filepath.Base(r.name))
+			delete(failed, r.name)
+		case skipErr:
+			delete(failed, r.name)
+			t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+		default:
+			t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+		}
+	}
+	t.Logf("files %v, ok %v, failed %v", rq, ok, len(failed))
+	sort.Strings(success)
+	for _, fpath := range success {
+		g.w.Write([]byte(fpath))
+		g.w.Write([]byte{'\n'})
+	}
+	if len(failed) == 0 {
+		return
+	}
+
+	var a []string
+	for k := range failed {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		t.Logf("FAIL %s", v)
+	}
+}
+
 func TestGCCExec(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(gccDir))
 	g := newGolden(t, fmt.Sprintf("testdata/gcc_exec_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
