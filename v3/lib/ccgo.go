@@ -284,7 +284,6 @@ unsigned __sync_sub_and_fetch_uint32(unsigned*, unsigned);
 
 func origin(skip int) string {
 	pc, fn, fl, _ := runtime.Caller(skip)
-	fn = filepath.Base(fn)
 	f := runtime.FuncForPC(pc)
 	var fns string
 	if f != nil {
@@ -296,32 +295,20 @@ func origin(skip int) string {
 	return fmt.Sprintf("%s:%d:%s", fn, fl, fns)
 }
 
-func todo(s string, args ...interface{}) string { //TODO-
+func todo(s string, args ...interface{}) string {
 	switch {
 	case s == "":
 		s = fmt.Sprintf(strings.Repeat("%v ", len(args)), args...)
 	default:
 		s = fmt.Sprintf(s, args...)
 	}
-	pc, fn, fl, _ := runtime.Caller(1)
-	f := runtime.FuncForPC(pc)
-	var fns string
-	if f != nil {
-		fns = f.Name()
-		if x := strings.LastIndex(fns, "."); x > 0 {
-			fns = fns[x+1:]
-		}
-	}
-	r := fmt.Sprintf("%s:%d:%s: TODOTODO %s", fn, fl, fns, s) //TODOOK
-	if dmesgs {
-		dmesg("%v: %v", origin(1), r)
-	}
+	r := fmt.Sprintf("%s\n\tTODO %s", origin(2), s) //TODOOK
 	fmt.Fprintf(os.Stdout, "%s\n", r)
 	os.Stdout.Sync()
 	return r
 }
 
-func trc(s string, args ...interface{}) string { //TODO-
+func trc(s string, args ...interface{}) string {
 	switch {
 	case s == "":
 		s = fmt.Sprintf(strings.Repeat("%v ", len(args)), args...)
@@ -329,8 +316,8 @@ func trc(s string, args ...interface{}) string { //TODO-
 		s = fmt.Sprintf(s, args...)
 	}
 	r := fmt.Sprintf("%s: TRC %s", origin(2), s)
-	fmt.Fprintf(os.Stdout, "%s\n", r)
-	os.Stdout.Sync()
+	fmt.Fprintf(os.Stderr, "%s\n", r)
+	os.Stderr.Sync()
 	return r
 }
 
@@ -617,7 +604,6 @@ func (t *Task) capi2(files []string) (pkgName string, exports map[string]struct{
 
 // Main executes task.
 func (t *Task) Main() (err error) {
-	// trc("%p: %q", t, t.args)
 	if dmesgs {
 		defer func() {
 			if err != nil {

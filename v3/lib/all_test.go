@@ -22,14 +22,18 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pmezard/go-difflib/difflib"
 	"modernc.org/cc/v3"
+	"modernc.org/ccorpus"
 )
 
 func caller(s string, va ...interface{}) {
@@ -73,16 +77,23 @@ func init() {
 // ----------------------------------------------------------------------------
 
 var (
+	fs = ccorpus.FileSystem()
+
 	oBlackBox   = flag.String("blackbox", "", "Record CSmith file to this file")
 	oCSmith     = flag.Duration("csmith", 15*time.Minute, "")
 	oCpp        = flag.Bool("cpp", false, "Amend compiler errors with preprocessor output")
 	oDebug      = flag.Bool("debug", false, "")
+	oFullPaths  = flag.Bool("full-paths", false, "")
+	oGCC        = flag.String("gcc", "", "")
 	oKeep       = flag.Bool("keep", false, "keep temp directories")
+	oKeepTmp    = flag.Bool("keep-tmp", false, "")
+	oO          = flag.Int("O", 1, "")
 	oRE         = flag.String("re", "", "")
 	oStackTrace = flag.Bool("trcstack", false, "")
 	oTrace      = flag.Bool("trc", false, "Print tested paths.")
 	oTraceF     = flag.Bool("trcf", false, "Print test file content")
 	oTraceO     = flag.Bool("trco", false, "Print test output")
+	oTrc2       = flag.Bool("trc2", false, "")
 	oXTags      = flag.String("xtags", "", "passed to go build of TestSQLite")
 	writeFailed = flag.Bool("write-failed", false, "Write all failed tests into a file called FAILED in the cwd, in the format of go maps for easy copy-pasting.")
 
@@ -90,7 +101,21 @@ var (
 	sqliteDir = filepath.FromSlash("testdata/sqlite-amalgamation-3330000")
 	tccDir    = filepath.FromSlash("testdata/tcc-0.9.27")
 
-	testWD string
+	overlayDir           string
+	re                   *regexp.Regexp
+	systemCC             string
+	systemCCVersion      string
+	tempDir              string
+	testWD               string
+	initIncludePathsOnce sync.Once
+	includePaths         []string
+	predefined           string
+	sysIncludePaths      []string
+
+	keep = map[string]struct{}{
+		"go.mod": {},
+		"go.sum": {},
+	}
 
 	csmithDefaultArgs = strings.Join([]string{
 		"--bitfields",                     // --bitfields | --no-bitfields: enable | disable full-bitfields structs (disabled by default).
@@ -124,12 +149,155 @@ func TestMain(m *testing.M) {
 	flag.BoolVar(&oTraceG, "trcg", false, "Print generator output")
 	flag.BoolVar(&oTracePin, "trcpin", false, "Print pinning")
 	flag.Parse()
+	if s := *oRE; s != "" {
+		re = regexp.MustCompile(s)
+	}
 	var err error
 	if testWD, err = os.Getwd(); err != nil {
 		panic("Cannot determine working dir: " + err.Error())
 	}
+	s := filepath.FromSlash("testdata/overlay")
+	if overlayDir, err = filepath.Abs(s); err != nil {
+		panic(err) //TODOOK
+	}
+	if *oGCC == "" {
+		var err error
+		initIncludePathsOnce.Do(func() { err = initIncludePaths("") })
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 
-	rc = m.Run()
+		if systemCC, err = exec.LookPath(env("CC", "gcc")); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		fmt.Fprintf(os.Stderr, "CC=%s\n", systemCC)
+		out, err := exec.Command(systemCC, "--version").CombinedOutput()
+		if err == nil {
+			if a := strings.Split(string(out), "\n"); len(a) > 0 {
+				systemCCVersion = a[0]
+				fmt.Fprintf(os.Stderr, "%s\n", systemCCVersion)
+			}
+		}
+
+		os.Exit(testMain(m))
+	}
+
+	var args []string
+	for i, v := range os.Args {
+		if v == "-gcc" {
+			args = append(os.Args[:i], os.Args[i+2:]...)
+		}
+	}
+	a := strings.Split(*oGCC, ",")
+	for _, suffix := range a {
+		systemCC = fmt.Sprintf("gcc-%s", suffix)
+		systemCPP := fmt.Sprintf("cpp-%s", suffix)
+		var err error
+		if systemCC, err = exec.LookPath(systemCC); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %s\n", systemCC, err)
+			continue
+		}
+
+		if systemCPP, err = exec.LookPath(systemCPP); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %s\n", systemCPP, err)
+			continue
+		}
+
+		os.Setenv("CC", systemCC)
+		os.Setenv("CCGO_CPP", systemCPP)
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			rc = 1
+		}
+	}
+	os.Exit(rc)
+}
+
+func initGoMod() error {
+	switch os.Getenv("GO111MODULE") {
+	case "off":
+		return nil
+	}
+
+	dummy := filepath.Join(tempDir, "dummy.go")
+	if err := ioutil.WriteFile(dummy, []byte(`
+package main
+
+import (
+	"modernc.org/libc"
+)
+
+var (
+	_ libc.TLS
+)
+func main() {}
+`), 0600); err != nil {
+		return err
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	defer os.Chdir(wd)
+
+	if err := os.Chdir(tempDir); err != nil {
+		return err
+	}
+
+	if b, err := exec.Command("go", "mod", "init", "example.com/ccgotest").CombinedOutput(); err != nil {
+		return fmt.Errorf("go mod init: %s\nFAIL: %v", b, err)
+	}
+
+	if b, err := exec.Command("go", "mod", "tidy").CombinedOutput(); err != nil {
+		return fmt.Errorf("go mod tidy: %s\nFAIL: %v", b, err)
+	}
+
+	return nil
+}
+
+func testMain(m *testing.M) int {
+	var err error
+	tempDir, err = ioutil.TempDir("", "ccgo-test-")
+	if err != nil {
+		panic(err) //TODOOK
+	}
+
+	if err = initGoMod(); err != nil {
+		panic(err) //TODOOK
+	}
+
+	switch {
+	case *oKeepTmp:
+		fmt.Fprintf(os.Stderr, "keeping temporary directory %s\n", tempDir)
+	default:
+		defer os.RemoveAll(tempDir)
+	}
+
+	s := filepath.FromSlash("testdata/overlay")
+	if overlayDir, err = filepath.Abs(s); err != nil {
+		panic(err) //TODOOK
+	}
+
+	return m.Run()
+}
+
+func initIncludePaths(cpp string) error {
+	var err error
+	predefined, includePaths, sysIncludePaths, err = cc.HostConfig(cpp)
+	if err != nil {
+		return err
+	}
+
+	includePaths = append(includePaths, "@")
+	includePaths = append(includePaths, sysIncludePaths...)
+	return nil
 }
 
 type golden struct {
@@ -187,190 +355,756 @@ func h(v interface{}) string {
 	}
 }
 
-func TestTCC(t *testing.T) {
-	root := filepath.Join(testWD, filepath.FromSlash(tccDir))
-	g := newGolden(t, fmt.Sprintf("testdata/tcc_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
-
-	defer g.close()
-
-	var files, ok int
-	const dir = "tests/tests2"
-	f, o := testTCCExec(g.w, t, filepath.Join(root, filepath.FromSlash(dir)))
-	files += f
-	ok += o
-	t.Logf("files %s, ok %s", h(files), h(ok))
+type runResult struct {
+	ccTime    time.Duration
+	csmithSrc []byte
+	ccgoTime  time.Duration
+	err       error
+	name      string
+	out       []byte
 }
 
-func testTCCExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
-	blacklist := map[string]struct{}{
-		"34_array_assignment.c":       {}, // gcc: 16:6: error: assignment to expression with array type
-		"60_errors_and_warnings.c":    {}, // Not a standalone test. gcc fails.
-		"76_dollars_in_identifiers.c": {}, // `int $ = 10;` etc.
-		"77_push_pop_macro.c":         {}, //
-		"81_types.c":                  {}, // invalid function type cast
-		"86_memory-model.c":           {},
-		"93_integer_promotion.c":      {}, // The expected output does not agree with gcc.
-		"95_bitfields.c":              {}, // Included from 95_bitfields_ms.c
-		"95_bitfields_ms.c":           {}, // The expected output does not agree with gcc.
-		"96_nodata_wanted.c":          {}, // Not a standalone test. gcc fails.
-		"99_fastcall.c":               {}, // 386 only
+type skipErr string
 
-		"40_stdio.c":                {}, //TODO
-		"73_arm64.c":                {}, //TODO struct varargs
-		"80_flexarray.c":            {}, //TODO Flexible array member
-		"85_asm-outside-function.c": {}, //TODO
-		"87_dead_code.c":            {}, //TODO expression statement
-		"88_codeopt.c":              {}, //TODO expression statement
-		"89_nocode_wanted.c":        {}, //TODO expression statement
-		"90_struct-init.c":          {}, //TODO cc ... in designator
-		"92_enum_bitfield.c":        {}, //TODO bit fields
-		"94_generic.c":              {}, //TODO cc _Generic
-		"98_al_ax_extend.c":         {}, //TODO
-	}
-	if runtime.GOARCH == "s390x" {
-		blacklist["91_ptr_longlong_arith32.c"] = struct{}{} // OK, invalid result on big endian
-	}
-	if runtime.GOOS == "windows" {
-		blacklist["46_grep.c"] = struct{}{} //TODO
-	}
-	wd, err := os.Getwd()
+func (e skipErr) Error() string { return "skipped: " + string(e) }
+
+type runTask struct {
+	args      []string
+	c         chan *runResult
+	cmd       string
+	csmithSrc []byte
+	opts      []string
+	src       string
+
+	ccCanFail       bool
+	doNotExec       bool
+	hasBinaryOutput bool
+}
+
+func (t *runTask) run() {
+	r := &runResult{name: t.src}
+	r.out, r.err, r.ccTime, r.ccgoTime = t.run0()
+	t.c <- r
+}
+
+func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
+	const outLimit = 1 << 16
+	defer func() {
+		if e := recover(); e != nil {
+			switch {
+			case err == nil:
+				err = fmt.Errorf("PANIC: %v\n%s", e, debug.Stack())
+			default:
+				err = fmt.Errorf("%v\nPANIC: %v\n%s", err, e, debug.Stack())
+			}
+		}
+	}()
+
+	overlay := filepath.Join(overlayDir, t.src)
+	b, err := ioutil.ReadFile(overlay)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer os.Chdir(wd)
-
-	temp, err := ioutil.TempDir("", "ccgo-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer os.RemoveAll(temp)
-
-	if err := os.Chdir(temp); err != nil {
-		t.Fatal(err)
-	}
-
-	if os.Getenv("GO111MODULE") != "off" {
-		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/tcc"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
+		if !os.IsNotExist(err) {
+			return nil, err, ccTime, ccgoTime
 		}
 
-		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-	}
-
-	var re *regexp.Regexp
-	if s := *oRE; s != "" {
-		re = regexp.MustCompile(s)
-	}
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	failed := make([]string, 0, 0)
-	success := make([]string, 0, 0)
-	limiter := make(chan int, runtime.GOMAXPROCS(0))
-	// fill the limiter
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		limiter <- i
-	}
-	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		f, err := fs.Open(t.src)
 		if err != nil {
-			if os.IsNotExist(err) {
+			return nil, err, ccTime, ccgoTime
+		}
+
+		if b, err = ioutil.ReadAll(f); err != nil {
+			return nil, err, ccTime, ccgoTime
+		}
+
+		if err = f.Close(); err != nil {
+			return nil, err, ccTime, ccgoTime
+		}
+	}
+
+	overlay = filepath.Join(overlayDir, t.src+".expectrc")
+	b2, err := ioutil.ReadFile(overlay)
+	if err != nil {
+		f, err := fs.Open(t.src + ".expectrc")
+		if err == nil {
+			if b2, err = ioutil.ReadAll(f); err != nil {
+				return nil, err, ccTime, ccgoTime
+			}
+
+			if err = f.Close(); err != nil {
+				return nil, err, ccTime, ccgoTime
+			}
+		}
+	}
+	var expectRC int
+	if len(b2) != 0 {
+		s := strings.TrimSpace(string(b2))
+		n, err := strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err, ccTime, ccgoTime
+		}
+
+		expectRC = int(n)
+	}
+
+	baseName := filepath.Base(t.src)
+	if err := ioutil.WriteFile(baseName, b, 0600); err != nil {
+		return nil, err, ccTime, ccgoTime
+	}
+
+	args, err := getArgs(t.src)
+	if err != nil {
+		return nil, err, ccTime, ccgoTime
+	}
+
+	ccArgs := append([]string{"-lm"}, t.opts...)
+	ok := true
+	for _, v := range t.opts {
+		if strings.HasPrefix(v, "-O") {
+			ok = false
+			break
+		}
+	}
+	if ok {
+		if o := *oO; o >= 0 {
+			ccArgs = append(ccArgs, fmt.Sprintf("-O%d", o))
+		}
+	}
+	if t.doNotExec {
+		ccArgs = append(ccArgs, "-c")
+	}
+	binary, err := makeCCBinary(baseName, t.doNotExec, ccArgs...)
+	if err != nil {
+		return nil, skipErr(err.Error()), ccTime, ccgoTime
+	}
+
+	const (
+		ccOut   = "cc.out"
+		ccgoOut = "ccgo.out"
+	)
+	var binaryBytes, binaryBytes2 int
+	var expected []byte
+	if !t.doNotExec {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		if t.cmd != "" {
+			binary = t.cmd
+		}
+		if len(t.args) != 0 {
+			args = t.args
+		}
+		t0 := time.Now()
+		if *oTrc2 {
+			fmt.Fprintf(os.Stderr, "%v: started CC binary for %s: %v %v\n", t0, baseName, binary, args)
+		}
+		switch {
+		case t.hasBinaryOutput:
+			binaryBytes, err = execute(ctx, binary, ccOut, args)
+			defer os.Remove(ccOut)
+		default:
+			expected, err = exec.CommandContext(ctx, binary, args...).CombinedOutput()
+			if len(expected) > outLimit {
+				panic(todo("", t.src, len(expected)))
+			}
+		}
+		ccTime = time.Since(t0)
+		if *oTrc2 {
+			switch {
+			case t.hasBinaryOutput:
+				fmt.Fprintf(os.Stderr, "%v: CC binary for %s returned: %v bytes, err %v\n", time.Now(), baseName, binaryBytes, err)
+			default:
+				fmt.Fprintf(os.Stderr, "%v: CC binary for %s returned: err %v\n%s\n", time.Now(), baseName, err, expected)
+			}
+		}
+		if err != nil {
+			switch {
+			case t.ccCanFail:
+				expected = nil
+				expectRC = 0
+			default:
+				rc := err.(*exec.ExitError).ProcessState.ExitCode()
+				if rc != expectRC {
+					return nil, skipErr(fmt.Sprintf("executing CC binary %v %v: %v (rc %v, expected %v)\n%s", binary, args, err, rc, expectRC, expected)), ccTime, ccgoTime
+				}
+
+				err = nil
+			}
+		}
+
+		if *oTraceO {
+			switch {
+			case t.hasBinaryOutput:
+				fmt.Fprintf(os.Stderr, "%v %q: %d bytes\n", ccTime, args, binaryBytes)
+			default:
+				fmt.Fprintf(os.Stderr, "%v %q: %s\n", ccTime, args, expected)
+			}
+		}
+	}
+
+	if t.cmd == "" {
+		if err := os.Remove(binary); err != nil {
+			return nil, fmt.Errorf("removing %v: %v", binary, err), ccTime, ccgoTime
+		}
+	}
+
+	ccgoArgs := append([]string(nil), t.opts...)
+	if *oFullPaths {
+		ccgoArgs = append(ccgoArgs, "-full-paths-comments")
+	}
+	if t.doNotExec {
+		panic(todo(""))
+	}
+	if binary, err = makeBinary(t.src, t.doNotExec, ccgoArgs...); err != nil {
+		return nil, err, ccTime, ccgoTime
+	}
+
+	var got []byte
+	if !t.doNotExec {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		if t.cmd != "" {
+			binary = t.cmd
+		}
+		if len(t.args) != 0 {
+			args = t.args
+		}
+		t0 := time.Now()
+		if *oTrc2 {
+			fmt.Fprintf(os.Stderr, "%v: started ccgo binary for %s: %v %v\n", t0, baseName, binary, args)
+		}
+		switch {
+		case t.hasBinaryOutput:
+			binaryBytes2, err = execute(ctx, binary, ccgoOut, args)
+			defer os.Remove(ccgoOut)
+		default:
+			got, err = exec.CommandContext(ctx, binary, args...).CombinedOutput()
+			if len(got) > outLimit {
+				panic(todo("", t.src, len(expected)))
+			}
+		}
+		ccgoTime = time.Since(t0)
+		if *oTrc2 {
+			switch {
+			case t.hasBinaryOutput:
+				fmt.Fprintf(os.Stderr, "%v: ccgo binary for %s returned: %v bytes, err %v\n", time.Now(), baseName, binaryBytes2, err)
+			default:
+				fmt.Fprintf(os.Stderr, "%v: ccgo binary for %s returned: err %v\n%s\n", time.Now(), baseName, err, got)
+			}
+		}
+		if err != nil {
+			rc := err.(*exec.ExitError).ProcessState.ExitCode()
+			if rc != expectRC {
+				return nil, fmt.Errorf("executing ccgo binary %v %v: %v (rc %v, expected %v)\n%s", binary, args, err, rc, expectRC, got), ccTime, ccgoTime
+			}
+
+			err = nil
+		}
+
+		if *oTraceO {
+			switch {
+			case t.hasBinaryOutput:
+				fmt.Fprintf(os.Stderr, "%v %q: %d bytes\n", ccgoTime, args, binaryBytes2)
+			default:
+				fmt.Fprintf(os.Stderr, "%v %q: %s\n", ccgoTime, args, got)
+			}
+		}
+		switch {
+		case t.hasBinaryOutput:
+			if err := fileEqual(ccgoOut, ccOut); err != nil {
+				return nil, fmt.Errorf("binary output: %s", err), ccTime, ccgoTime
+			}
+		default:
+			got := string(got)
+			expected := string(expected)
+			got = strings.ReplaceAll(got, "\r", "")
+			got = lineTrim(strings.TrimSpace(got))
+			expected = strings.ReplaceAll(expected, "\r", "")
+			expected = lineTrim(strings.TrimSpace(expected))
+			if got != expected {
+				diff := difflib.UnifiedDiff{
+					A:        difflib.SplitLines(expected),
+					B:        difflib.SplitLines(got),
+					FromFile: "expected",
+					ToFile:   "got",
+					Context:  3,
+				}
+				text, _ := difflib.GetUnifiedDiffString(diff)
+				return nil, fmt.Errorf(
+					"%v: text output differs:\n%s\n---- x.c\ngot\n%s\nexp\n%s\ngot\n%s\nexp\n%s",
+					t.src, text,
+					hex.Dump([]byte(got)), hex.Dump([]byte(expected)),
+					got, expected,
+				), ccTime, ccgoTime
+			}
+		}
+	}
+	return got, err, ccTime, ccgoTime
+}
+
+func lineTrim(s string) string {
+	a := strings.Split(s, "\n")
+	for i, v := range a {
+		a[i] = strings.TrimSpace(v)
+	}
+	return strings.Join(a, "\n")
+}
+
+func fileEqual(g, e string) error {
+	fig, err := os.Stat(g)
+	if err != nil {
+		return err
+	}
+
+	fie, err := os.Stat(e)
+	if err != nil {
+		return err
+	}
+
+	if g, e := fig.Size(), fie.Size(); g != e {
+		return fmt.Errorf("files sizes differ, got %v, expected %v", g, e)
+	}
+
+	rem := fig.Size()
+	if rem == 0 {
+		return nil
+	}
+
+	var bg, be [4096]byte
+	fg, err := os.Open(g)
+	if err != nil {
+		return err
+	}
+
+	defer fg.Close()
+
+	fe, err := os.Open(e)
+	if err != nil {
+		return err
+	}
+
+	defer fe.Close()
+
+	for rem != 0 {
+		n, err := io.ReadFull(fg, bg[:])
+		if n == 0 {
+			if err == io.EOF {
 				err = nil
 			}
 			return err
 		}
 
-		if info.IsDir() {
-			return nil
+		n2, err := io.ReadFull(fe, be[:])
+		if n == 0 {
+			if err == io.EOF {
+				err = nil
+			}
+			return err
 		}
 
-		if filepath.Ext(path) != ".c" || info.Mode()&os.ModeType != 0 {
-			return nil
+		if n != n2 {
+			panic(todo("", n, n2))
 		}
 
-		if _, ok := blacklist[filepath.Base(path)]; ok {
-			return nil
+		if !bytes.Equal(bg[:n], be[:n]) {
+			return fmt.Errorf("files are different")
 		}
 
-		files++
+		rem -= int64(n)
+	}
+	return nil
+}
 
-		if re != nil && !re.MatchString(path) {
-			return nil
-		}
+var ftoken uint32
 
-		main_file, err := ioutil.TempFile(temp, "*.go")
+func newID() uint32 { return atomic.AddUint32(&ftoken, 1) }
+
+func makeBinary(src string, obj bool, args ...string) (executable string, err error) {
+	defer func() {
 		if err != nil {
+			if *oTrace {
+				fmt.Println(err)
+			}
+			err = cpp(*oCpp, args, err)
+			err = fmt.Errorf("%s: %v", src, err)
+		}
+	}()
+
+	if obj {
+		panic(todo("", src))
+	}
+
+	main := fmt.Sprintf("main%d.go", newID())
+	src = filepath.Base(src)
+	if err := NewTask(append([]string{"ccgo", "-o", main, src}, args...), nil, nil).Main(); err != nil {
+		return "", err
+	}
+
+	executable = fmt.Sprintf("./%s%d", src[:len(src)-len(filepath.Ext(src))], newID())
+	var ext string
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	executable += ext
+	os.Remove(executable)
+	b, err := exec.Command("go", "build", "-o", executable, main).CombinedOutput()
+	if err != nil {
+		err = fmt.Errorf("%s\n\tFAIL: %v", b, err)
+	}
+	return executable, err
+}
+
+type countingWriter struct {
+	written int
+	w       *bufio.Writer
+}
+
+func (c *countingWriter) Write(b []byte) (int, error) {
+	n, err := c.w.Write(b)
+	c.written += n
+	return n, err
+}
+
+var _ io.Writer = (*countingWriter)(nil)
+
+// err = execute(ctx, executable, args, ccOut)
+func execute(ctx context.Context, executable, out string, args []string) (n int, err error) {
+	cmd := exec.CommandContext(ctx, executable, args...)
+	f, err := os.Create(out)
+	if err != nil {
+		return 0, err
+	}
+
+	defer func() {
+		if e := f.Close(); e != nil && err == nil {
+			err = e
+		}
+	}()
+
+	w := &countingWriter{w: bufio.NewWriter(f)}
+
+	defer func() {
+		if e := w.w.Flush(); e != nil && err == nil {
+			err = e
+		}
+	}()
+
+	cmd.Stdout = w
+	err = cmd.Run()
+	return w.written, err
+}
+
+func makeCCBinary(src string, obj bool, args ...string) (executable string, err error) {
+	ext := ""
+	if obj {
+		ext = ".o"
+	}
+	src = filepath.Base(src)
+	executable = "./" + src[:len(src)-len(filepath.Ext(src))]
+	if runtime.GOOS == "windows" && !obj {
+		ext = ".exe"
+	}
+	executable += ext
+	os.Remove(executable)
+	b, err := exec.Command(systemCC, append([]string{"-o", executable, src}, args...)...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%v %v -o %v %v: system C compiler: %v\n%s", systemCC, args, executable, src, err, b)
+	}
+
+	return executable, nil
+}
+
+func getArgs(src string) (args []string, err error) {
+	src = src[:len(src)-len(filepath.Ext(src))] + ".arg"
+	overlay := filepath.Join(overlayDir, src)
+	b, err := ioutil.ReadFile(overlay)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+
+		f, err := fs.Open(src)
+		if err != nil {
+			return nil, nil
+		}
+
+		if b, err = ioutil.ReadAll(f); err != nil {
+			return nil, err
+		}
+
+		if err = f.Close(); err != nil {
+			return nil, err
+		}
+	}
+
+	a := strings.Split(strings.TrimSpace(string(b)), "\n")
+	for _, v := range a {
+		switch {
+		case strings.HasPrefix(v, "\"") || strings.HasPrefix(v, "`"):
+			w, err := strconv.Unquote(v)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %v: %v", src, v, err)
+			}
+
+			args = append(args, w)
+		default:
+			args = append(args, v)
+		}
+	}
+	return args, nil
+}
+
+func TestTCC(t *testing.T) {
+	const root = "/tcc-0.9.27/tests/tests2"
+	g := newGolden(t, fmt.Sprintf("testdata/tcc_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
+	mustEmptyDir(t, tempDir, keep)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	needFiles(t, root, []string{
+		"18_include.h",
+		"95_bitfields.c",
+	})
+	blacklist := map[string]struct{}{
+		"60_errors_and_warnings.c":    {}, // no main
+		"73_arm64.c":                  {}, // does not work properly on any gcc tested (7-11)
+		"76_dollars_in_identifiers.c": {}, // `int $ = 10;` etc.
+		"77_push_pop_macro.c":         {}, // unsupported push/pop macro
+		"78_vla_label.c":              {}, //MAYBE
+		"79_vla_continue.c":           {}, //MAYBE
+		"80_flexarray.c":              {}, //MAYBE
+		"83_utf8_in_identifiers.c":    {}, // No support before gcc 10.
+		"85_asm-outside-function.c":   {}, // asm
+		"90_struct-init.c":            {}, // 90_struct-init.c:168:25: `...`: expected ]
+		"94_generic.c":                {}, // 94_generic.c:36:18: `int`: expected primary-expression
+		"95_bitfields.c":              {}, // Included from 95_bitfields_ms.c
+		"96_nodata_wanted.c":          {}, // no main
+		"98_al_ax_extend.c":           {}, // asm
+		"99_fastcall.c":               {}, // asm
+
+		"95_bitfields_ms.c": {}, //TODO
+	}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "s390x" {
+		blacklist["95_bitfields.c"] = struct{}{} //TODO
+	}
+	var rq, res, ok int
+	limit := runtime.GOMAXPROCS(0)
+	limiter := make(chan struct{}, limit)
+	success := make([]string, 0, 0)
+	results := make(chan *runResult, limit)
+	failed := map[string]struct{}{}
+	err = walk(root, func(pth string, fi os.FileInfo) error {
+		if !strings.HasSuffix(pth, ".c") {
 			return nil
 		}
-		main := main_file.Name()
-		main_file.Close()
-		wg.Add(1)
-		go func(id int) {
+
+		switch {
+		case re != nil:
+			if !re.MatchString(pth) {
+				return nil
+			}
+		default:
+			if _, ok := blacklist[filepath.Base(pth)]; ok {
+				return nil
+			}
+		}
+
+	more:
+		select {
+		case r := <-results:
+			res++
+			<-limiter
+			switch r.err.(type) {
+			case nil:
+				ok++
+				success = append(success, filepath.Base(r.name))
+				delete(failed, r.name)
+			case skipErr:
+				delete(failed, r.name)
+				t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+			default:
+				t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+			}
+			goto more
+		case limiter <- struct{}{}:
+			rq++
 			if *oTrace {
-				fmt.Fprintln(os.Stderr, path)
+				fmt.Fprintf(os.Stderr, "%v: %s\n", rq, pth)
 			}
-			var ret bool
-
-			defer func() {
-				mu.Lock()
-				if ret {
-					ok++
-					success = append(success, filepath.Base(path))
-				} else {
-					failed = append(failed, filepath.Base(path))
-				}
-				mu.Unlock()
-				limiter <- id
-				wg.Done()
-			}()
-
-			ccgoArgs := []string{
-				"ccgo",
-
-				"-all-errors",
-				"-hide", "__sincosf,__sincos,__sincospif,__sincospi",
-				"-o", main,
-				"-verify-structs",
-			}
-			var args []string
-			switch base := filepath.Base(path); base {
-			case "31_args.c":
-				args = []string{"arg1", "arg2", "arg3", "arg4", "arg5"}
-			case "46_grep.c":
-				if err := copyFile(path, filepath.Join(temp, base)); err != nil {
-					t.Error(err)
-					return
-				}
-
-				args = []string{`[^* ]*[:a:d: ]+\:\*-/: $`, base}
-			}
-
-			ret = testSingle(t, main, path, ccgoArgs, args)
-		}(<-limiter)
+			failed[pth] = struct{}{}
+			go run(pth, false, false, false, results)
+		}
 		return nil
-	}); err != nil {
-		t.Errorf("%v", err)
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	wg.Wait()
-	sort.Strings(failed)
-	sort.Strings(success)
-	if *writeFailed {
-		failedFile, _ := os.Create("FAILED")
-		for _, fpath := range failed {
-			failedFile.WriteString("\"")
-			failedFile.WriteString(fpath)
-			failedFile.WriteString("\": {},\n")
+	for res != rq {
+		r := <-results
+		res++
+		<-limiter
+		switch r.err.(type) {
+		case nil:
+			ok++
+			success = append(success, filepath.Base(r.name))
+			delete(failed, r.name)
+		case skipErr:
+			delete(failed, r.name)
+			t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+		default:
+			t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
 		}
 	}
+	t.Logf("files %v, ok %v, failed %v", rq, ok, len(failed))
+	sort.Strings(success)
 	for _, fpath := range success {
-		w.Write([]byte(fpath))
-		w.Write([]byte{'\n'})
+		g.w.Write([]byte(fpath))
+		g.w.Write([]byte{'\n'})
+	}
+	if len(failed) == 0 {
+		return
 	}
 
-	return len(failed) + len(success), len(success)
+	var a []string
+	for k := range failed {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		t.Logf("FAIL %s", v)
+	}
+}
+
+func run(src string, binaryOut, ccCanFail, doNotExec bool, c chan *runResult, opts ...string) {
+	(&runTask{
+		c:               c,
+		ccCanFail:       ccCanFail,
+		doNotExec:       doNotExec,
+		hasBinaryOutput: binaryOut,
+		opts:            opts,
+		src:             src,
+	}).run()
+}
+
+func walk(dir string, f func(pth string, fi os.FileInfo) error) error {
+	if !strings.HasSuffix(dir, "/") {
+		dir += "/"
+	}
+	root, err := fs.Open(dir)
+	if err != nil {
+		return err
+	}
+
+	fi, err := root.Stat()
+	if err != nil {
+		return err
+	}
+
+	if !fi.IsDir() {
+		return fmt.Errorf("%s: not a directory", fi.Name())
+	}
+
+	fis, err := root.Readdir(-1)
+	if err != nil {
+		return err
+	}
+
+	for _, v := range fis {
+		switch {
+		case v.IsDir():
+			if err = walk(v.Name(), f); err != nil {
+				return err
+			}
+		default:
+			if err = f(v.Name(), v); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func needFiles(t *testing.T, root string, a []string) {
+	for _, v := range a {
+		overlay := filepath.Join(overlayDir, filepath.FromSlash(root), v)
+		b, err := ioutil.ReadFile(overlay)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+
+			f, err := fs.Open(path.Join(root, v))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if b, err = ioutil.ReadAll(f); err != nil {
+				t.Fatal(err)
+			}
+
+			if err = f.Close(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if dir, _ := filepath.Split(v); dir != "" {
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := ioutil.WriteFile(v, b, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func mustEmptyDir(t *testing.T, s string, keep map[string]struct{}) {
+	if err := emptyDir(s, keep); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func emptyDir(s string, keep map[string]struct{}) error {
+	m, err := filepath.Glob(filepath.FromSlash(s + "/*"))
+	if err != nil {
+		return err
+	}
+
+	for _, v := range m {
+		fi, err := os.Stat(v)
+		if err != nil {
+			return err
+		}
+
+		switch {
+		case fi.IsDir():
+			if err = os.RemoveAll(v); err != nil {
+				return err
+			}
+		default:
+			if _, ok := keep[filepath.Base(v)]; ok {
+				break
+			}
+
+			if err = os.Remove(v); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func cpp(enabled bool, args []string, err0 error) error {
