@@ -2145,145 +2145,114 @@ next:
 }
 
 func TestBug(t *testing.T) {
+	const root = "/ccgo/bug"
 	g := newGolden(t, fmt.Sprintf("testdata/bug_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
 
 	defer g.close()
 
-	var files, ok int
-	f, o := testBugExec(g.w, t, filepath.Join(testWD, filepath.FromSlash("testdata/bug")))
-	files += f
-	ok += o
-	t.Logf("files %s, ok %s", h(files), h(ok))
-}
-
-func testBugExec(w io.Writer, t *testing.T, dir string) (files, ok int) {
+	mustEmptyDir(t, tempDir, keep)
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer os.Chdir(wd)
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
 
-	temp, err := ioutil.TempDir("", "ccgo-test-")
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	blacklist := map[string]struct{}{}
+	var rq, res, ok int
+	limit := runtime.GOMAXPROCS(0)
+	limiter := make(chan struct{}, limit)
+	success := make([]string, 0, 0)
+	results := make(chan *runResult, limit)
+	failed := map[string]struct{}{}
+	err = walk(root, func(pth string, fi os.FileInfo) error {
+		if !strings.HasSuffix(pth, ".c") {
+			return nil
+		}
+
+		switch {
+		case re != nil:
+			if !re.MatchString(pth) {
+				return nil
+			}
+		default:
+			if _, ok := blacklist[filepath.Base(pth)]; ok {
+				return nil
+			}
+		}
+
+	more:
+		select {
+		case r := <-results:
+			res++
+			<-limiter
+			switch r.err.(type) {
+			case nil:
+				ok++
+				success = append(success, filepath.Base(r.name))
+				delete(failed, r.name)
+			case skipErr:
+				delete(failed, r.name)
+				t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+			default:
+				t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+			}
+			goto more
+		case limiter <- struct{}{}:
+			rq++
+			if *oTrace {
+				fmt.Fprintf(os.Stderr, "%v: %s\n", rq, pth)
+			}
+			failed[pth] = struct{}{}
+			go run(pth, false, false, false, results)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	defer os.RemoveAll(temp)
-
-	if err := os.Chdir(temp); err != nil {
-		t.Fatal(err)
+	for res != rq {
+		r := <-results
+		res++
+		<-limiter
+		switch r.err.(type) {
+		case nil:
+			ok++
+			success = append(success, filepath.Base(r.name))
+			delete(failed, r.name)
+		case skipErr:
+			delete(failed, r.name)
+			t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+		default:
+			t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+		}
 	}
-
-	blacklist := map[string]struct{}{}
-	if os.Getenv("GO111MODULE") != "off" {
-		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/bug"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-
-		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-	}
-
-	var re *regexp.Regexp
-	if s := *oRE; s != "" {
-		re = regexp.MustCompile(s)
-	}
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	failed := make([]string, 0, 0)
-	success := make([]string, 0, 0)
-	limiter := make(chan int, runtime.GOMAXPROCS(0))
-	// fill the limiter
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		limiter <- i
-	}
-	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				err = nil
-			}
-			return err
-		}
-
-		if info.IsDir() {
-			return skipDir(path)
-		}
-
-		if filepath.Ext(path) != ".c" || info.Mode()&os.ModeType != 0 {
-			return nil
-		}
-
-		if _, ok := blacklist[filepath.Base(path)]; ok {
-			return nil
-		}
-
-		files++
-
-		if re != nil && !re.MatchString(path) {
-			return nil
-		}
-
-		main_file, err := ioutil.TempFile(temp, "*.go")
-		if err != nil {
-			return nil
-		}
-		main := main_file.Name()
-		main_file.Close()
-		wg.Add(1)
-		go func(id int) {
-			if *oTrace {
-				fmt.Fprintln(os.Stderr, path)
-			}
-			var ret bool
-
-			defer func() {
-				mu.Lock()
-				if ret {
-					ok++
-					success = append(success, filepath.Base(path))
-				} else {
-					failed = append(failed, filepath.Base(path))
-				}
-				mu.Unlock()
-				limiter <- id
-				wg.Done()
-			}()
-
-			ccgoArgs := []string{
-				"ccgo",
-
-				"-export-defines", "",
-				"-o", main,
-				"-verify-structs",
-			}
-
-			ret = testSingle(t, main, path, ccgoArgs, nil)
-		}(<-limiter)
-		return nil
-	}); err != nil {
-		t.Errorf("%v", err)
-	}
-
-	wg.Wait()
-	sort.Strings(failed)
+	t.Logf("files %v, ok %v, failed %v", rq, ok, len(failed))
 	sort.Strings(success)
-	if *writeFailed {
-		failedFile, _ := os.Create("FAILED")
-		for _, fpath := range failed {
-			failedFile.WriteString("\"")
-			failedFile.WriteString(fpath)
-			failedFile.WriteString("\": {},\n")
-		}
-	}
 	for _, fpath := range success {
-		w.Write([]byte(fpath))
-		w.Write([]byte{'\n'})
+		g.w.Write([]byte(fpath))
+		g.w.Write([]byte{'\n'})
+	}
+	if len(failed) == 0 {
+		return
 	}
 
-	return len(failed) + len(success), len(success)
+	var a []string
+	for k := range failed {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		t.Logf("FAIL %s", v)
+	}
 }
 
 func TestCSmith(t *testing.T) {
