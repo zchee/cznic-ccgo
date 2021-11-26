@@ -1592,6 +1592,139 @@ func TestMirLacc(t *testing.T) {
 	}
 }
 
+func TestMirNew(t *testing.T) {
+	const root = "/github.com/vnmakarov/mir/c-tests/new"
+	g := newGolden(t, fmt.Sprintf("testdata/mir_new_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
+	mustEmptyDir(t, tempDir, keep)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	blacklist := map[string]struct{}{
+		// 1: /github.com/vnmakarov/mir/c-tests/new/endif.c
+		//     all_test.go:1045: /github.com/vnmakarov/mir/c-tests/new/endif.c: /usr/bin/gcc: system C compiler: exit status 1
+		//         endif.c:1:2: error: #endif without #if
+		//          #endif
+		//           ^~~~~
+		"endif.c": {}, // No intent to support.
+
+		// 1: /github.com/vnmakarov/mir/c-tests/new/fermian-2.c
+		//     all_test.go:1051: /github.com/vnmakarov/mir/c-tests/new/fermian-2.c: /usr/bin/gcc: system C compiler: exit status 1
+		//         fermian-2.c:1:3: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘{’ token
+		//          a {
+		//            ^
+		"fermian-2.c": {}, // No intent to support.
+		"fermian.c":   {}, // No main.
+
+		"issue142.c": {}, //TODO
+		"issue18.c":  {}, //TODO
+		"issue23.c":  {}, //TODO
+		"setjmp.c":   {}, //TODO
+		"setjmp2.c":  {}, //TODO
+	}
+	binary := map[string]bool{}
+	var rq, res, ok int
+	limit := runtime.GOMAXPROCS(0)
+	limiter := make(chan struct{}, limit)
+	success := make([]string, 0, 0)
+	results := make(chan *runResult, limit)
+	failed := map[string]struct{}{}
+	err = walk(root, func(pth string, fi os.FileInfo) error {
+		if !strings.HasSuffix(pth, ".c") {
+			return nil
+		}
+
+		switch {
+		case re != nil:
+			if !re.MatchString(pth) {
+				return nil
+			}
+		default:
+			if _, ok := blacklist[filepath.Base(pth)]; ok {
+				return nil
+			}
+		}
+
+	more:
+		select {
+		case r := <-results:
+			res++
+			<-limiter
+			switch r.err.(type) {
+			case nil:
+				ok++
+				success = append(success, filepath.Base(r.name))
+				delete(failed, r.name)
+			case skipErr:
+				delete(failed, r.name)
+				t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+			default:
+				t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+			}
+			goto more
+		case limiter <- struct{}{}:
+			rq++
+			if *oTrace {
+				fmt.Fprintf(os.Stderr, "%v: %s\n", rq, pth)
+			}
+			failed[pth] = struct{}{}
+			go run(pth, binary[filepath.Base(pth)], false, false, results)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for res != rq {
+		r := <-results
+		res++
+		<-limiter
+		switch r.err.(type) {
+		case nil:
+			ok++
+			success = append(success, filepath.Base(r.name))
+			delete(failed, r.name)
+		case skipErr:
+			delete(failed, r.name)
+			t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+		default:
+			t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+		}
+	}
+	t.Logf("files %v, ok %v, failed %v", rq, ok, len(failed))
+	sort.Strings(success)
+	for _, fpath := range success {
+		g.w.Write([]byte(fpath))
+		g.w.Write([]byte{'\n'})
+	}
+	if len(failed) == 0 {
+		return
+	}
+
+	var a []string
+	for k := range failed {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		t.Logf("FAIL %s", v)
+	}
+}
+
 func TestGCCExec(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(gccDir))
 	g := newGolden(t, fmt.Sprintf("testdata/gcc_exec_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
