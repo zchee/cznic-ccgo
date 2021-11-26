@@ -2240,6 +2240,137 @@ func TestGCCExecute(t *testing.T) {
 	}
 }
 
+func TestGCCExecuteIEEE(t *testing.T) {
+	const root = "/github.com/gcc-mirror/gcc/gcc/testsuite/gcc.c-torture/execute/ieee"
+	g := newGolden(t, fmt.Sprintf("testdata/gcc_ieee_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
+	mustEmptyDir(t, tempDir, keep)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	blacklist := map[string]struct{}{
+		"compare-fp-1.c": {}, //TODO
+		"compare-fp-4.c": {}, //TODO
+		"copysign1.c":    {}, //TODO
+		"copysign2.c":    {}, //TODO
+		"fp-cmp-4.c":     {}, //TODO
+		"fp-cmp-4f.c":    {}, //TODO
+		"fp-cmp-4l.c":    {}, //TODO
+		"fp-cmp-5.c":     {}, //TODO
+		"fp-cmp-8.c":     {}, //TODO
+		"fp-cmp-8f.c":    {}, //TODO
+		"fp-cmp-8l.c":    {}, //TODO
+		"inf-1.c":        {}, //TODO
+		"inf-3.c":        {}, //TODO
+		"mzero4.c":       {}, //TODO
+		"pr36332.c":      {}, //TODO
+		"pr38016.c":      {}, //TODO
+		"pr50310.c":      {}, //TODO
+		"pr72824-2.c":    {}, //TODO
+	}
+	binary := map[string]bool{}
+	var rq, res, ok int
+	limit := runtime.GOMAXPROCS(0)
+	limiter := make(chan struct{}, limit)
+	success := make([]string, 0, 0)
+	results := make(chan *runResult, limit)
+	failed := map[string]struct{}{}
+	err = walk(root, func(pth string, fi os.FileInfo) error {
+		if !strings.HasSuffix(pth, ".c") {
+			return nil
+		}
+
+		switch {
+		case re != nil:
+			if !re.MatchString(pth) {
+				return nil
+			}
+		default:
+			if _, ok := blacklist[filepath.Base(pth)]; ok {
+				return nil
+			}
+		}
+
+	more:
+		select {
+		case r := <-results:
+			res++
+			<-limiter
+			switch r.err.(type) {
+			case nil:
+				ok++
+				success = append(success, filepath.Base(r.name))
+				delete(failed, r.name)
+			case skipErr:
+				delete(failed, r.name)
+				t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+			default:
+				t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+			}
+			goto more
+		case limiter <- struct{}{}:
+			rq++
+			if *oTrace {
+				fmt.Fprintf(os.Stderr, "%v: %s\n", rq, pth)
+			}
+			failed[pth] = struct{}{}
+			go run(pth, binary[filepath.Base(pth)], true, false, results)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for res != rq {
+		r := <-results
+		res++
+		<-limiter
+		switch r.err.(type) {
+		case nil:
+			ok++
+			success = append(success, filepath.Base(r.name))
+			delete(failed, r.name)
+		case skipErr:
+			delete(failed, r.name)
+			t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+		default:
+			t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+		}
+	}
+	t.Logf("files %v, ok %v, failed %v", rq, ok, len(failed))
+	sort.Strings(success)
+	for _, fpath := range success {
+		g.w.Write([]byte(fpath))
+		g.w.Write([]byte{'\n'})
+	}
+	if len(failed) == 0 {
+		return
+	}
+
+	var a []string
+	for k := range failed {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		t.Logf("FAIL %s", v)
+	}
+}
+
 func TestSQLite(t *testing.T) {
 	root := filepath.Join(testWD, filepath.FromSlash(sqliteDir))
 	testSQLite(t, root)
