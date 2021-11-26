@@ -550,9 +550,6 @@ func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
 	if *oFullPaths {
 		ccgoArgs = append(ccgoArgs, "-full-paths-comments")
 	}
-	if t.doNotExec {
-		panic(todo(""))
-	}
 	if binary, err = makeBinary(t.src, t.doNotExec, ccgoArgs...); err != nil {
 		return nil, err, ccTime, ccgoTime
 	}
@@ -728,13 +725,14 @@ func makeBinary(src string, obj bool, args ...string) (executable string, err er
 		}
 	}()
 
+	pkg := "main"
 	if obj {
-		panic(todo("", src))
+		pkg = "foo"
 	}
 
 	main := fmt.Sprintf("main%d.go", newID())
 	src = filepath.Base(src)
-	if err := NewTask(append([]string{"ccgo", "-o", main, src}, args...), nil, nil).Main(); err != nil {
+	if err := NewTask(append([]string{"ccgo", "-o", main, "-pkgname", pkg, src}, args...), nil, nil).Main(); err != nil {
 		return "", err
 	}
 
@@ -745,7 +743,13 @@ func makeBinary(src string, obj bool, args ...string) (executable string, err er
 	}
 	executable += ext
 	os.Remove(executable)
-	b, err := exec.Command("go", "build", "-o", executable, main).CombinedOutput()
+	var b []byte
+	switch {
+	case obj:
+		b, err = exec.Command("go", "build", main).CombinedOutput()
+	default:
+		b, err = exec.Command("go", "build", "-o", executable, main).CombinedOutput()
+	}
 	if err != nil {
 		err = fmt.Errorf("%s\n\tFAIL: %v", b, err)
 	}
@@ -2329,6 +2333,162 @@ func TestGCCExecuteIEEE(t *testing.T) {
 			}
 			failed[pth] = struct{}{}
 			go run(pth, binary[filepath.Base(pth)], true, false, results)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for res != rq {
+		r := <-results
+		res++
+		<-limiter
+		switch r.err.(type) {
+		case nil:
+			ok++
+			success = append(success, filepath.Base(r.name))
+			delete(failed, r.name)
+		case skipErr:
+			delete(failed, r.name)
+			t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+		default:
+			t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+		}
+	}
+	t.Logf("files %v, ok %v, failed %v", rq, ok, len(failed))
+	sort.Strings(success)
+	for _, fpath := range success {
+		g.w.Write([]byte(fpath))
+		g.w.Write([]byte{'\n'})
+	}
+	if len(failed) == 0 {
+		return
+	}
+
+	var a []string
+	for k := range failed {
+		a = append(a, k)
+	}
+	sort.Strings(a)
+	for _, v := range a {
+		t.Logf("FAIL %s", v)
+	}
+}
+
+func TestCxgo(t *testing.T) {
+	const root = "/github.com/cxgo"
+	g := newGolden(t, fmt.Sprintf("testdata/cxgo_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
+	mustEmptyDir(t, tempDir, keep)
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	needFiles(t, root, []string{})
+	blacklist := map[string]struct{}{
+		"array lit indexes.c":         {}, //TODO
+		"array lit.c":                 {}, //TODO
+		"bool arithm.c":               {}, //TODO
+		"char var init.c":             {}, //TODO
+		"comp lit zero init.c":        {}, //TODO
+		"complex var.c":               {}, //TODO
+		"enum fixed.c":                {}, //TODO
+		"enum no zero 2.c":            {}, //TODO
+		"enum no zero.c":              {}, //TODO
+		"enum start.c":                {}, //TODO
+		"enum zero.c":                 {}, //TODO
+		"extern var.c":                {}, //TODO
+		"forward enum.c":              {}, //TODO
+		"function forward decl.c":     {}, //TODO
+		"function var.c":              {}, //TODO
+		"go ints.c":                   {}, //TODO
+		"inet.c":                      {}, //TODO
+		"init byte string.c":          {}, //TODO
+		"macro empty.c":               {}, //TODO
+		"macro order.c":               {}, //TODO
+		"macro string.c":              {}, //TODO
+		"macro typed int.c":           {}, //TODO
+		"macro untyped int.c":         {}, //TODO
+		"math.c":                      {}, //TODO
+		"multiple vars 2.c":           {}, //TODO
+		"multiple vars.c":             {}, //TODO
+		"named enum.c":                {}, //TODO
+		"nested struct fields init.c": {}, //TODO
+		"recursive struct.c":          {}, //TODO
+		"rename decl struct.c":        {}, //TODO
+		"return enum.c":               {}, //TODO
+		"struct and func.c":           {}, //TODO
+		"struct and var.c":            {}, //TODO
+		"struct forward decl.c":       {}, //TODO
+		"tcc 10.c":                    {}, //TODO
+		"typedef enum.c":              {}, //TODO
+		"typedef primitive.c":         {}, //TODO
+		"typedef struct 3.c":          {}, //TODO
+		"typedef struct.c":            {}, //TODO
+		"unnamed enum.c":              {}, //TODO
+		"var init sum.c":              {}, //TODO
+		"var init.c":                  {}, //TODO
+		"var.c":                       {}, //TODO
+	}
+	var rq, res, ok int
+	limit := runtime.GOMAXPROCS(0)
+	limiter := make(chan struct{}, limit)
+	success := make([]string, 0, 0)
+	results := make(chan *runResult, limit)
+	failed := map[string]struct{}{}
+	err = walk(root, func(pth string, fi os.FileInfo) error {
+		if !strings.HasSuffix(pth, ".c") {
+			return nil
+		}
+
+		switch {
+		case re != nil:
+			if !re.MatchString(pth) {
+				return nil
+			}
+		default:
+			if _, ok := blacklist[filepath.Base(pth)]; ok {
+				return nil
+			}
+		}
+
+	more:
+		select {
+		case r := <-results:
+			res++
+			<-limiter
+			switch r.err.(type) {
+			case nil:
+				ok++
+				success = append(success, filepath.Base(r.name))
+				delete(failed, r.name)
+			case skipErr:
+				delete(failed, r.name)
+				t.Logf("%v: %v\n%s", r.name, r.err, r.out)
+			default:
+				t.Errorf("%v: %v\n%s", r.name, r.err, r.out)
+			}
+			goto more
+		case limiter <- struct{}{}:
+			rq++
+			if *oTrace {
+				fmt.Fprintf(os.Stderr, "%v: %s\n", rq, pth)
+			}
+			failed[pth] = struct{}{}
+			go run(pth, false, false, true, results)
 		}
 		return nil
 	})
