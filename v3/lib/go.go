@@ -2554,8 +2554,12 @@ package %s
 		p.o("\t\"fmt\"\n")
 	}
 	first := true
+	libc := false
 	for _, v := range p.task.imported {
 		if v.used {
+			if v.path == p.task.crtImportPath {
+				libc = true
+			}
 			if first {
 				p.o("\n")
 				first = false
@@ -2564,6 +2568,9 @@ package %s
 		}
 	}
 	if p.task.crtImportPath != "" {
+		if !libc {
+			p.o("\t%q\n", p.task.crtImportPath)
+		}
 		p.o("\t%q\n", p.task.crtImportPath+"/sys/types")
 	}
 	p.o(`)
@@ -2574,6 +2581,9 @@ var _ atomic.Value
 var _ unsafe.Pointer
 `)
 	if p.task.crtImportPath != "" {
+		if libc {
+			p.o("var _ *libc.TLS\n")
+		}
 		p.o("var _ types.Size_t\n")
 	}
 	if p.isMain {

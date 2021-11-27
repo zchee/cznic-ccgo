@@ -732,7 +732,7 @@ func makeBinary(src string, obj bool, args ...string) (executable string, err er
 
 	main := fmt.Sprintf("main%d.go", newID())
 	src = filepath.Base(src)
-	if err := NewTask(append([]string{"ccgo", "-o", main, "-pkgname", pkg, src}, args...), nil, nil).Main(); err != nil {
+	if err := NewTask(append([]string{"ccgo", "-o", main, "-pkgname", pkg, "-nocapi", src}, args...), nil, nil).Main(); err != nil {
 		return "", err
 	}
 
@@ -2471,71 +2471,8 @@ func TestCxgo(t *testing.T) {
 
 	needFiles(t, root, []string{})
 	blacklist := map[string]struct{}{
-		"array lit indexes.c":         {}, //TODO
-		"array lit.c":                 {}, //TODO
-		"bool arithm.c":               {}, //TODO
-		"char var init.c":             {}, //TODO
-		"comp lit zero init.c":        {}, //TODO
-		"complex var.c":               {}, //TODO
-		"double negate.c":             {}, //TODO
-		"enum fixed.c":                {}, //TODO
-		"enum no zero 2.c":            {}, //TODO
-		"enum no zero.c":              {}, //TODO
-		"enum start.c":                {}, //TODO
-		"enum zero.c":                 {}, //TODO
-		"extern var.c":                {}, //TODO
-		"for init multiple.c":         {}, //TODO
-		"forward enum.c":              {}, //TODO
-		"function forward decl.c":     {}, //TODO
-		"function var.c":              {}, //TODO
-		"go ints.c":                   {}, //TODO
-		"if bool eq int 0.c":          {}, //TODO
-		"if bool neq int 0.c":         {}, //TODO
-		"if int.c":                    {}, //TODO
-		"inet.c":                      {}, //TODO
-		"init byte string.c":          {}, //TODO
-		"int overflow.c":              {}, //TODO
-		"local func var.c":            {}, //TODO
-		"macro empty.c":               {}, //TODO
-		"macro order.c":               {}, //TODO
-		"macro string.c":              {}, //TODO
-		"macro typed int.c":           {}, //TODO
-		"macro untyped int.c":         {}, //TODO
-		"math.c":                      {}, //TODO
-		"multiple vars 2.c":           {}, //TODO
-		"multiple vars.c":             {}, //TODO
-		"named enum.c":                {}, //TODO
-		"negative char.c":             {}, //TODO
-		"negative uchar.c":            {}, //TODO
-		"negative uint.c":             {}, //TODO
-		"nested struct fields init.c": {}, //TODO
-		"recursive struct.c":          {}, //TODO
-		"rename decl struct.c":        {}, //TODO
-		"return enum.c":               {}, //TODO
-		"string to byte ptr.c":        {}, //TODO
-		"struct and func.c":           {}, //TODO
-		"struct and var.c":            {}, //TODO
-		"struct forward decl.c":       {}, //TODO
-		"tcc 10.c":                    {}, //TODO
-		"typedef enum.c":              {}, //TODO
-		"typedef primitive.c":         {}, //TODO
-		"typedef struct 3.c":          {}, //TODO
-		"typedef struct.c":            {}, //TODO
-		"unnamed enum.c":              {}, //TODO
-		"var init sum.c":              {}, //TODO
-		"var init.c":                  {}, //TODO
-		"var.c":                       {}, //TODO
-		"wrong func ptr.c":            {}, //TODO
-	}
-	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
-	case "linux/arm64":
-		blacklist["if int eq.c"] = struct{}{} //TODO
-	case "windows/amd64":
-		blacklist["function forward decl 2.c"] = struct{}{} //TODO
-	case "windows/386":
-		blacklist["func arg.c"] = struct{}{}      //TODO
-		blacklist["func ptr.c"] = struct{}{}      //TODO
-		blacklist["function decl.c"] = struct{}{} //TODO
+		"inet.c": {}, //TODO
+		"math.c": {}, //TODO
 	}
 	var rq, res, ok int
 	limit := runtime.GOMAXPROCS(0)
