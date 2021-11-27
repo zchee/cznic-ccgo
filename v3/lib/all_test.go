@@ -1523,7 +1523,7 @@ func TestMirLacc(t *testing.T) {
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/386":
-		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO
+		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
 	case "windows/amd64":
 		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO
 		blacklist["immediate-pointer.c"] = struct{}{}      //TODO
@@ -1908,17 +1908,39 @@ func TestGCCExecute(t *testing.T) {
 		"20040709-2.c",
 	})
 	blacklist := map[string]struct{}{
-		"20000113-1.c":                 {}, //TODO
+		// assembler
+		"20001009-2.c": {},
+
+		// Nested function
+		"20000822-1.c": {},
+		"20010209-1.c": {},
+		"20010605-1.c": {},
+
+		//TODO back-end: undefined: __builtin_return_address
+		"20010122-1.c": {},
+
+		//TODO crash in cc
+		"20010605-2.c": {},
+
+		//TODO flexible array members not supported
+		"20010924-1.c": {},
+
+		//TODO TODO in go.go
+		"20000113-1.c": {},
+
+		//TODO executing ccgo binary . signal: aborted or similar run time crash
+		"20010904-1.c":    {},
+		"20010904-2.c":    {},
+		"20021127-1.c":    {},
+		"20040423-1.c":    {},
+		"20040411-1.c":    {},
+		"20101011-1.c":    {},
+		"eeprof-1.c":      {},
+		"pr55750.c":       {},
+		"pushpop_macro.c": {},
+
+		//TODO not yet classified
 		"20000801-3.c":                 {}, //TODO
-		"20000822-1.c":                 {}, //TODO
-		"20001009-2.c":                 {}, //TODO
-		"20010122-1.c":                 {}, //TODO
-		"20010209-1.c":                 {}, //TODO
-		"20010605-1.c":                 {}, //TODO
-		"20010605-2.c":                 {}, //TODO
-		"20010904-1.c":                 {}, //TODO
-		"20010904-2.c":                 {}, //TODO
-		"20010924-1.c":                 {}, //TODO
 		"20020107-1.c":                 {}, //TODO
 		"20020206-2.c":                 {}, //TODO
 		"20020227-1.c":                 {}, //TODO
@@ -1928,7 +1950,6 @@ func TestGCCExecute(t *testing.T) {
 		"20020412-1.c":                 {}, //TODO
 		"20021113-1.c":                 {}, //TODO
 		"20021120-1.c":                 {}, //TODO
-		"20021127-1.c":                 {}, //TODO
 		"20030109-1.c":                 {}, //TODO
 		"20030128-1.c":                 {}, //TODO
 		"20030222-1.c":                 {}, //TODO
@@ -1938,8 +1959,6 @@ func TestGCCExecute(t *testing.T) {
 		"20040223-1.c":                 {}, //TODO
 		"20040302-1.c":                 {}, //TODO
 		"20040308-1.c":                 {}, //TODO
-		"20040411-1.c":                 {}, //TODO
-		"20040423-1.c":                 {}, //TODO
 		"20040520-1.c":                 {}, //TODO
 		"20040629-1.c":                 {}, //TODO
 		"20040705-1.c":                 {}, //TODO
@@ -1974,7 +1993,6 @@ func TestGCCExecute(t *testing.T) {
 		"20080502-1.c":                 {}, //TODO
 		"20090219-1.c":                 {}, //TODO
 		"20100430-1.c":                 {}, //TODO
-		"20101011-1.c":                 {}, //TODO
 		"20121108-1.c":                 {}, //TODO
 		"20180921-1.c":                 {}, //TODO
 		"920302-1.c":                   {}, //TODO
@@ -2038,7 +2056,6 @@ func TestGCCExecute(t *testing.T) {
 		"complex-5.c":                  {}, //TODO
 		"complex-6.c":                  {}, //TODO
 		"complex-7.c":                  {}, //TODO
-		"eeprof-1.c":                   {}, //TODO
 		"ffs-1.c":                      {}, //TODO
 		"ffs-2.c":                      {}, //TODO
 		"fprintf-2.c":                  {}, //TODO
@@ -2092,7 +2109,6 @@ func TestGCCExecute(t *testing.T) {
 		"pr53160.c":                    {}, //TODO
 		"pr53645-2.c":                  {}, //TODO
 		"pr53645.c":                    {}, //TODO
-		"pr55750.c":                    {}, //TODO
 		"pr56205.c":                    {}, //TODO
 		"pr56837.c":                    {}, //TODO
 		"pr56866.c":                    {}, //TODO
@@ -2166,7 +2182,6 @@ func TestGCCExecute(t *testing.T) {
 		"pr98474.c":                    {}, //TODO
 		"pr98681.c":                    {}, //TODO
 		"printf-2.c":                   {}, //TODO
-		"pushpop_macro.c":              {}, //TODO
 		"return-addr.c":                {}, //TODO
 		"scal-to-vec1.c":               {}, //TODO
 		"scal-to-vec2.c":               {}, //TODO
@@ -2190,7 +2205,8 @@ func TestGCCExecute(t *testing.T) {
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/386":
-		blacklist["960830-1.c"] = struct{}{} //TODO
+		// asm
+		blacklist["960830-1.c"] = struct{}{}
 	case "linux/arm64":
 		blacklist["vfprintf-chk-1.c"] = struct{}{} //TODO
 	case "linux/s390x":
@@ -2339,7 +2355,7 @@ func TestGCCExecuteIEEE(t *testing.T) {
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/386":
-		blacklist["rbug.c"] = struct{}{} //TODO
+		blacklist["rbug.c"] = struct{}{} //TODO Go1.18 https://github.com/golang/go/issues/48807
 	case "linux/arm":
 		blacklist["compare-fp-3.c"] = struct{}{} //TODO
 		blacklist["rbug.c"] = struct{}{}         //TODO
