@@ -905,9 +905,9 @@ func TestTCC(t *testing.T) {
 	case "linux/s390x":
 		blacklist["function forward decl 2.c"] = struct{}{} //TODO
 		blacklist["if bool eq int 0.c"] = struct{}{}        //TODO
-	case "freebsd64/amd64":
+	case "freebsd/amd64":
 		blacklist["40_stdio.c"] = struct{}{} //TODO
-	case "netbsd64/amd64":
+	case "netbsd/amd64":
 		blacklist["40_stdio.c"] = struct{}{} //TODO
 	case "darwin/amd64":
 		blacklist["40_stdio.c"] = struct{}{} //TODO
@@ -1234,7 +1234,10 @@ func TestMirBenchmarks(t *testing.T) {
 	case "darwin/amd64":
 		blacklist["method-call.c"] = struct{}{} //TODO
 	case "windows/amd64":
-		blacklist["except.c"] = struct{}{} //TODO
+		blacklist["except.c"] = struct{}{}     //TODO
+		blacklist["mandelbrot.c"] = struct{}{} //TODO
+	case "windows/386":
+		blacklist["mandelbrot.c"] = struct{}{} //TODO
 	}
 	binary := map[string]bool{
 		"mandelbrot.c": true,
