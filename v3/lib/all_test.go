@@ -905,6 +905,8 @@ func TestTCC(t *testing.T) {
 	case "linux/s390x":
 		blacklist["function forward decl 2.c"] = struct{}{} //TODO
 		blacklist["if bool eq int 0.c"] = struct{}{}        //TODO
+	case "freebsd64/amd64":
+		blacklist["40_stdio.c"] = struct{}{} //TODO
 	case "netbsd64/amd64":
 		blacklist["40_stdio.c"] = struct{}{} //TODO
 	case "darwin/amd64":
@@ -1232,10 +1234,7 @@ func TestMirBenchmarks(t *testing.T) {
 	case "darwin/amd64":
 		blacklist["method-call.c"] = struct{}{} //TODO
 	case "windows/amd64":
-		blacklist["except.c"] = struct{}{}     //TODO
-		blacklist["mandelbrot.c"] = struct{}{} //TODO
-	case "windows/386":
-		blacklist["mandelbrot.c"] = struct{}{} //TODO
+		blacklist["except.c"] = struct{}{} //TODO
 	}
 	binary := map[string]bool{
 		"mandelbrot.c": true,
@@ -1785,6 +1784,8 @@ func TestCompCert(t *testing.T) {
 		blacklist["fftw.c"] = struct{}{}       //TODO
 		blacklist["mandelbrot.c"] = struct{}{} //TODO
 		blacklist["perlin.c"] = struct{}{}     //TODO
+	case "windows/amd64":
+		blacklist["mandelbrot.c"] = struct{}{} //TODO
 	}
 	binary := map[string]bool{
 		"mandelbrot.c": true,
@@ -2192,7 +2193,7 @@ func TestGCCExecute(t *testing.T) {
 	case "linux/s390x":
 		blacklist["pr58574.c"] = struct{}{}        //TODO
 		blacklist["vfprintf-chk-1.c"] = struct{}{} //TODO
-	case "windows/arm64":
+	case "windows/amd64":
 		blacklist["941014-2.c"] = struct{}{} //TODO
 		blacklist["pr36339.c"] = struct{}{}  //TODO
 		blacklist["pr78622.c"] = struct{}{}  //TODO
@@ -2337,11 +2338,8 @@ func TestGCCExecuteIEEE(t *testing.T) {
 	case "linux/386":
 		blacklist["rbug.c"] = struct{}{} //TODO
 	case "linux/arm":
-		blacklist["abs.c"] = struct{}{}                  //TODO
-		blacklist["bool include.c"] = struct{}{}         //TODO
-		blacklist["bool to int.c"] = struct{}{}          //TODO
-		blacklist["wrong func ptr.c"] = struct{}{}       //TODO
-		blacklist["wstring to wchar ptr.c"] = struct{}{} //TODO
+		blacklist["compare-fp-3.c"] = struct{}{} //TODO
+		blacklist["rbug.c"] = struct{}{}         //TODO
 	case "linux/s390x":
 		blacklist["compare-fp-3.c"] = struct{}{} //TODO
 	case "windows/amd64":
@@ -2527,8 +2525,14 @@ func TestCxgo(t *testing.T) {
 		"wrong func ptr.c":            {}, //TODO
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
+	case "linux/arm64":
+		blacklist["if int eq.c"] = struct{}{} //TODO
 	case "windows/amd64":
 		blacklist["function forward decl 2.c"] = struct{}{} //TODO
+	case "windows/386":
+		blacklist["func arg.c"] = struct{}{}      //TODO
+		blacklist["func ptr.c"] = struct{}{}      //TODO
+		blacklist["function decl.c"] = struct{}{} //TODO
 	}
 	var rq, res, ok int
 	limit := runtime.GOMAXPROCS(0)
