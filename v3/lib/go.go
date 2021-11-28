@@ -4606,6 +4606,8 @@ func (p *project) instrument(n cc.Node) {
 	}
 }
 
+var dummyJumpStatement = &cc.JumpStatement{}
+
 func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace, forceNoBraces, switchBlock bool, mode exprMode) (r *cc.JumpStatement) {
 	if forceCompoundStmtBrace {
 		p.w(" {")
@@ -4629,6 +4631,7 @@ func (p *project) statement(f *function, n *cc.Statement, forceCompoundStmtBrace
 			p.w("return ")
 			e := n.ExpressionStatement.Expression
 			p.expression(f, e, e.Operand.Type(), exprValue, fOutermost)
+			r = dummyJumpStatement
 			break
 		}
 
