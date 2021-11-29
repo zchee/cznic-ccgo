@@ -1953,9 +1953,6 @@ func TestGCCExecute(t *testing.T) {
 		//TODO #pragma push/pop macro
 		"pushpop_macro.c": {},
 
-		//TODO executing ccgo binary . signal: aborted or similar run time crash
-		"pr55750.c": {}, // bit field
-
 		//TODO not yet classified
 		"20000801-3.c":                 {}, //TODO
 		"20020107-1.c":                 {}, //TODO
