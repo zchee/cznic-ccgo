@@ -1921,7 +1921,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		// trc("%v: %q\n%s", p.pos(n), t.Tag(), info)
 		b.WriteString("struct {")
 		if info.NeedExplicitAlign {
-			fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*p.align(t))
+			fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*p.align(n, t))
 		}
 		var max uintptr
 		for _, off := range info.Offsets {
@@ -1974,7 +1974,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 				}
 
 				max += ft.Size()
-				fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, ft))
+				fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(n, ft))
 			}
 		}
 		if info.PaddingAfter != 0 {
@@ -1983,6 +1983,10 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		b.WriteByte('}')
 	case cc.Union:
 		b.WriteString("struct {")
+		info := cc.NewStructLayout(t)
+		if info.NeedExplicitAlign {
+			fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*p.align(n, t))
+		}
 		al := uintptr(t.Align())
 		sz := t.Size()
 		if al > sz {
@@ -2005,7 +2009,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 			fmt.Fprintf(b, "uint%d;", f.BitFieldBlockWidth())
 			fsz = uintptr(f.BitFieldBlockWidth()) >> 3
 		default:
-			fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(nil, ft))
+			fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(n, ft))
 		}
 		if pad := sz - fsz; pad != 0 {
 			fmt.Fprintf(b, "%s [%d]byte;", p.padName(&npad), pad)
@@ -2023,7 +2027,7 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 	return r
 }
 
-func (p *project) align(t cc.Type) int {
+func (p *project) align(nd cc.Node, t cc.Type) int {
 	switch n := t.Align(); {
 	case n <= 1:
 		return 1
@@ -2031,7 +2035,10 @@ func (p *project) align(t cc.Type) int {
 		return 2
 	case n <= 4:
 		return 4
+	case n <= 8:
+		return 8
 	default:
+		p.err(nd, "unsupported alignment of type %s: %v", t, n)
 		return 8
 	}
 }
@@ -2713,7 +2720,7 @@ func (p *project) initPatches() {
 			switch {
 			case d != nil && d.Type().Kind() == cc.Function:
 				p.w("\n*(*")
-				p.functionSignature(nil, d.Type(), "")
+				p.functionSignature(d, nil, d.Type(), "")
 				p.w(")(unsafe.Pointer(uintptr(unsafe.Pointer(&%s))+%d%s)) = ", tld.name, init.Offset, fld)
 				p.declarator(init, nil, d, d.Type(), exprFunc, 0)
 			default:
@@ -3333,14 +3340,14 @@ func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator,
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
 				p.w("(*(*")
-				p.functionSignature(f, u, "")
+				p.functionSignature(n, f, u, "")
 				p.w(")(unsafe.Pointer(%s%s)))", f.bpName, nonZeroUintptr(local.off))
 				return
 			}
 
 			if d.IsParameter {
 				p.w("(*(*")
-				p.functionSignature(f, u, "")
+				p.functionSignature(n, f, u, "")
 				p.w(")(unsafe.Pointer(&%s)))", local.name)
 				return
 			}
@@ -3350,7 +3357,7 @@ func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator,
 
 		if x := p.tlds[d]; x != nil && d.IsStatic() {
 			p.w("(*(*")
-			p.functionSignature(f, u, "")
+			p.functionSignature(n, f, u, "")
 			p.w(")(unsafe.Pointer(&%s)))", x.name)
 			return
 		}
@@ -3358,7 +3365,7 @@ func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator,
 		switch x := p.symtab[d.Name().String()].(type) {
 		case *tld:
 			p.w("(*(*")
-			p.functionSignature(f, u, "")
+			p.functionSignature(n, f, u, "")
 			p.w(")(unsafe.Pointer(&%s)))", x.name)
 		case *imported:
 			x.used = true
@@ -3560,7 +3567,7 @@ func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declara
 
 	if x := p.tlds[d]; x != nil && d.IsStatic() {
 		p.w("*(*uintptr)(unsafe.Pointer(&struct{f ")
-		p.functionSignature(f, d.Type(), "")
+		p.functionSignature(n, f, d.Type(), "")
 		p.w("}{%s}))", x.name)
 		return
 	}
@@ -3568,12 +3575,12 @@ func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declara
 	switch x := p.symtab[d.Name().String()].(type) {
 	case *tld:
 		p.w("*(*uintptr)(unsafe.Pointer(&struct{f ")
-		p.functionSignature(f, d.Type(), "")
+		p.functionSignature(n, f, d.Type(), "")
 		p.w("}{%s}))", x.name)
 	case *imported:
 		x.used = true
 		p.w("*(*uintptr)(unsafe.Pointer(&struct{f ")
-		p.functionSignature(f, d.Type(), "")
+		p.functionSignature(n, f, d.Type(), "")
 		p.w("}{%sX%s}))", x.qualifier, d.Name())
 	default:
 		p.err(d, "back-end: undefined: %s", d.Name())
@@ -3709,7 +3716,7 @@ func (p *project) convertType(n cc.Node, from, to cc.Type, flags flags) string {
 	// trc("%v: %v -> %v\n%s", p.pos(n), from, to, debug.Stack()[:600]) //TODO-
 	force := flags&fForceConv != 0
 	if from == nil {
-		p.w("%s(", p.typ(nil, to))
+		p.w("%s(", p.typ(n, to))
 		return ")"
 	}
 
@@ -4025,7 +4032,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 	value := op.Value()
 	if value == nil || !to.IsIntegerType() {
 		if to.IsScalarType() {
-			p.w("%s(", p.typ(nil, to))
+			p.w("%s(", p.typ(n, to))
 			return ")"
 		}
 
@@ -4103,7 +4110,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 				switch to.Size() {
 				case 1:
 					if x >= 0 && x <= math.MaxUint8 {
-						p.w("%s(", p.typ(nil, to))
+						p.w("%s(", p.typ(n, to))
 						return ")"
 					}
 
@@ -4111,7 +4118,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 					return ")"
 				case 2:
 					if x >= 0 && x <= math.MaxUint16 {
-						p.w("%s(", p.typ(nil, to))
+						p.w("%s(", p.typ(n, to))
 						return ")"
 					}
 
@@ -4119,7 +4126,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 					return ")"
 				case 4:
 					if x >= 0 && x <= math.MaxUint32 {
-						p.w("%s(", p.typ(nil, to))
+						p.w("%s(", p.typ(n, to))
 						return ")"
 					}
 
@@ -4140,7 +4147,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 				switch to.Size() {
 				case 1:
 					if x <= math.MaxUint8 {
-						p.w("%s(", p.typ(nil, to))
+						p.w("%s(", p.typ(n, to))
 						return ")"
 					}
 
@@ -4148,7 +4155,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 					return ")"
 				case 2:
 					if x <= math.MaxUint16 {
-						p.w("%s(", p.typ(nil, to))
+						p.w("%s(", p.typ(n, to))
 						return ")"
 					}
 
@@ -4156,7 +4163,7 @@ func (p *project) convertInt(n cc.Node, op cc.Operand, to cc.Type, flags flags) 
 					return ")"
 				case 4:
 					if x <= math.MaxUint32 {
-						p.w("%s(", p.typ(nil, to))
+						p.w("%s(", p.typ(n, to))
 						return ")"
 					}
 
@@ -4328,7 +4335,7 @@ func (p *project) tld(f *function, n *cc.InitDeclarator, sep string, staticLocal
 					t = &tld{}
 					t.name = p.tldScope.take(d.Name())
 				}
-				p.functionSignature2(nil, d.Type(), t.name)
+				p.functionSignature2(n, nil, d.Type(), t.name)
 			}
 		}
 		return
@@ -4437,7 +4444,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 	p.compoundStatement(f, n.CompoundStatement, "", false, false, 0)
 	p.pass1 = false
 	p.w("\n\n")
-	p.functionDefinitionSignature(f, tld)
+	p.functionDefinitionSignature(n, f, tld)
 	if p.task.header && p.task.funcSig {
 		return
 	}
@@ -4542,7 +4549,7 @@ func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomme
 	}
 	if n.Parent() == nil && r == nil && f.rt.Kind() != cc.Void {
 		p.w("\nreturn ")
-		p.zeroValue(f.rt)
+		p.zeroValue(n, f.rt)
 	}
 	s := tidyComment("\n", &n.Token2)
 	p.w("%s", s)
@@ -4555,15 +4562,15 @@ func (p *project) compoundStatement(f *function, n *cc.CompoundStatement, scomme
 	f.block = sv
 }
 
-func (p *project) zeroValue(t cc.Type) {
+func (p *project) zeroValue(n cc.Node, t cc.Type) {
 	if t.IsScalarType() {
-		p.w("%s(0)", p.typ(nil, t))
+		p.w("%s(0)", p.typ(n, t))
 		return
 	}
 
 	switch t.Kind() {
 	case cc.Struct, cc.Union:
-		p.w("%s{}", p.typ(nil, t))
+		p.w("%s{}", p.typ(n, t))
 	default:
 		panic(todo("", t, t.Kind()))
 	}
@@ -4711,7 +4718,7 @@ func (p *project) jumpStatement(f *function, n *cc.JumpStatement) (r *cc.JumpSta
 			}
 
 			p.w("return ")
-			p.zeroValue(f.rt)
+			p.zeroValue(n, f.rt)
 		default:
 			if n.Expression != nil {
 				p.expression(f, n.Expression, n.Expression.Operand.Type(), exprVoid, fOutermost)
@@ -5621,7 +5628,7 @@ func (p *project) conditionalExpressionFunc(f *function, n *cc.ConditionalExpres
 		}
 
 		p.w(" func() ")
-		p.functionSignature(f, t, "")
+		p.functionSignature(n, f, t, "")
 		p.w("{ if ")
 		p.logicalOrExpression(f, n.LogicalOrExpression, n.LogicalOrExpression.Operand.Type(), exprBool, flags|fOutermost)
 		p.w(" { return ")
@@ -8078,7 +8085,7 @@ func (p *project) castExpressionFunc(f *function, n *cc.CastExpression, t cc.Typ
 			switch et := ot.Elem(); et.Kind() {
 			case cc.Function, cc.Void:
 				p.w("(*(*")
-				p.functionSignature(f, ft, "")
+				p.functionSignature(n, f, ft, "")
 				p.w(")(unsafe.Pointer(")
 				p.castExpression(f, n.CastExpression, ot, exprAddrOf, flags)
 				p.w(")))")
@@ -8707,6 +8714,7 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 		p.castExpression(f, n.CastExpression, n.CastExpression.Operand.Type(), exprBool, flags|fOutermost)
 		p.w("))")
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
+		p.checkSizeof(n.UnaryExpression, n.UnaryExpression.Operand.Type())
 		defer p.w("%s", p.convertNil(n, t, flags))
 		if d := n.UnaryExpression.Declarator(); d != nil {
 			var isLocal bool
@@ -8760,6 +8768,7 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
 		defer p.w("%s", p.convertNil(n, t, flags))
 		t := n.TypeName.Type()
+		p.checkSizeof(n.TypeName, t)
 		if t.Kind() == cc.Array {
 			p.w("%d", t.Len()*t.Elem().Size())
 			break
@@ -8840,6 +8849,27 @@ func (p *project) unaryExpressionValue(f *function, n *cc.UnaryExpression, t cc.
 	default:
 		panic(todo("%v: internal error: %v", n.Position(), n.Case))
 	}
+}
+
+func (p *project) checkSizeof(n cc.Node, t cc.Type) {
+	if !p.checkSizeof0(n, t) {
+		p.err(n, "sizeof type %s: not supported", t.Alias())
+	}
+}
+
+func (p *project) checkSizeof0(n cc.Node, t cc.Type) (ok bool) {
+	switch t.Kind() {
+	case cc.Array:
+		return !t.IsVLA()
+	case cc.Struct, cc.Union:
+		nf := t.NumField()
+		for i := []int{0}; i[0] < nf; i[0]++ {
+			if !p.checkSizeof0(n, t.FieldByIndex(i).Type()) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (p *project) unaryExpressionLValue(f *function, n *cc.UnaryExpression, t cc.Type, mode exprMode, flags flags) {
@@ -9813,7 +9843,7 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 			switch et := n.Operand.Type().Elem(); et.Kind() {
 			case cc.Function:
 				p.w("(*(*")
-				p.functionSignature(f, n.Operand.Type().Elem(), "")
+				p.functionSignature(n, f, n.Operand.Type().Elem(), "")
 				p.w(")(unsafe.Pointer(")
 				p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
 				p.w(")))")
@@ -9829,7 +9859,7 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 			switch et := n.Operand.Type().Elem(); et.Kind() {
 			case cc.Function:
 				p.w("(*(*")
-				p.functionSignature(f, n.Operand.Type().Elem(), "")
+				p.functionSignature(n, f, n.Operand.Type().Elem(), "")
 				p.w(")(unsafe.Pointer(")
 				p.postfixExpressionCall(f, n, t, exprValue, flags)
 				p.w(")))")
@@ -12920,17 +12950,17 @@ func (p *project) constantExpression(f *function, n *cc.ConstantExpression, t cc
 	p.conditionalExpression(f, n.ConditionalExpression, t, mode, flags)
 }
 
-func (p *project) functionDefinitionSignature(f *function, tld *tld) {
+func (p *project) functionDefinitionSignature(n cc.Node, f *function, tld *tld) {
 	switch {
 	case f.mainSignatureForced:
 		p.w("%sfunc %s(%s *%sTLS, _ int32, _ uintptr) int32", tidyComment("\n", f.fndef), tld.name, f.tlsName, p.task.crt)
 	default:
 		p.w("%s", tidyComment("\n", f.fndef))
-		p.functionSignature(f, f.fndef.Declarator.Type(), tld.name)
+		p.functionSignature(n, f, f.fndef.Declarator.Type(), tld.name)
 	}
 }
 
-func (p *project) functionSignature2(f *function, t cc.Type, nm string) {
+func (p *project) functionSignature2(n cc.Node, f *function, t cc.Type, nm string) {
 	p.w("func %s", nm)
 	p.w("(_ *%sTLS", p.task.crt)
 	suffix := 1
@@ -12954,11 +12984,11 @@ func (p *project) functionSignature2(f *function, t cc.Type, nm string) {
 	}
 	p.w(")")
 	if rt := t.Result(); rt != nil && rt.Kind() != cc.Void {
-		p.w(" %s", p.typ(nil, rt))
+		p.w(" %s", p.typ(n, rt))
 	}
 }
 
-func (p *project) functionSignature(f *function, t cc.Type, nm string) {
+func (p *project) functionSignature(n cc.Node, f *function, t cc.Type, nm string) {
 	p.w("func")
 	if nm != "" {
 		p.w(" %s", nm)
@@ -12995,7 +13025,7 @@ func (p *project) functionSignature(f *function, t cc.Type, nm string) {
 	}
 	p.w(")")
 	if rt := t.Result(); rt != nil && rt.Kind() != cc.Void {
-		p.w(" %s", p.typ(nil, rt))
+		p.w(" %s", p.typ(n, rt))
 	}
 }
 
@@ -13013,7 +13043,7 @@ func (p *project) paramTyp(n cc.Node, t cc.Type) string {
 		}
 	}
 
-	return p.typ(nil, t)
+	return p.typ(n, t)
 }
 
 func (p *project) dbg(a ...interface{}) {
@@ -13047,7 +13077,7 @@ func (p *project) fnVal(n cc.Node, f *function, expr func(), exprDecl *cc.Declar
 			case 0:
 				// (*struct{ f func()})(unsafe.Pointer(&struct{uintptr}{fprintfptr})).f()
 				p.w("(*struct{ f ")
-				p.functionSignature(f, et, "")
+				p.functionSignature(n, f, et, "")
 				p.w("})(unsafe.Pointer(&struct{uintptr}{")
 				expr()
 				p.w("})).f")
@@ -13064,7 +13094,7 @@ func (p *project) fnVal(n cc.Node, f *function, expr func(), exprDecl *cc.Declar
 				default:
 					// (*struct{ f func()})(unsafe.Pointer(&struct{uintptr}{fprintfptr})).f()
 					p.w("(*(**struct{ f ")
-					p.functionSignature(f, et2, "")
+					p.functionSignature(n, f, et2, "")
 					p.w("})(unsafe.Pointer(&struct{uintptr}{")
 					expr()
 					p.w("}))).f")

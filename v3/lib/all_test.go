@@ -736,6 +736,11 @@ func makeBinary(src string, obj bool, args ...string) (executable string, err er
 		return "", err
 	}
 
+	if *oTraceF {
+		b, _ := ioutil.ReadFile(main)
+		fmt.Printf("\n----\n%s\n----\n", b)
+	}
+
 	executable = fmt.Sprintf("./%s%d", src[:len(src)-len(filepath.Ext(src))], newID())
 	var ext string
 	if runtime.GOOS == "windows" {
@@ -1916,6 +1921,20 @@ func TestGCCExecute(t *testing.T) {
 		"20010209-1.c": {},
 		"20010605-1.c": {},
 
+		// Alignment > 8
+		"20010904-1.c": {},
+		"20010904-2.c": {},
+
+		// Variable sized type
+		"20040423-1.c": {},
+		"20040411-1.c": {},
+
+		// Relies on SIGFPE
+		"20101011-1.c": {},
+
+		// Relies on gcc instrumentation
+		"eeprof-1.c": {},
+
 		//TODO back-end: undefined: __builtin_return_address
 		"20010122-1.c": {},
 
@@ -1928,16 +1947,14 @@ func TestGCCExecute(t *testing.T) {
 		//TODO TODO in go.go
 		"20000113-1.c": {},
 
-		//TODO executing ccgo binary . signal: aborted or similar run time crash
-		"20010904-1.c":    {},
-		"20010904-2.c":    {},
-		"20021127-1.c":    {},
-		"20040423-1.c":    {},
-		"20040411-1.c":    {},
-		"20101011-1.c":    {},
-		"eeprof-1.c":      {},
-		"pr55750.c":       {},
+		//TODO relies on link order, libc first
+		"20021127-1.c": {},
+
+		//TODO #pragma push/pop macro
 		"pushpop_macro.c": {},
+
+		//TODO executing ccgo binary . signal: aborted or similar run time crash
+		"pr55750.c": {}, // bit field
 
 		//TODO not yet classified
 		"20000801-3.c":                 {}, //TODO
