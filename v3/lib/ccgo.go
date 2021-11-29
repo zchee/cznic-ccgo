@@ -1106,6 +1106,9 @@ func (t *Task) link() (err error) {
 			return
 		}
 
+		if out, e := exec.Command("gofmt", "-r", "(x) -> x", "-l", "-s", "-w", t.o).CombinedOutput(); e != nil && err == nil {
+			err = fmt.Errorf(strings.Join([]string{string(out), e.Error()}, ": "))
+		}
 		if out, e := exec.Command("gofmt", "-l", "-s", "-w", t.o).CombinedOutput(); e != nil && err == nil {
 			err = fmt.Errorf(strings.Join([]string{string(out), e.Error()}, ": "))
 		}
