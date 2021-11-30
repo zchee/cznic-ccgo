@@ -9783,11 +9783,9 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 		case cc.Ptr:
 			switch et := n.Operand.Type().Elem(); et.Kind() {
 			case cc.Function:
-				p.w("(*(*")
-				p.functionSignature(n, f, n.Operand.Type().Elem(), "")
-				p.w(")(unsafe.Pointer(")
-				p.postfixExpression(f, n, n.Operand.Type(), exprAddrOf, flags)
-				p.w(")))")
+				p.fnVal(n, f, func() {
+					p.postfixExpression(f, n, n.Operand.Type(), exprValue, flags)
+				}, nil, n.Operand.Type(), 0, mode, flags)
 			default:
 				panic(todo("", p.pos(n), et, et.Kind()))
 			}
@@ -9799,11 +9797,9 @@ func (p *project) postfixExpressionFunc(f *function, n *cc.PostfixExpression, t 
 		case cc.Ptr:
 			switch et := n.Operand.Type().Elem(); et.Kind() {
 			case cc.Function:
-				p.w("(*(*")
-				p.functionSignature(n, f, n.Operand.Type().Elem(), "")
-				p.w(")(unsafe.Pointer(")
-				p.postfixExpressionCall(f, n, t, exprValue, flags)
-				p.w(")))")
+				p.fnVal(n, f, func() {
+					p.postfixExpressionCall(f, n, t, exprValue, flags)
+				}, nil, n.Operand.Type(), 0, mode, flags)
 			default:
 				panic(todo("", p.pos(n), et, et.Kind()))
 			}
