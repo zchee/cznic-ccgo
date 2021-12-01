@@ -382,37 +382,38 @@ type Task struct {
 	// feature should ever set it.
 	CallOutBinary string
 
-	E                     bool // -E
-	allErrors             bool // -all-errors
-	compiledbValid        bool // -compiledb present
-	configSaved           bool
-	configured            bool // hostPredefined, hostIncludes, hostSysIncludes are valid
-	cover                 bool // -cover-instrumentation
-	coverC                bool // -cover-instrumentation-c
-	defaultUnExport       bool // -unexported-by-default
-	errTrace              bool // -err-trace
-	exportDefinesValid    bool // -export-defines present
-	exportEnumsValid      bool // -export-enums present
-	exportExternsValid    bool // -export-externs present
-	exportFieldsValid     bool // -export-fields present
-	exportStructsValid    bool // -export-structs present
-	exportTypedefsValid   bool // -export-typedefs present
-	fullPathComments      bool // -full-path-comments
-	funcSig               bool // -func-sig
-	header                bool // -header
-	ignoreUndefined       bool // -ignoreUndefined
-	isScripted            bool
-	mingw                 bool
-	noCapi                bool // -nocapi
-	nostdinc              bool // -nostdinc
-	nostdlib              bool // -nostdlib
-	panicStubs            bool // -panic-stubs
-	tracePinning          bool // -trace-pinning
-	traceTranslationUnits bool // -trace-translation-units
-	verifyStructs         bool // -verify-structs
-	version               bool // -version
-	watch                 bool // -watch-instrumentation
-	windows               bool // -windows
+	E                         bool // -E
+	allErrors                 bool // -all-errors
+	compiledbValid            bool // -compiledb present
+	configSaved               bool
+	configured                bool // hostPredefined, hostIncludes, hostSysIncludes are valid
+	cover                     bool // -cover-instrumentation
+	coverC                    bool // -cover-instrumentation-c
+	defaultUnExport           bool // -unexported-by-default
+	errTrace                  bool // -err-trace
+	exportDefinesValid        bool // -export-defines present
+	exportEnumsValid          bool // -export-enums present
+	exportExternsValid        bool // -export-externs present
+	exportFieldsValid         bool // -export-fields present
+	exportStructsValid        bool // -export-structs present
+	exportTypedefsValid       bool // -export-typedefs present
+	fullPathComments          bool // -full-path-comments
+	funcSig                   bool // -func-sig
+	header                    bool // -header
+	ignoreUndefined           bool // -ignoreUndefined
+	ignoreUnsupportedAligment bool // -ignore-unsupported-alignment
+	isScripted                bool
+	mingw                     bool
+	noCapi                    bool // -nocapi
+	nostdinc                  bool // -nostdinc
+	nostdlib                  bool // -nostdlib
+	panicStubs                bool // -panic-stubs
+	tracePinning              bool // -trace-pinning
+	traceTranslationUnits     bool // -trace-translation-units
+	verifyStructs             bool // -verify-structs
+	version                   bool // -version
+	watch                     bool // -watch-instrumentation
+	windows                   bool // -windows
 }
 
 // NewTask returns a newly created Task.
@@ -668,6 +669,7 @@ func (t *Task) Main() (err error) {
 	opts.Opt("func-sig", func(opt string) error { t.funcSig = true; return nil })
 	opts.Opt("header", func(opt string) error { t.header = true; return nil })
 	opts.Opt("ignore-undefined", func(opt string) error { t.ignoreUndefined = true; return nil })
+	opts.Opt("ignore-unsupported-alignment", func(opt string) error { t.ignoreUnsupportedAligment = true; return nil })
 	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	opts.Opt("panic-stubs", func(opt string) error { t.panicStubs = true; return nil })

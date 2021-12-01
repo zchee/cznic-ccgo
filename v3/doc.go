@@ -415,6 +415,13 @@
 // functions manually. Name conflict resolution for such declarator names may
 // or may not be applied.
 //
+// Ignoring unsupported aligmnent
+//
+// -ignore-unsupported-alignment
+//
+// This option tells the compiler to not complain about alignments that Go
+// cannot support.
+//
 // Tracing included files
 //
 // -trace-included-files

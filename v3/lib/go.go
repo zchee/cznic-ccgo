@@ -2037,7 +2037,9 @@ func (p *project) align(nd cc.Node, t cc.Type) int {
 	case n <= 8:
 		return 8
 	default:
-		p.err(nd, "unsupported alignment of type %s: %v", t, n)
+		if !p.task.ignoreUnsupportedAligment {
+			p.err(nd, "unsupported alignment of type %s: %v", t, n)
+		}
 		return 8
 	}
 }
