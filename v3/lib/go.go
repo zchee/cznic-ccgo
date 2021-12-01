@@ -1333,7 +1333,7 @@ func (p *project) err(n cc.Node, s string, args ...interface{}) {
 		s = s + "(" + origin(2) + ")"
 	}
 	if p.task.traceTranslationUnits {
-		trc("%v: error: %s (%v)", n.Position(), fmt.Sprintf(s, args...), origin(2))
+		trc("%v: error: %s (%v)", pos(n), fmt.Sprintf(s, args...), origin(2))
 	}
 	if !p.task.allErrors && len(p.errors) >= 10 {
 		return
