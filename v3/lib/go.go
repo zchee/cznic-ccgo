@@ -11832,39 +11832,51 @@ func (p *project) charConst(n cc.Node, src string, op cc.Operand, to cc.Type, fl
 
 		p.w("%d", on)
 		return
-	case to.IsSignedType():
+	case to.IsIntegerType():
+		var in int64
+		var ok bool
 		switch to.Size() {
 		case 1:
-			mask = math.MaxInt8
+			in = int64(int8(on))
+			ok = int8(on) >= 0
 		case 2:
-			mask = math.MaxInt16
+			in = int64(int16(on))
+			ok = int16(on) >= 0
 		case 4:
-			mask = math.MaxInt32
+			in = int64(int32(on))
+			ok = int32(on) >= 0
 		case 8:
-			mask = math.MaxInt64
+			in = int64(int64(on))
+			ok = in >= 0
 		default:
 			panic(todo("", op.Type().Size()))
 		}
+		if ok && rValid && uint64(in) == on { // Prefer original form
+			p.w("%s", src)
+			return
+		}
+
+		p.w("%d", in)
 	default:
 		switch to.Size() {
 		case 1:
-			mask = math.MaxUint8
+			mask = 0xff
 		case 2:
-			mask = math.MaxUint16
+			mask = 0xffff
 		case 4:
-			mask = math.MaxUint32
+			mask = 0xffffffff
 		case 8:
-			mask = math.MaxUint64
+			mask = 0xffffffffffffffff
 		default:
 			panic(todo("", op.Type().Size()))
 		}
-	}
-	if rValid && uint64(r)&mask == on { // Prefer original form
-		p.w("%s", src)
-		return
-	}
+		if rValid && uint64(r)&mask == on { // Prefer original form
+			p.w("%s", src)
+			return
+		}
 
-	p.w("%d", mask&on)
+		p.w("%d", on&mask)
+	}
 }
 
 func (p *project) floatConst(n cc.Node, src string, op cc.Operand, to cc.Type, flags flags) {
