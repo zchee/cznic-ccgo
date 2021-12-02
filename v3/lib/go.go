@@ -3117,7 +3117,7 @@ func (p *project) declaratorDecay(n cc.Node, f *function, d *cc.Declarator, t cc
 				return
 			}
 
-			p.w("%s%s/* &%s[0] */", f.bpName, nonZeroUintptr(local.off), local.name)
+			p.w("(%s%s)/* &%s[0] */", f.bpName, nonZeroUintptr(local.off), local.name)
 			return
 		}
 	}
@@ -3283,7 +3283,7 @@ func (p *project) declaratorValueArray(n cc.Node, f *function, d *cc.Declarator,
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				p.w("%s%s/* %s */", f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("(%s%s)/* %s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3562,7 +3562,7 @@ func (p *project) declaratorAddrOfArrayParameter(n cc.Node, f *function, d *cc.D
 	}
 
 	local := f.locals[d]
-	p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
+	p.w("(%s%s)/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 }
 
 func (p *project) declaratorAddrOfFunction(n cc.Node, f *function, d *cc.Declarator) {
@@ -3601,7 +3601,7 @@ func (p *project) declaratorAddrOfUnion(n cc.Node, f *function, d *cc.Declarator
 			}
 
 			if local.isPinned {
-				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("(%s%s)/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3634,7 +3634,7 @@ func (p *project) declaratorAddrOfNormal(n cc.Node, f *function, d *cc.Declarato
 			}
 
 			if local.isPinned {
-				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("(%s%s)/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3676,7 +3676,7 @@ func (p *project) declaratorAddrOfArray(n cc.Node, f *function, d *cc.Declarator
 			}
 
 			if local.isPinned {
-				p.w("%s%s/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("(%s%s)/* &%s */", f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -11738,7 +11738,7 @@ func (p *project) stringLiteralString(s string) string {
 		p.ts.WriteByte(0)
 		p.tsOffs[id] = off
 	}
-	return fmt.Sprintf("%s%s%s", p.tsNameP, nonZeroUintptr(off), p.stringSnippet(s))
+	return fmt.Sprintf("(%s%s)%s", p.tsNameP, nonZeroUintptr(off), p.stringSnippet(s))
 }
 
 func (p *project) stringLiteral(v cc.Value) string {
@@ -11757,7 +11757,7 @@ func (p *project) stringLiteral(v cc.Value) string {
 			p.ts.WriteByte(0)
 			p.tsOffs[id] = off
 		}
-		return fmt.Sprintf("%s%s%s", p.tsNameP, nonZeroUintptr(off), p.stringSnippet(s))
+		return fmt.Sprintf("(%s%s)%s", p.tsNameP, nonZeroUintptr(off), p.stringSnippet(s))
 	default:
 		panic(todo("%T", x))
 	}
@@ -11793,7 +11793,7 @@ func (p *project) wideStringLiteral(v cc.Value, pad int) string {
 			p.tsW = append(p.tsW, 0)
 			p.tsWOffs[id] = off
 		}
-		return fmt.Sprintf("%s%s", p.tsWNameP, nonZeroUintptr(off))
+		return fmt.Sprintf("(%s%s)", p.tsWNameP, nonZeroUintptr(off))
 	default:
 		panic(todo("%T", x))
 	}
