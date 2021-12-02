@@ -11832,7 +11832,7 @@ func (p *project) charConst(n cc.Node, src string, op cc.Operand, to cc.Type, fl
 
 		p.w("%d", on)
 		return
-	case to.IsIntegerType():
+	case to.IsSignedType():
 		var in int64
 		var ok bool
 		switch to.Size() {
