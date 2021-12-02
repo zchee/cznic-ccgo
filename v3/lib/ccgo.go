@@ -354,7 +354,8 @@ type Task struct {
 	hostIncludes                    []string
 	hostPredefined                  string
 	hostSysIncludes                 []string
-	ignoredIncludes                 string // -ignored-includes
+	ignoredIncludes                 string              // -ignored-includes
+	ignoredObjects                  map[string]struct{} // -ignore-object
 	imported                        []*imported
 	includedFiles                   map[string]struct{}
 	l                               []string // -l
@@ -400,7 +401,6 @@ type Task struct {
 	fullPathComments          bool // -full-path-comments
 	funcSig                   bool // -func-sig
 	header                    bool // -header
-	ignoreUndefined           bool // -ignoreUndefined
 	ignoreUnsupportedAligment bool // -ignore-unsupported-alignment
 	isScripted                bool
 	mingw                     bool
@@ -668,7 +668,6 @@ func (t *Task) Main() (err error) {
 	opts.Opt("full-path-comments", func(opt string) error { t.fullPathComments = true; return nil })
 	opts.Opt("func-sig", func(opt string) error { t.funcSig = true; return nil })
 	opts.Opt("header", func(opt string) error { t.header = true; return nil })
-	opts.Opt("ignore-undefined", func(opt string) error { t.ignoreUndefined = true; return nil })
 	opts.Opt("ignore-unsupported-alignment", func(opt string) error { t.ignoreUnsupportedAligment = true; return nil })
 	opts.Opt("nocapi", func(opt string) error { t.noCapi = true; return nil })
 	opts.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
@@ -696,6 +695,13 @@ func (t *Task) Main() (err error) {
 				fmt.Fprintf(os.Stderr, "#include %s\n", pathName)
 			}
 		}
+		return nil
+	})
+	opts.Arg("ignore-object", false, func(arg, value string) error {
+		if t.ignoredObjects == nil {
+			t.ignoredObjects = map[string]struct{}{}
+		}
+		t.ignoredObjects[value] = struct{}{}
 		return nil
 	})
 	opts.Arg("save-config", false, func(arg, value string) error {
@@ -1223,7 +1229,7 @@ type cdb struct {
 	outputIndex map[string][]*cdbItem
 }
 
-func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, path []string, cc, ar string) error {
+func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, path []string, cc, ar string, ignored map[string]struct{}) error {
 	// trc("%v: nm %q ver %v seqLimit %v path %q cc %q ar %q", origin(1), nm, ver, seqLimit, path, cc, ar)
 	var item *cdbItem
 	var k string
@@ -1283,6 +1289,12 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, path 
 		}
 	}
 	if item == nil {
+		for k := range ignored {
+			if k == nm || strings.HasSuffix(nm, k) {
+				return nil
+			}
+		}
+
 		return fmt.Errorf("not found in compile DB: %s (max seq %d), path %v", k, seqLimit, path)
 	}
 
@@ -1293,7 +1305,7 @@ func (db *cdb) find(obj map[string]*cdbItem, nm string, ver, seqLimit int, path 
 	obj[k] = item
 	var errs []string
 	for _, v := range item.sources(cc, ar) {
-		if err := db.find(obj, v, -1, item.seq, append(path, nm), cc, ar); err != nil {
+		if err := db.find(obj, v, -1, item.seq, append(path, nm), cc, ar, ignored); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -1371,7 +1383,7 @@ func (t *Task) useCompileDB(fn string, args []string) error {
 	notFound := false
 	for _, v := range args {
 		v, ver := suffixNum(v, 0)
-		if err := cdb.find(obj, v, ver, -1, nil, t.ccLookPath, t.arLookPath); err != nil {
+		if err := cdb.find(obj, v, ver, -1, nil, t.ccLookPath, t.arLookPath, t.ignoredObjects); err != nil {
 			notFound = true
 			fmt.Fprintln(os.Stderr, err)
 		}
