@@ -1759,6 +1759,7 @@ func (it *cdbItem) sources(cc, ar string) (r []string) {
 	case
 		"libtool",
 		ar,
+		filepath.Base(ar),
 		cc:
 
 		var prev string
@@ -1783,6 +1784,7 @@ type cdbMakeWriter struct {
 	b      bytes.Buffer
 	cc     string
 	ar     string
+	arBase string
 	dir    string
 	err    error
 	it     cdbItem
@@ -1796,6 +1798,7 @@ func (t *Task) newCdbMakeWriter(w *cdbWriter, dir string, parser func(s string) 
 	r := &cdbMakeWriter{
 		cc:     t.ccLookPath,
 		ar:     t.arLookPath,
+		arBase: filepath.Base(t.arLookPath),
 		dir:    dir,
 		parser: parser,
 		w:      w,
@@ -1871,6 +1874,8 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 			fmt.Printf("CCGO CC: %q\n", args)
 			err = w.handleGCC(args)
 		case w.ar:
+			fallthrough
+		case w.arBase:
 			if isCreateArchive(args[1]) {
 				fmt.Printf("CCGO AR: %q\n", args)
 				err = w.handleAR(args)
