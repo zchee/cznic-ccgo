@@ -1587,9 +1587,19 @@ func hasPlusPrefix(s string) (n int, r string) {
 }
 
 func makeXParser(s string) (r []string, err error) {
-	n, s := hasPlusPrefix(s)
-	if n == 0 {
-		return nil, nil
+	switch {
+	case strings.HasPrefix(s, "libtool: link: ar "):
+		s = s[len("libtool: link:"):]
+	case strings.HasPrefix(s, "libtool: compile: "):
+		s = s[len("libtool: compile:"):]
+		for strings.HasPrefix(s, "  ") {
+			s = s[1:]
+		}
+	default:
+		var n int
+		if n, s = hasPlusPrefix(s); n == 0 {
+			return nil, nil
+		}
 	}
 
 	if !strings.HasPrefix(s, " ") {
@@ -1602,6 +1612,9 @@ func makeXParser(s string) (r []string, err error) {
 		if strings.Contains(err.Error(), "Unterminated single-quoted string") {
 			return nil, nil // ignore
 		}
+	}
+	if len(r) != 0 && filepath.Base(r[0]) == "libtool" {
+		r[0] = "libtool"
 	}
 	return r, err
 }
@@ -1695,13 +1708,20 @@ func (it *cdbItem) ccgoArgs(cc string) (r []string, err error) {
 				strings.HasPrefix(arg, "-m"):
 
 				// nop
+			case strings.HasPrefix(arg, ">"):
+				return opt.Skip(nil)
 			default:
 				return fmt.Errorf("unknown/unsupported CC option: %s", arg)
 			}
 
 			return nil
 		}); err != nil {
-			return nil, err
+			switch err.(type) {
+			case opt.Skip:
+				// ok
+			default:
+				return nil, err
+			}
 		}
 
 		return r, nil

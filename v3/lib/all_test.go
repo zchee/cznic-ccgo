@@ -1238,6 +1238,8 @@ func TestMirBenchmarks(t *testing.T) {
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "darwin/amd64":
 		blacklist["method-call.c"] = struct{}{} //TODO
+	case "darwin/arm64":
+		blacklist["method-call.c"] = struct{}{} //TODO
 	case "windows/amd64":
 		blacklist["except.c"] = struct{}{}     //TODO
 		blacklist["mandelbrot.c"] = struct{}{} //TODO
