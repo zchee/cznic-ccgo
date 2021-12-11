@@ -249,6 +249,7 @@ void *__builtin_memset(void *s, int c, size_t n);
 void *__builtin_mmap(void *addr, size_t length, int prot, int flags, int fd, __INTPTR_TYPE__ offset);
 void *__ccgo_va_arg(__builtin_va_list ap);
 void __builtin_abort(void);
+void __builtin_bzero(void *s, size_t n);
 void __builtin_exit(int status);
 void __builtin_free(void *ptr);
 void __builtin_prefetch (const void *addr, ...);
