@@ -69,7 +69,6 @@ for-empty-expr.c
 for-side-effects.c
 for.c
 function-char-args.c
-function-implicit-declare.c
 goto.c
 identifier.c
 immediate-branch.c
@@ -120,7 +119,6 @@ pointer-immediate.c
 preprocess-expression.c
 preprocess.c
 preprocessor-expression.c
-printstr.c
 promote-unsigned.c
 prototype-scope-enum.c
 ptrdiff.c

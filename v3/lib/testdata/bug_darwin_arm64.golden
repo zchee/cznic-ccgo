@@ -2,7 +2,6 @@ arr.c
 atomic.c
 bitfield.c
 condfn.c
-cpl_convert.c
 csmith.c
 csmith2.c
 dereffp.c
@@ -29,7 +28,6 @@ select.c
 sizeof.c
 sizeof2.c
 sqlite.c
-sqlite2.c
 struct.c
 struct2.c
 tk.c

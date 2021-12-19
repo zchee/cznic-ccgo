@@ -914,8 +914,6 @@ func TestTCC(t *testing.T) {
 		blacklist["40_stdio.c"] = struct{}{} //TODO
 	case "netbsd/amd64":
 		blacklist["40_stdio.c"] = struct{}{} //TODO
-	case "darwin/amd64":
-		blacklist["40_stdio.c"] = struct{}{} //TODO
 	}
 	var rq, res, ok int
 	limit := runtime.GOMAXPROCS(0)

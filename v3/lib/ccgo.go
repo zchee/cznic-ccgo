@@ -211,6 +211,7 @@ double __builtin_huge_val (void);
 double __builtin_inf (void);
 double __builtin_nan (const char *str);
 float __builtin_copysignf ( float x, float y );
+float __builtin_fabsf(float x);
 float __builtin_huge_valf (void);
 float __builtin_inff (void);
 float __builtin_nanf (const char *str);
@@ -236,6 +237,7 @@ int __builtin_sprintf(char *str, const char *format, ...);
 int __builtin_strcmp(const char *s1, const char *s2);
 int __builtin_sub_overflow();
 long __builtin_expect (long exp, long c);
+long double __builtin_fabsl(long double x);
 long double __builtin_nanl (const char *str);
 long long __builtin_llabs(long long j);
 size_t __builtin_object_size (void * ptr, int type);
@@ -278,6 +280,10 @@ void __ccgo_va_start(__builtin_va_list ap);
 
 unsigned __sync_add_and_fetch_uint32(unsigned*, unsigned);
 unsigned __sync_sub_and_fetch_uint32(unsigned*, unsigned);
+
+#ifdef __APPLE__
+int (*__darwin_check_fd_set_overflow)(int, void *, int);
+#endif
 
 `
 	defaultCrt = "modernc.org/libc"

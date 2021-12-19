@@ -8168,8 +8168,12 @@ func (p *project) castExpressionValueFunction(f *function, n *cc.CastExpression,
 		switch {
 		case tn.Kind() == cc.Ptr && t.Kind() == cc.Ptr:
 			p.castExpression(f, n.CastExpression, op.Type(), exprValue, flags)
+		case tn.IsIntegerType():
+			p.w("%s(", p.typ(n, tn))
+			p.castExpression(f, n.CastExpression, op.Type(), exprValue, flags)
+			p.w(")")
 		default:
-			panic(todo("", n.Position()))
+			panic(todo("%v: tn %v expr %v", n.Position(), tn, op.Type()))
 		}
 	default:
 		panic(todo("%v: %v -> %v -> %v", p.pos(n), op.Type(), tn, t))
