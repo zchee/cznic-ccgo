@@ -2644,6 +2644,16 @@ func testSQLite(t *testing.T, dir string) {
 	if *oDebug {
 		ccgoArgs = append(ccgoArgs, "-DSQLITE_DEBUG_OS_TRACE", "-DSQLITE_FORCE_OS_TRACE")
 	}
+	if os.Getenv("GO111MODULE") != "off" {
+		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/sqlite"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+
+		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	}
+
 	if !func() (r bool) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -2674,16 +2684,6 @@ func testSQLite(t *testing.T, dir string) {
 		return true
 	}() {
 		return
-	}
-
-	if os.Getenv("GO111MODULE") != "off" {
-		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/sqlite"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
-
-		if out, err := Shell("go", "get", "modernc.org/libc"); err != nil {
-			t.Fatalf("%v\n%s", err, out)
-		}
 	}
 
 	shell := "./shell"
