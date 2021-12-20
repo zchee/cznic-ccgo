@@ -94,3 +94,29 @@ func testSingle(t *testing.T, main, path string, ccgoArgs []string, runargs []st
 
 	return true
 }
+
+func testSingleCombinedoutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	var b bytes.Buffer
+	cmd.Stdout = &b
+	cmd.Stderr = &b
+
+	err := testSingleRun(ctx, cmd)
+	return b.Bytes(), err
+}
+
+func testSingleRun(ctx context.Context, cmd *exec.Cmd) error {
+	err := cmd.Start()
+	if err == nil {
+		waitDone := make(chan struct{})
+		go func() {
+			select {
+			case <-ctx.Done():
+				cmd.Process.Kill()
+			case <-waitDone:
+			}
+		}()
+		err = cmd.Wait()
+		close(waitDone)
+	}
+	return err
+}

@@ -501,8 +501,7 @@ func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
 			binaryBytes, err = execute(ctx, binary, ccOut, args)
 			defer os.Remove(ccOut)
 		default:
-			expected, err = exec.CommandContext(ctx, binary, args...).CombinedOutput()
-			if len(expected) > outLimit {
+			if expected, err = testSingleCombinedoutput(ctx, exec.CommandContext(ctx, binary, args...)); len(expected) > outLimit {
 				panic(todo("", t.src, len(expected)))
 			}
 		}
@@ -573,8 +572,7 @@ func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
 			binaryBytes2, err = execute(ctx, binary, ccgoOut, args)
 			defer os.Remove(ccgoOut)
 		default:
-			got, err = exec.CommandContext(ctx, binary, args...).CombinedOutput()
-			if len(got) > outLimit {
+			if got, err = testSingleCombinedoutput(ctx, exec.CommandContext(ctx, binary, args...)); len(got) > outLimit {
 				panic(todo("", t.src, len(expected)))
 			}
 		}
@@ -797,7 +795,7 @@ func execute(ctx context.Context, executable, out string, args []string) (n int,
 	}()
 
 	cmd.Stdout = w
-	err = cmd.Run()
+	err = testSingleRun(ctx, cmd)
 	return w.written, err
 }
 
