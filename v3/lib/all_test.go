@@ -456,7 +456,7 @@ func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
 		return nil, err, ccTime, ccgoTime
 	}
 
-	ccArgs := append([]string{"-lm"}, t.opts...)
+	ccArgs := append([]string{"-w", "-lm"}, t.opts...)
 	ok := true
 	for _, v := range t.opts {
 		if strings.HasPrefix(v, "-O") {
@@ -464,7 +464,7 @@ func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
 			break
 		}
 	}
-	if ok {
+	if ok && runtime.GOOS != "darwin" {
 		if o := *oO; o >= 0 {
 			ccArgs = append(ccArgs, fmt.Sprintf("-O%d", o))
 		}
@@ -546,6 +546,7 @@ func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
 	}
 
 	ccgoArgs := append([]string(nil), t.opts...)
+	ccgoArgs = append(ccgoArgs, "-D__ccgo_test__", "-export-fields", "F")
 	if *oFullPaths {
 		ccgoArgs = append(ccgoArgs, "-full-paths-comments")
 	}
@@ -2635,6 +2636,7 @@ func testSQLite(t *testing.T, dir string) {
 		"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
 		"-DSQLITE_MEMDEBUG",
 		"-DSQLITE_THREADSAFE=0",
+		"-export-fields", "F",
 		"-all-errors",
 		"-o", main,
 		"-verify-structs",

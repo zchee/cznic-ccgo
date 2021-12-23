@@ -10,6 +10,10 @@
 //
 //	ccgo { option | input-file }
 //
+// Changelog
+//
+// 2021-12-23: v3.13.0 add clang support.
+//
 // Libc
 //
 // To compile the resulting Go programs the package modernc.org/libc has to be
@@ -108,7 +112,7 @@
 // The supported build system must output information about entering
 // directories that is compatible with GNU make.
 //
-// The only compiler supported is `gcc`.
+// The only compilers supported are `gcc` and `clang`.
 //
 // The only archiver supported is `ar`.
 //

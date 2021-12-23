@@ -222,6 +222,7 @@ int __builtin__snprintf_chk(char * str, size_t maxlen, int flag, size_t strlen, 
 int __builtin_abs(int j);
 int __builtin_add_overflow();
 int __builtin_clz (unsigned);
+int __builtin_isunordered(double x, double y);
 int __builtin_clzl (unsigned long);
 int __builtin_clzll (unsigned long long);
 int __builtin_constant_p_impl(int, ...);
