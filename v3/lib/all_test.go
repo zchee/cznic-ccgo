@@ -1528,12 +1528,14 @@ func TestMirLacc(t *testing.T) {
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/386":
 		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
+	case "freebsd/386":
+		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
 	case "windows/amd64":
-		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO
+		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
 		blacklist["immediate-pointer.c"] = struct{}{}      //TODO
 		blacklist["unsigned-sign-extend.c"] = struct{}{}   //TODO
 	case "windows/386":
-		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO
+		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
 		blacklist["unsigned-sign-extend.c"] = struct{}{}   //TODO
 	}
 	binary := map[string]bool{}
@@ -2217,6 +2219,9 @@ func TestGCCExecute(t *testing.T) {
 		"zero-struct-2.c":              {}, //TODO
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
+	case "freebsd/386":
+		// asm
+		blacklist["960830-1.c"] = struct{}{}
 	case "linux/386":
 		// asm
 		blacklist["960830-1.c"] = struct{}{}
@@ -2368,6 +2373,8 @@ func TestGCCExecuteIEEE(t *testing.T) {
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/386":
+		blacklist["rbug.c"] = struct{}{} //TODO Go1.18 https://github.com/golang/go/issues/48807
+	case "freebsd/386":
 		blacklist["rbug.c"] = struct{}{} //TODO Go1.18 https://github.com/golang/go/issues/48807
 	case "linux/arm":
 		blacklist["compare-fp-3.c"] = struct{}{} //TODO

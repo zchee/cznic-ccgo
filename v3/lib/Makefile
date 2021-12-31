@@ -75,6 +75,7 @@ build_all_targets:
 	GOOS=darwin GOARCH=amd64 go test -c -o /dev/null
 	GOOS=darwin GOARCH=arm64 go test -c -o /dev/null
 	GOOS=freebsd GOARCH=amd64 go test -c -o /dev/null
+	GOOS=freebsd GOARCH=386 go test -c -o /dev/null
 	GOOS=linux GOARCH=386 go test -c -o /dev/null
 	GOOS=linux GOARCH=amd64 go test -c -o /dev/null
 	GOOS=linux GOARCH=arm go test -c -o /dev/null
