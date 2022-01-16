@@ -2286,7 +2286,7 @@ func TestGCCExecute(t *testing.T) {
 			}
 			base := filepath.Base(pth)
 			failed[pth] = struct{}{}
-			go run(pth, binary[base], true, false, results)
+			go run(pth, binary[base], false, false, results)
 		}
 		return nil
 	})
@@ -2392,6 +2392,8 @@ func TestGCCExecuteIEEE(t *testing.T) {
 		blacklist["rbug.c"] = struct{}{}     //TODO
 	case "netbsd/amd64":
 		blacklist["compare-fp-3.c"] = struct{}{} //TODO
+		blacklist["fp-cmp-7.c"] = struct{}{}     //TODO
+	case "openbsd/amd64":
 		blacklist["fp-cmp-7.c"] = struct{}{}     //TODO
 	}
 	binary := map[string]bool{}
