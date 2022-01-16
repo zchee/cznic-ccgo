@@ -1474,7 +1474,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 	var parser func(s string) ([]string, error)
 out:
 	switch t.goos {
-	case "darwin", "freebsd", "netbsd":
+	case "darwin", "freebsd", "netbsd", "openbsd":
 		switch command[0] {
 		case "make", "gmake":
 			// ok
