@@ -1616,6 +1616,10 @@ func makeXParser(s string) (r []string, err error) {
 
 	s = s[1:]
 	r, err = shellquote.Split(s)
+	if dmesgs {
+		dmesg("%v: source line `%s`", s)
+		dmesg("%v: shellquote.Split %v %[1]q, %v", r, err)
+	}
 	if err != nil {
 		if strings.Contains(err.Error(), "Unterminated single-quoted string") {
 			return nil, nil // ignore
@@ -1885,6 +1889,10 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 		}
 
 		args, err := w.parser(s)
+		if dmesgs {
+			dmesg("%v: source line `%s`", s)
+			dmesg("%v: parser args %v %[1]q", args)
+		}
 		if err != nil {
 			w.fail(err)
 			continue
