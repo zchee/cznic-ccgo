@@ -1474,7 +1474,7 @@ func (t *Task) createCompileDB(command []string) (rerr error) {
 	var parser func(s string) ([]string, error)
 out:
 	switch t.goos {
-	case "darwin", "freebsd", "netbsd", "openbsd":
+	case "darwin", "freebsd", "netbsd":
 		switch command[0] {
 		case "make", "gmake":
 			// ok
@@ -1490,6 +1490,22 @@ out:
 		command = append([]string{sh, "-c"}, join(" ", command[0], "SHELL='sh -x'", command[1:]))
 		cmd = exec.Command(command[0], command[1:]...)
 		parser = makeXParser
+	case "openbsd":
+		switch command[0] {
+		case "make", "gmake":
+			// ok
+		default:
+			return fmt.Errorf("usupported build command: %s", command[0])
+		}
+
+		sh, err := exec.LookPath("sh")
+		if err != nil {
+			return err
+		}
+
+		command = append([]string{sh, "-c"}, join(" ", command[0], "SHELL='sh -x'", command[1:]))
+		cmd = exec.Command(command[0], command[1:]...)
+		parser = makeXParser2
 	case "windows":
 		if command[0] != "make" {
 			return fmt.Errorf("usupported build command: %s", command[0])
@@ -1615,6 +1631,41 @@ func makeXParser(s string) (r []string, err error) {
 	}
 
 	s = s[1:]
+	if dmesgs {
+		dmesg("%v: source line `%s`, caller %v:", origin(1), s, origin(2))
+	}
+	r, err = shellquote.Split(s)
+	if dmesgs {
+		dmesg("%v: shellquote.Split -> %v %[2]q, %v", origin(1), r, err)
+	}
+	if err != nil {
+		if strings.Contains(err.Error(), "Unterminated single-quoted string") {
+			return nil, nil // ignore
+		}
+	}
+	if len(r) != 0 && filepath.Base(r[0]) == "libtool" {
+		r[0] = "libtool"
+	}
+	return r, err
+}
+
+func makeXParser2(s string) (r []string, err error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case strings.HasPrefix(s, "libtool: link: ar "):
+		s = s[len("libtool: link:"):]
+	case strings.HasPrefix(s, "libtool: compile: "):
+		s = s[len("libtool: compile:"):]
+		for strings.HasPrefix(s, "  ") {
+			s = s[1:]
+		}
+	default:
+		var n int
+		if n, s = hasPlusPrefix(s); n != 0 {
+			return nil, nil
+		}
+	}
+
 	if dmesgs {
 		dmesg("%v: source line `%s`, caller %v:", origin(1), s, origin(2))
 	}
