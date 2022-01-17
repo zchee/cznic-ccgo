@@ -1874,6 +1874,7 @@ type cdbMakeWriter struct {
 	err    error
 	it     cdbItem
 	parser func(s string) ([]string, error)
+	prefix string
 	sc     *bufio.Scanner
 	t      *Task
 	w      *cdbWriter
@@ -1908,7 +1909,15 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 			panic(todo("internal error"))
 		}
 
-		s := strings.TrimSpace(w.sc.Text())
+		s := w.sc.Text()
+		if strings.HasSuffix(s, "\\") {
+			w.prefix += s[:len(s)-1]
+			continue
+		}
+
+		s = w.prefix + s
+		w.prefix = ""
+		s = strings.TrimSpace(s)
 		if edx := strings.Index(s, "Entering directory"); edx >= 0 {
 			s = s[edx+len("Entering directory"):]
 			s = strings.TrimSpace(s)
