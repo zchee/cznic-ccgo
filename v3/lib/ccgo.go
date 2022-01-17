@@ -1809,26 +1809,28 @@ func (it *cdbItem) sources(cc, ar string) (r []string) {
 }
 
 type cdbMakeWriter struct {
-	b      bytes.Buffer
-	cc     string
 	ar     string
 	arBase string
+	b      bytes.Buffer
+	cc     string
 	dir    string
 	err    error
 	it     cdbItem
 	parser func(s string) ([]string, error)
 	sc     *bufio.Scanner
+	t      *Task
 	w      *cdbWriter
 }
 
 func (t *Task) newCdbMakeWriter(w *cdbWriter, dir string, parser func(s string) ([]string, error)) *cdbMakeWriter {
 	const sz = 1 << 16
 	r := &cdbMakeWriter{
-		cc:     t.ccLookPath,
 		ar:     t.arLookPath,
 		arBase: filepath.Base(t.arLookPath),
+		cc:     t.ccLookPath,
 		dir:    dir,
 		parser: parser,
+		t:      t,
 		w:      w,
 	}
 	r.sc = bufio.NewScanner(&r.b)
@@ -1899,16 +1901,25 @@ func (w *cdbMakeWriter) Write(b []byte) (int, error) {
 		err = nil
 		switch args[0] {
 		case w.cc:
+			if w.t.verboseCompiledb {
+				fmt.Printf("source line: %q\n", s)
+			}
 			fmt.Printf("CCGO CC: %q\n", args)
 			err = w.handleGCC(args)
 		case w.ar:
 			fallthrough
 		case w.arBase:
 			if isCreateArchive(args[1]) {
+				if w.t.verboseCompiledb {
+					fmt.Printf("source line: %q\n", s)
+				}
 				fmt.Printf("CCGO AR: %q\n", args)
 				err = w.handleAR(args)
 			}
 		case "libtool":
+			if w.t.verboseCompiledb {
+				fmt.Printf("source line: %q\n", s)
+			}
 			fmt.Printf("CCGO LIBTOOL: %q\n", args)
 			err = w.handleLibtool(args)
 		}
