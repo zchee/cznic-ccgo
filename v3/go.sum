@@ -102,8 +102,8 @@ modernc.org/ccgo/v3 v3.13.1/go.mod h1:aBYVOUfIlcSnrsRVU8VRS35y2DIfpgkmVkYZ0tpIXi
 modernc.org/ccgo/v3 v3.15.9/go.mod h1:md59wBwDT2LznX/OTCPoVS6KIsdRgY8xqQwBV+hkTH0=
 modernc.org/ccgo/v3 v3.15.10/go.mod h1:wQKxoFn0ynxMuCLfFD09c8XPUCc8obfchoVR9Cn0fI8=
 modernc.org/ccorpus v1.11.1/go.mod h1:2gEUTrWqdpH2pXsmTM1ZkjeSrUWDpjMu2T6m29L/ErQ=
-modernc.org/ccorpus v1.11.3 h1:ZlA4fEoTAluzXxWOavNLqvbh+WxmfNqlPJuEVRTiyE8=
-modernc.org/ccorpus v1.11.3/go.mod h1:2gEUTrWqdpH2pXsmTM1ZkjeSrUWDpjMu2T6m29L/ErQ=
+modernc.org/ccorpus v1.11.4 h1:YOmQBBzE8GC/puUx76D5j/gJYIZQsydrh6VMJVfXF0M=
+modernc.org/ccorpus v1.11.4/go.mod h1:2gEUTrWqdpH2pXsmTM1ZkjeSrUWDpjMu2T6m29L/ErQ=
 modernc.org/httpfs v1.0.6 h1:AAgIpFZRXuYnkjftxTAZwMIiwEqAfk8aVB2/oA6nAeM=
 modernc.org/httpfs v1.0.6/go.mod h1:7dosgurJGp0sPaRanU53W4xZYKh14wfzX420oZADeHM=
 modernc.org/libc v1.9.8/go.mod h1:U1eq8YWr/Kc1RWCMFUWEdkTg8OTcfLw2kY8EDwl039w=
