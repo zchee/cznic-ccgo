@@ -6,6 +6,7 @@ cpl_convert.c
 csmith.c
 csmith2.c
 dereffp.c
+do.c
 enums.c
 esc_e.c
 for.c

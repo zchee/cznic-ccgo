@@ -12561,7 +12561,7 @@ func (p *project) iterationStatement(f *function, n *cc.IterationStatement) {
 			break
 		}
 
-		v := "ok"
+		v := "__ccgo"
 		if !p.pass1 {
 			v = f.scope.take(cc.String(v))
 		}
