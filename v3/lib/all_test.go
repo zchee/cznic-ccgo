@@ -3008,7 +3008,8 @@ out:
 
 		ccOut, err := exec.Command(gcc, "-o", binaryName, "main.c", csp).CombinedOutput()
 		if err != nil {
-			t.Fatalf("%s\n%s\ncc: %v", extra, ccOut, err)
+			t.Logf("%s\n%s\ncc: %v", extra, ccOut, err)
+			continue
 		}
 
 		binOutA, err := func() ([]byte, error) {
