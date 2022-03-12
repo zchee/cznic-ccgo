@@ -2652,6 +2652,26 @@ func testSQLite(t *testing.T, dir string) {
 		"shell.c",
 		"sqlite3.c",
 	}
+	if runtime.GOARCH == "riscv64" {
+		ccgoArgs = []string{
+			"ccgo",
+
+			"-DHAVE_USLEEP",
+			"-DLONGDOUBLE_TYPE=double",
+			"-DSQLITE_DEBUG",
+			"-DSQLITE_DEFAULT_MEMSTATUS=0",
+			"-DSQLITE_ENABLE_DBPAGE_VTAB",
+			"-DSQLITE_LIKE_DOESNT_MATCH_BLOBS",
+			"-DSQLITE_MEMDEBUG",
+			"-DSQLITE_THREADSAFE=0",
+			"-export-fields", "F",
+			"-all-errors",
+			"-o", main,
+			//TODO "-verify-structs",
+			"shell.c",
+			"sqlite3.c",
+		}
+	}
 	if *oDebug {
 		ccgoArgs = append(ccgoArgs, "-DSQLITE_DEBUG_OS_TRACE", "-DSQLITE_FORCE_OS_TRACE")
 	}
