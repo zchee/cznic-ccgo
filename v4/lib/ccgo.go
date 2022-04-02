@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/mod/semver"
 	"modernc.org/cc/v4"
 	"modernc.org/opt"
 )
@@ -32,25 +31,19 @@ typedef void *__builtin_va_list;
 #define __builtin_va_arg(va, type) (*(type*)__builtin_va_arg_impl(va))
 #endif
 
-#define __builtin_offsetof(type, member) ((size_t)&(((type*)0)->member))
+#define __builtin_offsetof(type, member) ((__SIZE_TYPE__)&(((type*)0)->member))
 #define __builtin_types_compatible_p(t1, t2) __builtin_types_compatible_p_impl((t1)0, (t2)0)
 
 #ifdef __SIZE_TYPE__
-typedef __SIZE_TYPE__ size_t;
-#else
-#error __SIZE_TYPE__ undefined
+typedef __SIZE_TYPE__ __predefined_size_t;
 #endif
 
 #ifdef __WCHAR_TYPE__
-typedef __WCHAR_TYPE__ wchar_t;
-#else
-#error __WCHAR_TYPE__ undefined
+typedef __WCHAR_TYPE__ __predefined_wchar_t;
 #endif
 
 #ifdef __PTRDIFF_TYPE__
-typedef __PTRDIFF_TYPE__ ptrdiff_t;
-#else
-#error __PTRDIFF_TYPE__ undefined
+typedef __PTRDIFF_TYPE__ __predefined_ptrdiff_t;
 #endif
 
 #define __FUNCTION__ __func__
@@ -60,17 +53,7 @@ typedef __PTRDIFF_TYPE__ ptrdiff_t;
 #define __builtin_convertvector(src, type) (*(type*)&src)
 #endif
 `
-
-	objectFilePackageName       = objectFilePackageNamePrefix + objectFileSemver
-	objectFilePackageNamePrefix = "__ccgo_object_file_"
-	objectFileSemver            = "v1"
 )
-
-func init() {
-	if !semver.IsValid(objectFileSemver) {
-		panic(todo("invalid objectFileSemver: %q", objectFileSemver))
-	}
-}
 
 // Task represents a compilation job.
 type Task struct {
@@ -127,7 +110,7 @@ func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs
 // Main executes task.
 func (t *Task) Main() (err error) {
 	if len(t.args) < 2 {
-		return fmt.Errorf("invalid arguments %v", t.args)
+		return errorf("invalid arguments %v", t.args)
 	}
 
 	set := opt.NewSet()
@@ -177,7 +160,7 @@ func (t *Task) Main() (err error) {
 
 	if err := set.Parse(t.args[1:], func(opt string) error {
 		if strings.HasPrefix(opt, "-") {
-			return fmt.Errorf(" unrecognized command-line option '%s'", opt)
+			return errorf(" unrecognized command-line option '%s'", opt)
 		}
 
 		if strings.HasSuffix(opt, ".c") || strings.HasSuffix(opt, ".h") {
@@ -186,9 +169,9 @@ func (t *Task) Main() (err error) {
 			return nil
 		}
 
-		return fmt.Errorf("unexpected argument %s", opt)
+		return errorf("unexpected argument %s", opt)
 	}); err != nil {
-		return fmt.Errorf("parsing %v: %v", t.args[1:], err)
+		return errorf("parsing %v: %v", t.args[1:], err)
 	}
 
 	t.cfgArgs = append(t.cfgArgs, t.D...)
@@ -219,63 +202,31 @@ func (t *Task) Main() (err error) {
 		return t.compile()
 	}
 
-	return fmt.Errorf("TODO %v %v", t.args, t.inputFiles)
+	return errorf("TODO %v %v", t.args, t.inputFiles)
 }
-
-func (t *Task) clone() *Task { r := *t; return &r }
 
 // -c
 func (t *Task) compile() error {
 	switch len(t.inputFiles) {
 	case 0:
-		return fmt.Errorf("no input files")
+		return errorf("no input files")
 	case 1:
 		// ok
 	default:
 		if t.o != "" {
-			return fmt.Errorf("cannot specify '-o' with '-c' with multiple files")
+			return errorf("cannot specify '-o' with '-c' with multiple files")
 		}
 	}
 
 	p := newParallel()
-	for _, v := range t.inputFiles {
-		p.exec(func() {
-			p.err(t.compile1(v, func(msg string, args ...interface{}) { p.err(fmt.Errorf(msg, args...)) }))
-		})
+	for _, ifn := range t.inputFiles {
+		ofn := t.o
+		if ofn == "" {
+			base := filepath.Base(ifn)
+			ext := filepath.Ext(base)
+			ofn = base[:len(base)-len(ext)] + ".go"
+		}
+		p.exec(func() error { return newCtx(t, p.eh).compile(ifn, ofn) })
 	}
 	return p.wait()
-}
-
-func (t *Task) compile1(ifn string, eh errHandler) error {
-	//  package __ccgo_object_file_v1
-	//
-	//	enumerator constant	c<name>
-	//	#define			d<name>
-	//	enum tag		e<name>
-	//	linkage internal	i<name>
-	//	struct tag		s<name>
-	//	union tag		u<name>
-	//	unpinned declarator	p<name>
-	//	typedef			t<name>
-	//	linkage external	x<name>
-	//	linkage none		_<name>
-	t = t.clone()
-	t.packageName = objectFilePackageName
-	t.prefixDefine = "d"
-	t.prefixEnum = "e"
-	t.prefixEnumerator = "c"
-	t.prefixExternal = "x"
-	t.prefixInternal = "i"
-	t.prefixNone = "_"
-	t.prefixStruct = "s"
-	t.prefixTypename = "t"
-	t.prefixUnion = "u"
-	t.prefixUnpinned = "p"
-	ofn := t.o
-	if ofn == "" {
-		base := filepath.Base(ifn)
-		ext := filepath.Ext(base)
-		ofn = base[:len(base)-len(ext)] + ".go"
-	}
-	return newCtx(t, eh).compile(ifn, ofn)
 }

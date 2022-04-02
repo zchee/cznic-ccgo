@@ -138,13 +138,15 @@ func newParallel() *parallel {
 	}
 }
 
+func (p *parallel) eh(msg string, args ...interface{}) { p.err(fmt.Errorf(msg, args...)) }
+
 func (p *parallel) fail()   { atomic.AddInt32(&p.fails, 1) }
 func (p *parallel) file()   { atomic.AddInt32(&p.files, 1) }
 func (p *parallel) id() int { return int(atomic.AddInt32(&p.ids, 1)) }
 func (p *parallel) ok()     { atomic.AddInt32(&p.oks, 1) }
 func (p *parallel) skip()   { atomic.AddInt32(&p.skips, 1) }
 
-func (p *parallel) exec(run func()) {
+func (p *parallel) exec(run func() error) {
 	p.limit <- struct{}{}
 	p.wg.Add(1)
 
@@ -154,7 +156,7 @@ func (p *parallel) exec(run func()) {
 			<-p.limit
 		}()
 
-		run()
+		p.err(run())
 	}()
 }
 
@@ -213,4 +215,39 @@ func buildDefs(D, U []string) string {
 		a = append(a, fmt.Sprintf("#undef %s", v))
 	}
 	return strings.Join(a, "\n")
+}
+
+type ns map[string]struct{}
+
+func (n *ns) take(s string) string {
+	if *n == nil {
+		*n = map[string]struct{}{}
+	}
+	m := *n
+	if _, ok := m[s]; !ok {
+		m[s] = struct{}{}
+		return s
+	}
+
+	l := 0
+	for i := len(s) - 1; i > 0; i++ {
+		if c := s[i]; c < '0' || c > '9' {
+			break
+		}
+
+		l++
+	}
+	num := 0
+	if l != 0 {
+		if n, err := strconv.Atoi(s[:len(s)-l]); err == nil {
+			num = n
+		}
+	}
+	for num++; ; num++ {
+		s2 := fmt.Sprintf("%s%d", s, num)
+		if _, ok := m[s2]; !ok {
+			m[s2] = struct{}{}
+			return s2
+		}
+	}
 }

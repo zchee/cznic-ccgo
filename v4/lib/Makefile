@@ -2,7 +2,7 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-.PHONY:	build_all_targets clean edit editor
+.PHONY:	build_all_targets clean edit editor tmp
 
 build_all_targets:
 	GOOS=darwin GOARCH=amd64 go build -v ./...
@@ -32,3 +32,8 @@ editor:
 	gofmt -l -s -w *.go
 	go test -o /dev/null -c
 	go install -v modernc.org/ccgo/v4 2>&1 | tee log-editor
+
+tmp:
+	go test -v -run Compile/tcc -re 00_ 2>&1 | tee log
+	grep -a '^ \+TODO' log | sort | uniq -c | sort -n
+	grep -a 'TOTAL\|PASS' log || true

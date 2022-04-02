@@ -151,7 +151,7 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 
 		apth := pth
 		afi := fi
-		p.exec(func() {
+		p.exec(func() error {
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, apth)
 			}
@@ -179,7 +179,7 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 
 				f, err := cfs.Open(apth)
 				if err != nil {
-					p.err(errorf("", err))
+					p.err(err)
 					return
 				}
 
@@ -192,8 +192,8 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 				}
 
 				fn := filepath.Join(tmp, filepath.Base(apth))
-				if err2 := os.WriteFile(fn, b, 0660); err2 != nil {
-					p.err(errorf("", err2))
+				if err := os.WriteFile(fn, b, 0660); err != nil {
+					p.err(errorf("%v: %v", apth, err))
 					return
 				}
 
@@ -209,10 +209,10 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 					return
 				}
 
-				p.err(ccgoErr)
 				p.fail()
+				p.err(ccgoErr)
 			}()
-
+			return nil
 		})
 		return nil
 	}))
