@@ -284,6 +284,30 @@ unsigned __sync_sub_and_fetch_uint32(unsigned*, unsigned);
 
 #ifdef __APPLE__
 int (*__darwin_check_fd_set_overflow)(int, void *, int);
+
+int
+__builtin_ctzll(long long mask)
+{
+	int bit;
+
+	if (mask == 0)
+		return (0);
+	for (bit = 1; !(mask & 1); bit++)
+		mask = (unsigned long long)mask >> 1;
+	return (bit);
+}
+
+int
+__builtin_ctzl(long long mask)
+{
+	int bit;
+
+	if (mask == 0)
+		return (0);
+	for (bit = 1; !(mask & 1); bit++)
+		mask = (unsigned long)mask >> 1;
+	return (bit);
+}
 #endif
 
 `

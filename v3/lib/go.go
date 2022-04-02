@@ -2609,6 +2609,10 @@ func main() { %sStart(%s) }`, p.task.crt, p.mainName)
 		return err
 	}
 
+	buf := p.buf.Bytes()
+	p.buf.Reset()
+	buf = bytes.ReplaceAll(buf, []byte("&uintptr"), []byte("uintptr"))
+	p.buf.Write(buf)
 	if _, err := p.buf.WriteTo(p.task.out); err != nil {
 		return err
 	}
@@ -2977,7 +2981,7 @@ func (p *project) initDeclarator(f *function, n *cc.InitDeclarator, sep string, 
 			f.condInitPrefix = func() {
 				//TODO- p.declarator(d, f, d, d.Type(), exprLValue, 0)
 				//TODO- p.w(" = ")
-				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */)) = ", p.typ(n, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("**(**%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s)/* %s */) = ", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
 			}
 			switch {
 			case p.isConditionalInitializer(n.Initializer):
@@ -3042,8 +3046,8 @@ func (p *project) initDeclaratorDeclVLA(f *function, n *cc.InitDeclarator, sep s
 	}
 	if local.isPinned {
 		panic(todo(""))
-		p.w("%s// var %s %s at %s%s, %d\n", sep, local.name, p.typ(n, d.Type()), f.bpName, nonZeroUintptr(local.off), d.Type().Size())
-		return
+		// p.w("%s// var %s %s at %s%s, %d\n", sep, local.name, p.typ(n, d.Type()), f.bpName, nonZeroUintptr(local.off), d.Type().Size())
+		// return
 	}
 
 	p.w("%s%s = %sXrealloc(%s, %s, types.Size_t(", sep, local.name, p.task.crt, f.tlsName, local.name)
@@ -3164,7 +3168,7 @@ func (p *project) declaratorValueArrayParameter(n cc.Node, f *function, d *cc.De
 	}
 	local := f.locals[d]
 	if local.isPinned {
-		p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(n, paramTypeDecay(d)), f.bpName, nonZeroUintptr(local.off), local.name)
+		p.w("%s(**(**%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s)/* %s */))", p.typ(n, paramTypeDecay(d)), p.typ(n, paramTypeDecay(d)), f.bpName, nonZeroUintptr(local.off), local.name)
 		return
 	}
 
@@ -3178,7 +3182,7 @@ func (p *project) declaratorValueUnion(n cc.Node, f *function, d *cc.Declarator,
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("%s(**(**%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s)/* %s */))", p.typ(d, d.Type()), p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3310,7 +3314,7 @@ func (p *project) declaratorValueNormal(n cc.Node, f *function, d *cc.Declarator
 					return
 				}
 
-				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("%s(**(**%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s)/* %s */))", p.typ(d, d.Type()), p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3349,7 +3353,7 @@ func (p *project) declaratorFuncNormal(n cc.Node, f *function, d *cc.Declarator,
 			if local.isPinned {
 				p.w("(*(*")
 				p.functionSignature(n, f, u, "")
-				p.w(")(unsafe.Pointer(%s%s)))", f.bpName, nonZeroUintptr(local.off))
+				p.w(")(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s)))", f.bpName, nonZeroUintptr(local.off))
 				return
 			}
 
@@ -3423,7 +3427,7 @@ func (p *project) declaratorLValueArray(n cc.Node, f *function, d *cc.Declarator
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("%s(**(**%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s)/* %s */)", p.typ(d, d.Type()), p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3446,7 +3450,7 @@ func (p *project) declaratorLValueNormal(n cc.Node, f *function, d *cc.Declarato
 	if f != nil {
 		if local := f.locals[d]; local != nil {
 			if local.isPinned {
-				p.w("*(*%s)(unsafe.Pointer(%s%s/* %s */))", p.dtyp(d), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("**(**%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s)/* %s */)", p.dtyp(d), f.bpName, nonZeroUintptr(local.off), local.name)
 				return
 			}
 
@@ -3475,7 +3479,8 @@ func (p *project) declaratorLValueDefault(n cc.Node, d *cc.Declarator) {
 			switch d.Name() {
 			case idEnviron:
 				if d.Type().String() == "pointer to pointer to char" {
-					p.w("*(*uintptr)(unsafe.Pointer(%sEnvironP()))", p.task.crt)
+					p.w("p := %sEnvironP()", p.task.crt)
+					p.w("uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&p)))")
 					return
 				}
 			}
@@ -3516,8 +3521,8 @@ func (p *project) declaratorSelectArray(n cc.Node, f *function, d *cc.Declarator
 		if local.isPinned {
 			panic(todo("", p.pos(n)))
 			//TODO type error
-			p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
-			return
+			// p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+			// return
 		}
 
 		p.w("%s", local.name)
@@ -3530,7 +3535,7 @@ func (p *project) declaratorSelectArray(n cc.Node, f *function, d *cc.Declarator
 func (p *project) declaratorSelectNormal(n cc.Node, f *function, d *cc.Declarator) {
 	if local := f.locals[d]; local != nil {
 		if local.isPinned {
-			p.w("(*%s)(unsafe.Pointer(%s%s/* &%s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
+			p.w("(*%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&%s)))%s/* &%s */))", p.typ(d, d.Type()), f.bpName, nonZeroUintptr(local.off), local.name)
 			return
 		}
 
@@ -4297,7 +4302,7 @@ func nonZeroUintptr(n uintptr) string {
 		return ""
 	}
 
-	return fmt.Sprintf("%+d", n)
+	return fmt.Sprintf("+uintptr(%d)", n)
 }
 
 func alias(attr []*cc.AttributeSpecifier) (r cc.StringID) {
@@ -4472,7 +4477,7 @@ func (p *project) functionDefinition(n *cc.FunctionDefinition) {
 		p.w("defer %s.Free(%d)\n", f.tlsName, need)
 		for _, v := range d.Type().Parameters() {
 			if local := f.locals[v.Declarator()]; local != nil && local.isPinned { // Pin it.
-				p.w("*(*%s)(unsafe.Pointer(%s%s)) = %s\n", p.typ(v.Declarator(), paramTypeDecay(v.Declarator())), f.bpName, nonZeroUintptr(local.off), local.name)
+				p.w("**(**%s)(unsafe.Pointer(uintptr(%s)%s)) = %s\n", p.typ(v.Declarator(), paramTypeDecay(v.Declarator())), f.bpName, nonZeroUintptr(local.off), local.name)
 			}
 		}
 		comment = ""
@@ -10136,9 +10141,9 @@ func (p *project) postfixExpressionValuePSelectStruct(f *function, n *cc.Postfix
 		case len(path) != 1:
 			panic(todo(""))
 		default:
-			p.w("(*%s)(unsafe.Pointer(", p.typ(n, pe.Elem()))
+			p.w("(**(**%s)(unsafe.Pointer(&", p.typ(n, pe.Elem()))
 			p.postfixExpression(f, n.PostfixExpression, pe, exprValue, flags)
-			p.w(")).%s", p.fieldName(n, n.Token2.Value))
+			p.w("))).%s", p.fieldName(n, n.Token2.Value))
 		}
 	}
 }
@@ -12497,9 +12502,11 @@ func (p *project) assignOpVoidNormal(f *function, n *cc.AssignmentExpression, t 
 		p.assignmentExpression(f, n.AssignmentExpression, n.Promote(), exprValue, flags)
 		p.w(")")
 	case lhs.Operand.Type().Kind() == cc.Ptr:
-		p.w("*(*%s)(unsafe.Pointer(", p.typ(n, lhs.Operand.Type()))
+		// p.w("**(**%s)(unsafe.Pointer(uintptr(**(**unsafe.Pointer)(unsafe.Pointer(&", p.typ(n, lhs.Operand.Type()))
+		p.w("**(**%s)(unsafe.Pointer(uintptr(", p.typ(n, lhs.Operand.Type()))
 		p.unaryExpression(f, lhs, lhs.Operand.Type(), exprAddrOf, flags)
-		p.w(")) %s= (", oper)
+		// p.w("))))) %s= (", oper)
+		p.w("))) %s= (", oper)
 		p.assignmentExpression(f, n.AssignmentExpression, lhs.Operand.Type(), exprValue, flags)
 		p.w(")")
 		if dd := p.incDelta(n, lhs.Operand.Type()); dd != 1 {
