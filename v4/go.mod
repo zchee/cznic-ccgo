@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/dustin/go-humanize v1.0.0
 	golang.org/x/mod v0.5.1
-	modernc.org/cc/v4 v4.0.0-20220401153742-791cea13719b
+	modernc.org/cc/v4 v4.0.0-20220403182234-9522ccb36668
 	modernc.org/ccorpus2 v0.0.14
 	modernc.org/opt v0.1.3
 	modernc.org/sortutil v1.1.0

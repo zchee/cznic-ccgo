@@ -14,10 +14,40 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"modernc.org/cc/v4"
 )
 
 var (
 	extendedErrors bool // true: Errors will include origin info.
+
+	goKeywords = map[string]struct{}{
+		"break":       {},
+		"case":        {},
+		"chan":        {},
+		"const":       {},
+		"continue":    {},
+		"default":     {},
+		"defer":       {},
+		"else":        {},
+		"fallthrough": {},
+		"for":         {},
+		"func":        {},
+		"go":          {},
+		"goto":        {},
+		"if":          {},
+		"import":      {},
+		"interface":   {},
+		"map":         {},
+		"package":     {},
+		"range":       {},
+		"return":      {},
+		"select":      {},
+		"struct":      {},
+		"switch":      {},
+		"type":        {},
+		"var":         {},
+	}
 )
 
 // origin returns caller's short position, skipping skip frames.
@@ -250,4 +280,14 @@ func (n *ns) take(s string) string {
 			return s2
 		}
 	}
+}
+
+func isGoKeyword(s string) bool { _, ok := goKeywords[s]; return ok }
+
+func pos(n cc.Node) (r token.Position) {
+	if n != nil {
+		r = token.Position(n.Position())
+		r.Filename = filepath.Base(r.Filename)
+	}
+	return r
 }

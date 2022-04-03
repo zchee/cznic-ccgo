@@ -20,6 +20,8 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 modernc.org/cc/v4 v4.0.0-20220401153742-791cea13719b h1:EpOK+X2ZbIOWo7D+pP5bYf0HDUnmmtvG8ZzmaUIuSSM=
 modernc.org/cc/v4 v4.0.0-20220401153742-791cea13719b/go.mod h1:vbnFXqB4O+YkADjAlFyB9hdhMyXVvg9xM8VFPXNa2tg=
+modernc.org/cc/v4 v4.0.0-20220403182234-9522ccb36668 h1:zQ3nosjr8lhjc0SEI7HfYo3OX3nCYdcnXrYjahCWbrA=
+modernc.org/cc/v4 v4.0.0-20220403182234-9522ccb36668/go.mod h1:vbnFXqB4O+YkADjAlFyB9hdhMyXVvg9xM8VFPXNa2tg=
 modernc.org/ccorpus2 v0.0.14 h1:EJuxR4jDTSFfa0uMJRHGmir78IqSvW62MhxNWarG7o8=
 modernc.org/ccorpus2 v0.0.14/go.mod h1:Wifvo4Q/qS/h1aRoC2TffcHsnxwTikmi1AuLANuucJQ=
 modernc.org/mathutil v1.0.0/go.mod h1:wU0vUrJsVWBZ4P6e7xtFJEhFSNsfRLJ8H458uRjg03k=

@@ -81,6 +81,7 @@ type ctx struct {
 	ast     *cc.AST
 	cfg     *cc.Config
 	eh      errHandler
+	ifn     string
 	imports map[string]string // import path: qualifier
 	out     io.Writer
 	task    *Task
@@ -138,7 +139,7 @@ func (c *ctx) compile(ifn, ofn string) error {
 
 	sources := []cc.Source{
 		{Name: "<predefined>", Value: c.cfg.Predefined},
-		{Name: "<builtin>", Value: builtin},
+		{Name: "<builtin>", Value: cc.Builtin},
 	}
 	if c.task.defs != "" {
 		sources = append(sources, cc.Source{Name: "<command-line>", Value: c.task.defs})
@@ -148,10 +149,11 @@ func (c *ctx) compile(ifn, ofn string) error {
 		return err
 	}
 
+	c.ifn = ifn
 	c.prologue()
-	// for n := c.ast.TranslationUnit; n != nil; n = n.TranslationUnit {
-	// 	c.externalDeclaration(n.ExternalDeclaration)
-	// }
+	for n := c.ast.TranslationUnit; n != nil; n = n.TranslationUnit {
+		c.externalDeclaration(n.ExternalDeclaration)
+	}
 	return nil
 }
 
@@ -189,19 +191,22 @@ package %s
 func (c *ctx) externalDeclaration(n *cc.ExternalDeclaration) {
 	switch n.Case {
 	case cc.ExternalDeclarationFuncDef: // FunctionDefinition
-		c.err(errorf("TODO %v", n.Case))
+		c.w("\n\n//TODO %T %v (%v: )\n// %s // %v:", n, n.Case, origin(1), cc.NodeSource(n.FunctionDefinition.Declarator), pos(n))
+		//TODO c.err(errorf("TODO %v", n.Case))
 	case cc.ExternalDeclarationDecl: // Declaration
 		c.declaration(n.Declaration)
 	case cc.ExternalDeclarationAsmStmt: // AsmStatement
-		c.err(errorf("TODO %v", n.Case))
+		//TODO c.err(errorf("TODO %v", n.Case))
 	case cc.ExternalDeclarationEmpty: // ';'
-		c.err(errorf("TODO %v", n.Case))
+		//TODO c.err(errorf("TODO %v", n.Case))
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
 }
 
 func (c *ctx) declaration(n *cc.Declaration) {
+	c.w("\n\n//TODO %T %v (%v: )\n// %s // %v:", n, n.Case, origin(1), cc.NodeSource(n), pos(n))
+	return //TODO-
 	switch n.Case {
 	case cc.DeclarationDecl: // DeclarationSpecifiers InitDeclaratorList AttributeSpecifierList ';'
 		switch {
@@ -223,18 +228,17 @@ func (c *ctx) declaration(n *cc.Declaration) {
 
 func (c *ctx) initDeclarator(n *cc.InitDeclarator) {
 	d := n.Declarator
-	if d.IsExtern() {
-		return
-	}
+	c.w("\n\n//TODO %T %v (%v: )\n// %s // %v:", n, n.Case, origin(1), cc.NodeSource(d), pos(n))
+	return //TODO-
 
 	switch n.Case {
 	case cc.InitDeclaratorDecl: // Declarator Asm
 		switch {
 		case d.IsTypename():
-			// trc("", d.Position(), d.Name(), d.Type())
+			trc("", d.Position(), d.Name(), d.Type())
 			c.err(errorf("TODO %v", n.Case))
 		default:
-			// trc("", d.Position(), d.Name(), d.Type())
+			trc("", d.Position(), d.Name(), d.Type())
 			c.err(errorf("TODO %v", n.Case))
 		}
 	case cc.InitDeclaratorInit: // Declarator Asm '=' Initializer
