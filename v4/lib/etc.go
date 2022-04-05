@@ -247,9 +247,9 @@ func buildDefs(D, U []string) string {
 	return strings.Join(a, "\n")
 }
 
-type ns map[string]struct{}
+type nameSpace map[string]struct{}
 
-func (n *ns) take(s string) string {
+func (n *nameSpace) take(s string) string {
 	if *n == nil {
 		*n = map[string]struct{}{}
 	}
@@ -280,6 +280,22 @@ func (n *ns) take(s string) string {
 			return s2
 		}
 	}
+}
+
+type nameSet map[string]struct{}
+
+func (n *nameSet) add(s string) (ok bool) {
+	if *n == nil {
+		*n = map[string]struct{}{s: {}}
+		return true
+	}
+	m := *n
+	if _, ok = m[s]; ok {
+		return false
+	}
+
+	m[s] = struct{}{}
+	return true
 }
 
 func isGoKeyword(s string) bool { _, ok := goKeywords[s]; return ok }

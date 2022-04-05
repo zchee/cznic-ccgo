@@ -50,6 +50,7 @@ type Task struct {
 
 	E              bool // -E
 	c              bool // -c
+	extendedErrors bool // -extended-errors
 	nostdinc       bool // -nostdinc
 	nostdlib       bool // -nostdlib
 	packageNameSet bool
@@ -95,6 +96,7 @@ func (t *Task) Main() (err error) {
 	set.Arg("std", true, func(opt, val string) error { t.std = fmt.Sprintf("%s=%s", opt, val); return nil })
 	set.Opt("E", func(opt string) error { t.E = true; return nil })
 	set.Opt("c", func(opt string) error { t.c = true; return nil })
+	set.Opt("extended-errors", func(opt string) error { extendedErrors = true; return nil })
 	set.Opt("nostdinc", func(opt string) error { t.nostdinc = true; return nil })
 	set.Opt("nostdlib", func(opt string) error { t.nostdlib = true; return nil })
 	set.Opt("pthread", func(opt string) error { t.pthread = true; t.cfgArgs = append(t.cfgArgs, opt); return nil })

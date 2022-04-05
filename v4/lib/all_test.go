@@ -96,6 +96,9 @@ func TestCompile(t *testing.T) {
 	// 	// Assertions are deprecated, not supported.
 	// 	"950919-1.c": {},
 	// }
+	blacklistTCC := map[string]struct{}{
+		"76_dollars_in_identifiers.c": {},
+	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/s390x":
 		blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
@@ -112,7 +115,7 @@ func TestCompile(t *testing.T) {
 		//TODO {"github.com/gcc-mirror/gcc/gcc/testsuite", blacklistGCC},
 		//TODO {"github.com/vnmakarov", nil},
 		//TODO {"sqlite-amalgamation-3380100", nil},
-		{"tcc-0.9.27/tests/tests2", nil},
+		{"tcc-0.9.27/tests/tests2", blacklistTCC},
 		//TODO {"benchmarksgame-team.pages.debian.net", nil},
 	} {
 		t.Run(v.dir, func(t *testing.T) {
