@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -81,6 +82,7 @@ type writer interface {
 
 type buf bytes.Buffer
 
+func (b *buf) bytes() []byte                   { return (*bytes.Buffer)(b).Bytes() }
 func (b *buf) w(s string, args ...interface{}) { fmt.Fprintf((*bytes.Buffer)(b), s, args...) }
 
 func tag(nm name) string { return tags[nm] }
@@ -89,15 +91,19 @@ func tag(nm name) string { return tags[nm] }
 type errHandler func(msg string, args ...interface{})
 
 type ctx struct {
-	ast         *cc.AST
-	cfg         *cc.Config
-	eh          errHandler
-	ifn         string
-	imports     map[string]string // import path: qualifier
-	out         io.Writer
-	task        *Task
-	taggedEnums nameSet
-	typenames   nameSet
+	ast           *cc.AST
+	cfg           *cc.Config
+	eh            errHandler
+	enumerators   nameSet
+	ft            *cc.FunctionType
+	ifn           string
+	imports       map[string]string // import path: qualifier
+	out           io.Writer
+	taggedEnums   nameSet
+	taggedStructs nameSet
+	taggedUnions  nameSet
+	task          *Task
+	typenames     nameSet
 
 	closed bool
 }
@@ -111,7 +117,7 @@ func newCtx(task *Task, eh errHandler) *ctx {
 	}
 }
 
-func (c *ctx) err(err error) { c.eh(err.Error()) }
+func (c *ctx) err(err error) { c.eh("%s", err.Error()) }
 
 func (c ctx) w(s string, args ...interface{}) {
 	if c.closed {
@@ -189,18 +195,18 @@ func (c *ctx) defines(w writer) {
 		r := m.ReplacementList()[0].SrcStr()
 		switch x := m.Value().(type) {
 		case cc.Int64Value:
-			b = append(b, fmt.Sprintf("\n%s%s = %v // %v:", tag(macro), m.Name.Src(), x, pos(m.Name)))
+			b = append(b, fmt.Sprintf("\n%s%s = %v // %v:", tag(macro), m.Name.Src(), x, c.pos(m.Name)))
 		case cc.UInt64Value:
-			b = append(b, fmt.Sprintf("\n%s%s = %v // %v:", tag(macro), m.Name.Src(), x, pos(m.Name)))
+			b = append(b, fmt.Sprintf("\n%s%s = %v // %v:", tag(macro), m.Name.Src(), x, c.pos(m.Name)))
 		case cc.Float64Value:
 			if s := fmt.Sprint(x); s == r {
-				b = append(b, fmt.Sprintf("\n%s%s = %s // %v:", tag(macro), m.Name.Src(), s, pos(m.Name)))
+				b = append(b, fmt.Sprintf("\n%s%s = %s // %v:", tag(macro), m.Name.Src(), s, c.pos(m.Name)))
 			}
 		case cc.StringValue:
-			b = append(b, fmt.Sprintf("\n%s%s = %q // %v:", tag(macro), m.Name.Src(), x[:len(x)-1], pos(m.Name)))
+			b = append(b, fmt.Sprintf("\n%s%s = %q // %v:", tag(macro), m.Name.Src(), x[:len(x)-1], c.pos(m.Name)))
 		}
 
-		w.w("\n%s%s = %q // %v:", tag(define), m.Name.Src(), r, pos(m.Name))
+		w.w("\n%s%s = %q // %v:", tag(define), m.Name.Src(), r, c.pos(m.Name))
 	}
 	w.w("\n)")
 	if len(b) == 0 {
@@ -208,6 +214,16 @@ func (c *ctx) defines(w writer) {
 	}
 
 	w.w("\n\nconst (\n%s\n)", strings.Join(b, "\n"))
+}
+
+func (c *ctx) pos(n cc.Node) (r token.Position) {
+	if n != nil {
+		r = token.Position(n.Position())
+		if !c.task.fullPaths {
+			r.Filename = filepath.Base(r.Filename)
+		}
+	}
+	return r
 }
 
 func (c *ctx) prologue(w writer) {
@@ -239,137 +255,28 @@ package %s
 	w.w("\n)")
 }
 
-func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
-	return //TODO-
-	switch n.Case {
-	case cc.ExternalDeclarationFuncDef: // FunctionDefinition
-		w.w("\n\n//TODO %T %v (%v: )\n// %s // %v:", n, n.Case, origin(1), cc.NodeSource(n.FunctionDefinition.DeclarationSpecifiers, n.FunctionDefinition.Declarator), pos(n))
-		//TODO c.err(errorf("TODO %v", n.Case))
-	case cc.ExternalDeclarationDecl: // Declaration
-		c.declaration(w, n.Declaration, true)
-	case cc.ExternalDeclarationAsmStmt: // AsmStatement
-		//TODO c.err(errorf("TODO %v", n.Case))
-	case cc.ExternalDeclarationEmpty: // ';'
-		//TODO c.err(errorf("TODO %v", n.Case))
+func (c *ctx) value(w writer, v cc.Value, t cc.Type) {
+	switch x := v.(type) {
+	case cc.Int64Value:
+		w.w("%s(%v)", c.typ(t), x)
+	case cc.StringValue:
+		w.w("%q", v)
 	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
+		c.err(errorf("TODO %T(%[1]v) %v", x, t))
+		w.w(" 0 ")
 	}
 }
 
-func (c *ctx) declaration(w writer, n *cc.Declaration, external bool) {
-	switch n.Case {
-	case cc.DeclarationDecl: // DeclarationSpecifiers InitDeclaratorList AttributeSpecifierList ';'
-		switch {
-		case n.InitDeclaratorList == nil:
-			if !external {
-				break
-			}
-
-			switch x := n.DeclarationSpecifiers.Type().(type) {
-			case *cc.EnumType:
-				c.defineTaggedEnum(w, x)
-			default:
-				trc("%v: %T", n.Position(), x)
-				c.err(errorf("TODO %v %T", n.Case, x))
-			}
-		default:
-			for l := n.InitDeclaratorList; l != nil; l = l.InitDeclaratorList {
-				c.initDeclarator(w, l.InitDeclarator, external)
-			}
-		}
-	case cc.DeclarationAssert: // StaticAssertDeclaration
-		c.err(errorf("TODO %v", n.Case))
-	case cc.DeclarationAuto: // "__auto_type" Declarator '=' Initializer ';'
-		c.err(errorf("TODO %v", n.Case))
+func (c *ctx) linkageTag(d *cc.Declarator) string {
+	switch d.Linkage() {
+	case cc.External:
+		return tag(external)
+	case cc.Internal:
+		return tag(internal)
+	case cc.None:
+		return tag(none)
 	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-}
-
-func (c *ctx) defineTaggedEnum(w writer, t *cc.EnumType) {
-	nmt := t.Tag()
-	if nm := nmt.SrcStr(); nm != "" {
-		if !c.taggedEnums.add(nm) {
-			return
-		}
-
-		w.w("\n\ntype %s%s = %s // %v:", tag(taggedEum), nm, c.typ(t.UnderlyingType()), pos(nmt))
-	}
-	w.w("\n\nconst (")
-	for _, v := range t.Enumerators() {
-		w.w("\n\t%s%s = %v // %v: ", tag(enumConst), v.Token.Src(), v.Value(), pos(v))
-	}
-	w.w("\n)")
-}
-
-func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
-	d := n.Declarator
-	if n.Asm != nil {
-		w.w("\n\n//TODO %T %v (%v: )\n// %s // %v:", n, n.Case, origin(1), cc.NodeSource(d), pos(n))
-		c.err(errorf("TODO asm %v", n.Case))
-		return //TODO-
-	}
-
-	nm := d.Name()
-	switch n.Case {
-	case cc.InitDeclaratorDecl: // Declarator Asm
-		switch {
-		case d.IsTypename():
-			if external && c.typenames.add(nm) {
-				w.w("\n\ntype %s%s = %s // %v:", tag(typename), nm, c.typedef(d.Type()), pos(d))
-			}
-		default:
-			trc("", d.Position(), d.Name(), d.Type())
-			c.err(errorf("TODO %v", n.Case))
-		}
-	case cc.InitDeclaratorInit: // Declarator Asm '=' Initializer
-		trc("", d.Position(), d.Name(), d.Type())
-		c.err(errorf("TODO %v", n.Case))
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-}
-
-func (c *ctx) typedef(t cc.Type) string {
-	var b strings.Builder
-	c.typ0(&b, t, false)
-	return b.String()
-}
-
-func (c *ctx) typ(t cc.Type) string {
-	var b strings.Builder
-	c.typ0(&b, t, true)
-	return b.String()
-}
-
-func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename bool) {
-	if tn := t.Typedef(); tn != nil && useTypename && tn.LexicalScope().Parent == nil {
-		fmt.Fprintf(b, "%s%s", tag(typename), tn.Name())
-		return
-	}
-
-	switch x := t.(type) {
-	case *cc.PointerType:
-		b.WriteString("uintptr")
-	case *cc.PredefinedType:
-		switch {
-		case cc.IsIntegerType(t):
-			if t.Size() <= 8 {
-				if !cc.IsSignedInteger(t) {
-					b.WriteByte('u')
-				}
-				fmt.Fprintf(b, "int%d", 8*t.Size())
-				break
-			}
-
-			b.WriteString("int")
-			c.err(errorf("TODO %T", x))
-		default:
-			b.WriteString("int")
-			c.err(errorf("TODO %T", x))
-		}
-	default:
-		b.WriteString("int")
-		c.err(errorf("TODO %T", x))
+		c.err(errorf("%v: internal error: %v", d.Position(), d.Linkage()))
+		return tag(none)
 	}
 }

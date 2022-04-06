@@ -14,8 +14,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"modernc.org/cc/v4"
 )
 
 var (
@@ -299,11 +297,3 @@ func (n *nameSet) add(s string) (ok bool) {
 }
 
 func isGoKeyword(s string) bool { _, ok := goKeywords[s]; return ok }
-
-func pos(n cc.Node) (r token.Position) {
-	if n != nil {
-		r = token.Position(n.Position())
-		r.Filename = filepath.Base(r.Filename)
-	}
-	return r
-}
