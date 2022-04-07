@@ -25,13 +25,14 @@ type Task struct {
 	args             []string // command name in args[0]
 	cfg              *cc.Config
 	cfgArgs          []string
+	compiledfFiles   map[string]string // .c -> .go
 	defs             string
 	fs               fs.FS
 	goarch           string
 	goos             string
 	inputFiles       []string
 	l                []string // -l
-	link             []string
+	linkFiles        []string
 	o                string // -o
 	packageName      string // --package-name
 	prefixDefine     string // --prefix-define <string>
@@ -61,19 +62,23 @@ type Task struct {
 // NewTask returns a newly created Task. args[0] is the command name.
 func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs.FS) (r *Task) {
 	return &Task{
-		args:   args,
-		fs:     fs,
-		goarch: goarch,
-		goos:   goos,
-		stderr: stderr,
-		stdout: stdout,
+		args:           args,
+		compiledfFiles: map[string]string{},
+		fs:             fs,
+		goarch:         goarch,
+		goos:           goos,
+		stderr:         stderr,
+		stdout:         stdout,
 	}
 }
 
 // Main executes task.
 func (t *Task) Main() (err error) {
-	if len(t.args) < 2 {
-		return errorf("invalid arguments %v", t.args)
+	switch len(t.args) {
+	case 0:
+		return errorf("invalid arguments")
+	case 1:
+		return errorf("no input files")
 	}
 
 	set := opt.NewSet()
@@ -92,7 +97,11 @@ func (t *Task) Main() (err error) {
 	set.Arg("I", true, func(opt, val string) error { t.I = append(t.I, val); return nil })
 	set.Arg("O", true, func(opt, val string) error { t.O = fmt.Sprintf("%s%s", opt, val); return nil })
 	set.Arg("U", true, func(opt, val string) error { t.U = append(t.U, fmt.Sprintf("%s%s", opt, val)); return nil })
-	set.Arg("l", true, func(opt, val string) error { t.l = append(t.l, val); t.link = append(t.link, val); return nil })
+	set.Arg("l", true, func(opt, val string) error {
+		t.l = append(t.l, val)
+		t.linkFiles = append(t.linkFiles, opt+"="+val)
+		return nil
+	})
 	set.Arg("o", true, func(opt, val string) error { t.o = val; return nil })
 	set.Arg("std", true, func(opt, val string) error { t.std = fmt.Sprintf("%s=%s", opt, val); return nil })
 	set.Opt("E", func(opt string) error { t.E = true; return nil })
@@ -130,7 +139,12 @@ func (t *Task) Main() (err error) {
 
 		if strings.HasSuffix(opt, ".c") || strings.HasSuffix(opt, ".h") {
 			t.inputFiles = append(t.inputFiles, opt)
-			t.link = append(t.link, opt)
+			t.linkFiles = append(t.linkFiles, opt)
+			return nil
+		}
+
+		if strings.HasSuffix(opt, ".go") {
+			t.linkFiles = append(t.linkFiles, opt)
 			return nil
 		}
 
@@ -164,14 +178,17 @@ func (t *Task) Main() (err error) {
 	}
 
 	if t.c {
-		return t.compile()
+		return t.compile(t.o)
 	}
 
-	return errorf("TODO %v %v", t.args, t.inputFiles)
+	if !t.nostdlib {
+		t.linkFiles = append(t.linkFiles, "-l=modernc.org/libc")
+	}
+	return t.link()
 }
 
 // -c
-func (t *Task) compile() error {
+func (t *Task) compile(optO string) error {
 	switch len(t.inputFiles) {
 	case 0:
 		return errorf("no input files")
@@ -185,12 +202,11 @@ func (t *Task) compile() error {
 
 	p := newParallel()
 	for _, ifn := range t.inputFiles {
-		ofn := t.o
+		ofn := optO
 		if ofn == "" {
-			base := filepath.Base(ifn)
-			ext := filepath.Ext(base)
-			ofn = base[:len(base)-len(ext)] + ".go"
+			ofn = filepath.Base(ifn) + ".go"
 		}
+		t.compiledfFiles[ifn] = ofn
 		p.exec(func() error { return newCtx(t, p.eh).compile(ifn, ofn) })
 	}
 	return p.wait()

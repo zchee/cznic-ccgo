@@ -25,6 +25,7 @@ import (
 type name int
 
 const (
+	objectFileCommentPrefix = "Code generated for "
 	//  package __ccgo_object_file_v1
 	objectFilePackageName       = objectFilePackageNamePrefix + objectFileSemver
 	objectFilePackageNamePrefix = "__ccgo_object_file_"
@@ -227,13 +228,14 @@ func (c *ctx) pos(n cc.Node) (r token.Position) {
 }
 
 func (c *ctx) prologue(w writer) {
-	w.w(`// Code generated for %s/%s by '%s %s', DO NOT EDIT.
+	w.w(`// %s%s/%s by '%s %s', DO NOT EDIT.
 
 //go:build ignore
 // +build ignore
 
 package %s
 `,
+		objectFileCommentPrefix,
 		c.task.goos, c.task.goarch,
 		filepath.Base(c.task.args[0]),
 		strings.Join(c.task.args[1:], " "),
@@ -253,18 +255,6 @@ package %s
 		w.w("\t%s %q\n", q, v)
 	}
 	w.w("\n)")
-}
-
-func (c *ctx) value(w writer, v cc.Value, t cc.Type) {
-	switch x := v.(type) {
-	case cc.Int64Value:
-		w.w("%s(%v)", c.typ(t), x)
-	case cc.StringValue:
-		w.w("%q", v)
-	default:
-		c.err(errorf("TODO %T(%[1]v) %v", x, t))
-		w.w(" 0 ")
-	}
 }
 
 func (c *ctx) linkageTag(d *cc.Declarator) string {

@@ -148,8 +148,8 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 		}
 	case cc.InitDeclaratorInit: // Declarator Asm '=' Initializer
 		c.defineEnumStructUnion(w, d.Type())
-		w.w("\n%s%s := ", c.linkageTag(d), nm)
-		c.initializer(w, n.Initializer, d.Type())
+		w.w("\n%s%s := %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}

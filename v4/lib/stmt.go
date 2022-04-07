@@ -40,7 +40,7 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 	case cc.JumpStatementBreak: // "break" ';'
 		c.err(errorf("TODO %v", n.Case))
 	case cc.JumpStatementReturn: // "return" ExpressionList ';'
-		w.w("\nreturn %s", c.convertExpressionList(w, n.ExpressionList, c.ft.Result()))
+		w.w("\nreturn %s", c.expressionList(w, n.ExpressionList, c.ft.Result(), value))
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
@@ -48,5 +48,5 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 }
 
 func (c *ctx) expressionStatement(w writer, n *cc.ExpressionStatement) {
-	w.w("\n%s // %v:", c.expressionList(w, n.ExpressionList, void), c.pos(n))
+	w.w("\n%s // %v:", c.expressionList(w, n.ExpressionList, cc.Invalid, void), c.pos(n))
 }
