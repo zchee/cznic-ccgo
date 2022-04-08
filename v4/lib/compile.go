@@ -12,20 +12,19 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"golang.org/x/mod/semver"
 	"modernc.org/cc/v4"
-	"modernc.org/sortutil"
 )
 
 type name int
 
 const (
-	objectFileCommentPrefix = "Code generated for "
+	generatedFilePrefix = "Code generated for "
+	generatedFileSuffix = ", DO NOT EDIT."
 	//  package __ccgo_object_file_v1
 	objectFilePackageName       = objectFilePackageNamePrefix + objectFileSemver
 	objectFilePackageNamePrefix = "__ccgo_object_file_"
@@ -36,7 +35,6 @@ const (
 	define name = iota
 	enumConst
 	external
-	imports
 	internal
 	macro
 	none
@@ -59,7 +57,6 @@ var (
 		define:       "df", // #define
 		enumConst:    "ec", // enumerator constant
 		external:     "X",  // external linkage
-		imports:      "iq", // import qualifier
 		internal:     "il", // internal linkage
 		macro:        "mv", // macro value
 		none:         "ln", // linkage none
@@ -105,6 +102,7 @@ type ctx struct {
 	taggedUnions  nameSet
 	task          *Task
 	typenames     nameSet
+	void          cc.Type
 
 	closed bool
 }
@@ -169,6 +167,7 @@ func (c *ctx) compile(ifn, ofn string) error {
 		return err
 	}
 
+	c.void = c.ast.Void
 	c.ifn = ifn
 	c.prologue(c)
 	c.defines(c)
@@ -228,33 +227,20 @@ func (c *ctx) pos(n cc.Node) (r token.Position) {
 }
 
 func (c *ctx) prologue(w writer) {
-	w.w(`// %s%s/%s by '%s %s', DO NOT EDIT.
+	w.w(`// %s%s/%s by '%s %s'%s.
 
 //go:build ignore
 // +build ignore
 
 package %s
 `,
-		objectFileCommentPrefix,
+		generatedFilePrefix,
 		c.task.goos, c.task.goarch,
 		filepath.Base(c.task.args[0]),
 		strings.Join(c.task.args[1:], " "),
+		generatedFileSuffix,
 		objectFilePackageName,
 	)
-	var a []string
-	if len(a) == 0 {
-		return
-	}
-
-	a = a[:sortutil.Dedupe(sort.StringSlice(a))]
-	var ns nameSpace
-	w.w("\nimport (")
-	for _, v := range a {
-		q := tag(imports) + ns.take(path.Base(v))
-		c.imports[v] = q
-		w.w("\t%s %q\n", q, v)
-	}
-	w.w("\n)")
 }
 
 func (c *ctx) linkageTag(d *cc.Declarator) string {

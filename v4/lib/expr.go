@@ -6,27 +6,38 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"modernc.org/cc/v4"
+	"modernc.org/mathutil"
 )
 
 type mode int
 
 const (
 	void   mode = iota
-	lvalue      // soit can stand on LHS of lhs = rhs
+	lvalue      // so it can stand on LHS of lhs = rhs
 	value       // so it can stand on RHS of lhs = rhs
 	call        // so it can stand in expr(...)
 )
+
+func (c *ctx) convert(n cc.Node, b []byte, from, to cc.Type) (r []byte) {
+	if from == to || to.Kind() == cc.Void {
+		return b
+	}
+
+	c.err(errorf("%v: TODO %q %s -> %s", c.pos(n), b, from, to))
+	return b //TODO
+}
 
 func (c *ctx) expressionList(w writer, n *cc.ExpressionList, t cc.Type, mode mode) (r []byte) {
 	if t.Kind() == cc.Void {
 		mode = void
 	}
+	defer func() { r = c.convert(n, r, n.Type(), t) }()
 	for ; n != nil; n = n.ExpressionList {
 		switch {
 		case n.ExpressionList == nil:
 			return c.expr(w, n.AssignmentExpression, t, mode)
 		default:
-			c.expr(w, n.AssignmentExpression, cc.Invalid, void)
+			c.expr(w, n.AssignmentExpression, c.void, void)
 		}
 	}
 	return nil
@@ -50,6 +61,7 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 	if t.Kind() == cc.Void {
 		mode = void
 	}
+	defer func() { r = c.convert(n, r, n.Type(), t) }()
 	var b buf
 	switch mode {
 	case void:
@@ -119,6 +131,7 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 	if t.Kind() == cc.Void {
 		mode = void
 	}
+	defer func() { r = c.convert(n, r, n.Type(), t) }()
 	var b buf
 	switch mode {
 	case value:
@@ -129,6 +142,8 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 				switch x.Linkage() {
 				case cc.None:
 					b.w("%s%s", tag(none), x.Name())
+				case cc.External:
+					b.w("*(*%s)(unsafe.Pointer(&%s%s))", c.typ(n.Type()), tag(external), x.Name())
 				default:
 					c.err(errorf("TODO %v", x.Linkage()))
 				}
@@ -136,7 +151,26 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 				c.err(errorf("TODO %T", x))
 			}
 		case cc.PrimaryExpressionInt: // INTCONST
-			b.w("%s", c.primaryExpressionValue(w, n.Value(), n.Type(), t))
+			switch x := n.Value().(type) {
+			case cc.Int64Value:
+				switch {
+				case cc.IsSignedInteger(t):
+					if t.Size() < 8 {
+						m := uint64(1)<<(t.Size()*8) - 1
+						switch {
+						case x < 0:
+							x |= ^cc.Int64Value(m)
+						default:
+							x &= cc.Int64Value(m)
+						}
+					}
+					b.w("int%d(%d)", 8*t.Size(), x)
+				default:
+					c.err(errorf("TODO %v", n.Case))
+				}
+			default:
+				c.err(errorf("TODO %T", x))
+			}
 		case cc.PrimaryExpressionFloat: // FLOATCONST
 			c.err(errorf("TODO %v", n.Case))
 		case cc.PrimaryExpressionChar: // CHARCONST
@@ -144,7 +178,16 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 		case cc.PrimaryExpressionLChar: // LONGCHARCONST
 			c.err(errorf("TODO %v", n.Case))
 		case cc.PrimaryExpressionString: // STRINGLITERAL
-			b.w("%s", c.primaryExpressionValue(w, n.Value(), n.Type(), t))
+			switch x := t.(type) {
+			case *cc.ArrayType:
+				v := n.Value().(cc.StringValue)
+				b.w("%s(%q)", c.typ(t), v[:mathutil.MaxInt64(x.Len(), int64(len(v)))])
+			case *cc.PointerType:
+				b.w("%q", n.Value())
+			default:
+				c.err(errorf("TODO %T", x))
+			}
+			t = n.Type()
 		case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
 			c.err(errorf("TODO %v", n.Case))
 		case cc.PrimaryExpressionExpr: // '(' ExpressionList ')'
@@ -199,6 +242,8 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 				switch x.Linkage() {
 				case cc.External:
 					b.w("%s%s", tag(external), x.Name())
+				case cc.Internal:
+					b.w("%s%s", tag(internal), x.Name())
 				default:
 					c.err(errorf("TODO %v", x.Linkage()))
 				}
@@ -234,67 +279,11 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 	return b.bytes()
 }
 
-func (c *ctx) primaryExpressionValue(w writer, v cc.Value, from, to cc.Type) (r []byte) {
-	var b buf
-
-	if to.Kind() == cc.Enum {
-		to = to.(*cc.EnumType).UnderlyingType()
-	}
-	switch {
-	case cc.IsIntegerType(to):
-		switch {
-		case to.Size() > 8:
-			c.err(errorf("TODO %v", to))
-		case cc.IsSignedInteger(to):
-			m := cc.Int64Value(-1)
-			if to.Size() < 8 {
-				m = cc.Int64Value(1)<<(8*to.Size()) - 1
-			}
-			switch x := v.(type) {
-			case cc.Int64Value:
-				switch {
-				case x < 0:
-					b.w("%s(%d)", c.typ(to), x|^m)
-				default:
-					b.w("%s(%d)", c.typ(to), x&m)
-				}
-			case cc.UInt64Value:
-				switch y := cc.Int64Value(x); {
-				case y < 0:
-					b.w("%s(%d)", c.typ(to), y|^m)
-				default:
-					b.w("%s(%d)", c.typ(to), y&m)
-				}
-			}
-		default:
-			m := ^cc.UInt64Value(0)
-			if to.Size() < 8 {
-				m = cc.UInt64Value(1)<<(8*to.Size()) - 1
-			}
-			switch x := v.(type) {
-			case cc.Int64Value:
-				b.w("%s(%d)", c.typ(to), cc.UInt64Value(x)&m)
-			case cc.UInt64Value:
-				b.w("%s(%d)", c.typ(to), x&m)
-			}
-		}
-	default:
-		switch x := v.(type) {
-		case cc.StringValue:
-			if to.Decay().Kind() == cc.Ptr {
-				b.w("%q", x)
-			}
-		default:
-			c.err(errorf("TODO %T %v -> %v", v, from, to))
-		}
-	}
-	return b.bytes()
-}
-
 func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Type, mode mode) (r []byte) {
 	if t.Kind() == cc.Void {
 		mode = void
 	}
+	defer func() { r = c.convert(n, r, n.Type(), t) }()
 	var b buf
 	switch mode {
 	case void:

@@ -40,6 +40,7 @@ type Task struct {
 	prefixEnumerator string // --prefix-enumerator <string>
 	prefixExternal   string // --prefix-external <string>
 	prefixInternal   string // --prefix-internal <string>
+	prefixMacro      string // --prefix-macro <string>
 	prefixNone       string // --prefix-none <string>
 	prefixStruct     string // --prefix-struct <string>
 	prefixTypename   string // --prefix-typename <string>
@@ -51,7 +52,6 @@ type Task struct {
 
 	E              bool // -E
 	c              bool // -c
-	extendedErrors bool // -extended-errors
 	fullPaths      bool // -full-paths
 	nostdinc       bool // -nostdinc
 	nostdlib       bool // -nostdlib
@@ -62,13 +62,24 @@ type Task struct {
 // NewTask returns a newly created Task. args[0] is the command name.
 func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs.FS) (r *Task) {
 	return &Task{
-		args:           args,
-		compiledfFiles: map[string]string{},
-		fs:             fs,
-		goarch:         goarch,
-		goos:           goos,
-		stderr:         stderr,
-		stdout:         stdout,
+		args:             args,
+		compiledfFiles:   map[string]string{},
+		fs:               fs,
+		goarch:           goarch,
+		goos:             goos,
+		prefixDefine:     "D",
+		prefixEnum:       "TE",
+		prefixEnumerator: "C",
+		prefixExternal:   "X",
+		prefixInternal:   "",
+		prefixMacro:      "M",
+		prefixNone:       "",
+		prefixStruct:     "TS",
+		prefixTypename:   "TN",
+		prefixUnion:      "TU",
+		prefixUnpinned:   "U",
+		stderr:           stderr,
+		stdout:           stdout,
 	}
 }
 
@@ -88,6 +99,7 @@ func (t *Task) Main() (err error) {
 	set.Arg("-prefix-enumerator", false, func(opt, val string) error { t.prefixEnumerator = val; return nil })
 	set.Arg("-prefix-external", false, func(opt, val string) error { t.prefixExternal = val; return nil })
 	set.Arg("-prefix-internal", false, func(opt, val string) error { t.prefixInternal = val; return nil })
+	set.Arg("-prefix-macro", false, func(opt, val string) error { t.prefixMacro = val; return nil })
 	set.Arg("-prefix-none", false, func(opt, val string) error { t.prefixNone = val; return nil })
 	set.Arg("-prefix-struct", false, func(opt, val string) error { t.prefixStruct = val; return nil })
 	set.Arg("-prefix-typename", false, func(opt, val string) error { t.prefixTypename = val; return nil })

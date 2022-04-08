@@ -48,5 +48,5 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 }
 
 func (c *ctx) expressionStatement(w writer, n *cc.ExpressionStatement) {
-	w.w("\n%s // %v:", c.expressionList(w, n.ExpressionList, cc.Invalid, void), c.pos(n))
+	w.w("\n%s // %v:", c.expressionList(w, n.ExpressionList, c.void, void), c.pos(n))
 }

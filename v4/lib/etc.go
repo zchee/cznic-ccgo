@@ -245,11 +245,33 @@ func buildDefs(D, U []string) string {
 	return strings.Join(a, "\n")
 }
 
+type dict struct {
+	ns nameSpace
+	m  map[string]string
+}
+
+func (d *dict) add(nm string) (r string) {
+	if d.m == nil {
+		d.m = map[string]string{}
+	}
+	if s, ok := d.m[nm]; ok {
+		return s
+	}
+
+	r = d.ns.take(nm)
+	d.m[nm] = r
+	return r
+}
+
 type nameSpace map[string]struct{}
 
 func (n *nameSpace) take(s string) string {
 	if *n == nil {
-		*n = map[string]struct{}{}
+		m := map[string]struct{}{}
+		*n = m
+		for k := range goKeywords {
+			m[k] = struct{}{}
+		}
 	}
 	m := *n
 	if _, ok := m[s]; !ok {
@@ -297,3 +319,12 @@ func (n *nameSet) add(s string) (ok bool) {
 }
 
 func isGoKeyword(s string) bool { _, ok := goKeywords[s]; return ok }
+
+func symKind(s string) name {
+	for i, v := range tags {
+		if strings.HasPrefix(s, v) {
+			return name(i)
+		}
+	}
+	return -1
+}
