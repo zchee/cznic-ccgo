@@ -32,12 +32,16 @@ const (
 )
 
 const (
-	define name = iota
+	ccgo name = iota
+	define
 	enumConst
 	external
+	importQualifier
 	internal
 	macro
 	none
+	noneStatic
+	preserve
 	taggedEum
 	taggedStruct
 	taggedUnion
@@ -54,17 +58,39 @@ var (
 	// The concatenation of a tag and a valid C identifier must not create a Go
 	// keyword neither it can be a prefix of a Go predefined identifier.
 	tags = [...]string{
-		define:       "df", // #define
-		enumConst:    "ec", // enumerator constant
-		external:     "X",  // external linkage
-		internal:     "il", // internal linkage
-		macro:        "mv", // macro value
-		none:         "ln", // linkage none
-		taggedEum:    "te", // tagged enum
-		taggedStruct: "ts", // tagged struct
-		taggedUnion:  "tu", // tagged union
-		typename:     "tn", // type name
-		unpinned:     "un", // unpinned
+		ccgo:            "_",  // internal use
+		define:          "df", // #define
+		enumConst:       "ec", // enumerator constant
+		external:        "X",  // external linkage
+		importQualifier: "iq",
+		internal:        "il", // internal linkage
+		macro:           "mv", // macro value
+		none:            "ln", // linkage none
+		noneStatic:      "ns", // linkage none + static
+		preserve:        "pp", // eg. TLS in iqlibc.ppTLS -> libc.TLS
+		taggedEum:       "te", // tagged enum
+		taggedStruct:    "ts", // tagged struct
+		taggedUnion:     "tu", // tagged union
+		typename:        "tn", // type name
+		unpinned:        "un", // unpinned
+	}
+
+	symRanks = [...]int{
+		ccgo:            13,
+		define:          9,
+		enumConst:       7,
+		external:        0,
+		importQualifier: 2,
+		internal:        1,
+		macro:           8,
+		none:            10,
+		noneStatic:      11,
+		preserve:        14,
+		taggedEum:       6,
+		taggedStruct:    4,
+		taggedUnion:     5,
+		typename:        3,
+		unpinned:        12,
 	}
 )
 
@@ -250,7 +276,12 @@ func (c *ctx) linkageTag(d *cc.Declarator) string {
 	case cc.Internal:
 		return tag(internal)
 	case cc.None:
-		return tag(none)
+		switch {
+		case d.IsStatic():
+			return tag(noneStatic)
+		default:
+			return tag(none)
+		}
 	default:
 		c.err(errorf("%v: internal error: %v", d.Position(), d.Linkage()))
 		return tag(none)

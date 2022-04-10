@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,7 +20,8 @@ import (
 var (
 	extendedErrors bool // true: Errors will include origin info.
 
-	goKeywords = map[string]struct{}{
+	reservedNames = nameRegister{
+		// Keywords
 		"break":       {},
 		"case":        {},
 		"chan":        {},
@@ -45,6 +47,49 @@ var (
 		"switch":      {},
 		"type":        {},
 		"var":         {},
+
+		// Predeclared identifiers
+		"any":        {},
+		"append":     {},
+		"bool":       {},
+		"byte":       {},
+		"cap":        {},
+		"close":      {},
+		"comparable": {},
+		"complex":    {},
+		"complex128": {},
+		"complex64":  {},
+		"copy":       {},
+		"delete":     {},
+		"error":      {},
+		"false":      {},
+		"float32":    {},
+		"float64":    {},
+		"imag":       {},
+		"int":        {},
+		"int16":      {},
+		"int32":      {},
+		"int64":      {},
+		"int8":       {},
+		"iota":       {},
+		"len":        {},
+		"make":       {},
+		"new":        {},
+		"nil":        {},
+		"panic":      {},
+		"print":      {},
+		"println":    {},
+		"real":       {},
+		"recover":    {},
+		"rune":       {},
+		"string":     {},
+		"true":       {},
+		"uint":       {},
+		"uint16":     {},
+		"uint32":     {},
+		"uint64":     {},
+		"uint8":      {},
+		"uintptr":    {},
 	}
 )
 
@@ -245,43 +290,78 @@ func buildDefs(D, U []string) string {
 	return strings.Join(a, "\n")
 }
 
-type dict struct {
-	ns nameSpace
-	m  map[string]string
+type dict map[string]string
+
+func (d *dict) put(k, v string) {
+	if *d == nil {
+		*d = map[string]string{}
+	}
+	(*d)[k] = v
 }
 
-func (d *dict) add(nm string) (r string) {
-	if d.m == nil {
-		d.m = map[string]string{}
-	}
-	if s, ok := d.m[nm]; ok {
-		return s
-	}
-
-	r = d.ns.take(nm)
-	d.m[nm] = r
-	return r
+type nameSpace struct {
+	reg  nameRegister
+	dict dict
 }
 
-type nameSpace map[string]struct{}
+func (n *nameSpace) registerSet(l *linker, set nameSet, tld bool) {
+	var linkNames []string
+	for nm := range set {
+		linkNames = append(linkNames, nm)
+	}
 
-func (n *nameSpace) take(s string) string {
-	if *n == nil {
-		m := map[string]struct{}{}
-		*n = m
-		for k := range goKeywords {
-			m[k] = struct{}{}
+	sort.Slice(linkNames, func(i, j int) bool {
+		return symRank(linkNames[i]) < symRank(linkNames[j]) || linkNames[i] < linkNames[j]
+	})
+	for _, linkName := range linkNames {
+		switch k := symKind(linkName); k {
+		case ccgo, none, noneStatic, preserve:
+			switch {
+			case tld:
+				panic(todo("%q", linkName))
+			default:
+				if _, ok := n.dict[linkName]; !ok {
+					n.registerName(l, linkName)
+				}
+			}
+		case external:
+			if !tld {
+				break
+			}
+
+			n.registerName(l, linkName)
+		default:
+			if k >= 0 {
+				panic(todo("%q %v", linkName, symKind(linkName)))
+			}
 		}
 	}
+}
+
+func (n *nameSpace) registerName(l *linker, linkName string) (goName string) {
+	goName = l.goName(linkName)
+	goName = n.reg.put(goName)
+	n.dict.put(linkName, goName)
+	return goName
+}
+
+type nameRegister map[string]struct{}
+
+// Colliding names will be adjusted by adding a numeric suffix.
+func (n *nameRegister) put(nm string) (r string) {
+	// defer func(mn string) { trc("%q -> %q", nm, r) }(nm)
+	if *n == nil {
+		*n = map[string]struct{}{}
+	}
 	m := *n
-	if _, ok := m[s]; !ok {
-		m[s] = struct{}{}
-		return s
+	if !reservedNames.has(nm) && !m.has(nm) {
+		m[nm] = struct{}{}
+		return nm
 	}
 
 	l := 0
-	for i := len(s) - 1; i > 0; i++ {
-		if c := s[i]; c < '0' || c > '9' {
+	for i := len(nm) - 1; i > 0; i-- {
+		if c := nm[i]; c < '0' || c > '9' {
 			break
 		}
 
@@ -289,18 +369,20 @@ func (n *nameSpace) take(s string) string {
 	}
 	num := 0
 	if l != 0 {
-		if n, err := strconv.Atoi(s[:len(s)-l]); err == nil {
+		if n, err := strconv.Atoi(nm[:len(nm)-l]); err == nil {
 			num = n
 		}
 	}
 	for num++; ; num++ {
-		s2 := fmt.Sprintf("%s%d", s, num)
+		s2 := fmt.Sprintf("%s%d", nm, num)
 		if _, ok := m[s2]; !ok {
 			m[s2] = struct{}{}
 			return s2
 		}
 	}
 }
+
+func (n *nameRegister) has(nm string) bool { _, ok := (*n)[nm]; return ok }
 
 type nameSet map[string]struct{}
 
@@ -309,6 +391,7 @@ func (n *nameSet) add(s string) (ok bool) {
 		*n = map[string]struct{}{s: {}}
 		return true
 	}
+
 	m := *n
 	if _, ok = m[s]; ok {
 		return false
@@ -318,8 +401,6 @@ func (n *nameSet) add(s string) (ok bool) {
 	return true
 }
 
-func isGoKeyword(s string) bool { _, ok := goKeywords[s]; return ok }
-
 func symKind(s string) name {
 	for i, v := range tags {
 		if strings.HasPrefix(s, v) {
@@ -327,4 +408,12 @@ func symKind(s string) name {
 		}
 	}
 	return -1
+}
+
+func symRank(s string) (r int) {
+	if r = int(symKind(s)); r < 0 {
+		return len(symRanks)
+	}
+
+	return symRanks[r]
 }

@@ -5,6 +5,9 @@
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
+	"fmt"
+	"strconv"
+
 	"modernc.org/cc/v4"
 	"modernc.org/mathutil"
 )
@@ -103,9 +106,9 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 				}
 				xargs = append(xargs, c.expr(w, v, t, value))
 			}
-			b.w("%s(", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call))
+			b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(ccgo))
 			for _, v := range xargs {
-				b.w("%s,", v)
+				b.w(", %s", v)
 			}
 			b.w(")")
 		case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
@@ -181,7 +184,15 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 			switch x := t.(type) {
 			case *cc.ArrayType:
 				v := n.Value().(cc.StringValue)
-				b.w("%s(%q)", c.typ(t), v[:mathutil.MaxInt64(x.Len(), int64(len(v)))])
+				v = v[:mathutil.MaxInt64(x.Len(), int64(len(v)))]
+				for len(v) != 0 && v[len(v)-1] == 0 {
+					v = v[:len(v)-1]
+				}
+				b.w("%s{", c.typ(t))
+				for i := 0; i < len(v); i++ {
+					b.w("%s, ", c.charConst(v[i]))
+				}
+				b.w("}")
 			case *cc.PointerType:
 				b.w("%q", n.Value())
 			default:
@@ -277,6 +288,17 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 		c.err(errorf("TODO %v", mode))
 	}
 	return b.bytes()
+}
+
+func (c *ctx) charConst(b byte) string {
+	switch {
+	case b >= ' ' && b < 0x7f:
+		return strconv.QuoteRuneToASCII(rune(b))
+	case c.ast.ABI.SignedChar:
+		return fmt.Sprint(int8(b))
+	default:
+		return fmt.Sprint(b)
+	}
 }
 
 func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Type, mode mode) (r []byte) {

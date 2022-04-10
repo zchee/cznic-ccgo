@@ -13,7 +13,9 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -27,7 +29,7 @@ const (
 )
 
 type object struct {
-	externs   map[string]struct{}
+	externs   nameSet
 	fset      *token.FileSet
 	id        string // file name or import path
 	pkgName   string // for kind == objectPkg
@@ -38,9 +40,8 @@ type object struct {
 
 func newObject(kind int, id string) *object {
 	return &object{
-		externs: map[string]struct{}{},
-		kind:    kind,
-		id:      id,
+		kind: kind,
+		id:   id,
 	}
 }
 
@@ -193,7 +194,7 @@ func (t *Task) getPkgSymbols(importPath, mode string) (r *object, err error) {
 				return false
 			}
 
-			r.externs[tag(external)+key] = struct{}{}
+			r.externs.add(tag(external) + key)
 		}
 		return true
 	})
@@ -253,7 +254,7 @@ func (t *Task) getFileSymbols(fset *token.FileSet, fn string) (r *object, err er
 
 			switch v.Kind {
 			case ast.Var, ast.Fun:
-				r.externs[k] = struct{}{}
+				r.externs.add(k)
 			default:
 				return nil, errorf("invalid object file: symbol %s of kind %v", k[len(x):], v.Kind)
 			}
@@ -270,7 +271,8 @@ type linker struct {
 	imports []*object
 	out     io.Writer
 	task    *Task
-	tldDict dict
+	tld     nameSpace
+	tsName  string
 
 	closed bool
 }
@@ -279,18 +281,24 @@ func newLinker(task *Task) (*linker, error) {
 	goTags := tags
 	for i := range tags {
 		switch name(i) {
+		case ccgo, noneStatic:
+			goTags[i] = task.prefixCcgo
 		case define:
 			goTags[i] = task.prefixDefine
 		case enumConst:
 			goTags[i] = task.prefixEnumerator
 		case external:
 			goTags[i] = task.prefixExternal
+		case importQualifier:
+			goTags[i] = task.prefixImportQualifier
 		case internal:
 			goTags[i] = task.prefixInternal
 		case macro:
 			goTags[i] = task.prefixMacro
 		case none:
 			goTags[i] = task.prefixNone
+		case preserve:
+			goTags[i] = ""
 		case taggedEum:
 			goTags[i] = task.prefixEnum
 		case taggedStruct:
@@ -332,16 +340,21 @@ func (l *linker) w(s string, args ...interface{}) {
 }
 
 func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object) error {
+	var tld nameSet
 	// Build the symbol table.
 	for _, linkFile := range linkFiles {
 		object := objects[linkFile]
 		for nm := range object.externs {
 			if _, ok := l.externs[nm]; !ok {
 				l.externs[nm] = object
-				l.tldDict.add(l.goName(nm))
+				trc("extern %s is defined in %s", nm, object.id)
 			}
+			tld.add(nm)
+			//TODO other symbol kinds
 		}
 	}
+	l.tld.registerSet(l, tld, true)
+	l.tsName = l.tld.reg.put("ts")
 
 	// Check for unresolved references.
 	for _, linkFile := range linkFiles {
@@ -363,7 +376,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 				}
 
 				if lib.qualifier == "" {
-					lib.qualifier = l.tldDict.add(lib.pkgName)
+					lib.qualifier = l.tld.registerName(l, tag(importQualifier)+lib.pkgName)
 					l.imports = append(l.imports, lib)
 				}
 			}
@@ -378,6 +391,10 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 	defer func() {
 		if err := f.Close(); err != nil {
 			l.err(errorf("%s", err))
+		}
+
+		if err := exec.Command("gofmt", "-w", ofn).Run(); err != nil {
+			l.err(errorf("%s: gofmt: %v", ofn, err))
 		}
 	}()
 
@@ -456,19 +473,8 @@ func (l *linker) decl(file *ast.File, object *object, n ast.Decl) error {
 }
 
 func (l *linker) funcDecl(file *ast.File, object *object, n *ast.FuncDecl) error {
-	nm := n.Name.Name
-	switch name := symKind(nm); name {
-	case external:
-		n.Name.Name = l.tldDict.m[l.goName(nm)]
-		return l.funcDef(file, object, n)
-	default:
-		return errorf("TODO %q %v", nm, name)
-	}
-}
-
-func (l *linker) funcDef(file *ast.File, object *object, n *ast.FuncDecl) error {
-	info := l.newVarInfo(object)
-	ast.Walk(info, n)
+	l.w("\n\n")
+	info := l.newFnInfo(object, n)
 	w := 0
 	for _, stmt := range n.Body.List {
 		if stmt := l.stmtPrune(stmt, info); stmt != nil {
@@ -484,33 +490,35 @@ func (l *linker) funcDef(file *ast.File, object *object, n *ast.FuncDecl) error 
 var _ ast.Visitor = (*renamer)(nil)
 
 type renamer struct {
-	info *varInfo
+	info *fnInfo
 }
 
 func (r *renamer) Visit(n ast.Node) ast.Visitor {
 	if x, ok := n.(*ast.Ident); ok {
-		switch symKind(x.Name) {
-		case none:
-			x.Name = r.info.dict.m[r.info.linker.goName(x.Name)]
-		case external:
-			if object := r.info.linker.externs[x.Name]; object != r.info.object {
-				x.Name = fmt.Sprintf("%s.%s", object.qualifier, r.info.linker.goName(x.Name))
+		if nm := r.info.name(x.Name); nm != "" {
+			if symKind(x.Name) == external {
+				obj := r.info.linker.externs[x.Name]
+				if obj.kind == objectPkg {
+					x.Name = fmt.Sprintf("%s.%s", obj.qualifier, nm)
+					return r
+				}
 			}
-		case internal:
-			r.info.linker.err(errorf("TODO %q %v", x.Name, symKind(x.Name)))
+
+			x.Name = nm
 		}
 	}
 	return r
 }
 
-func (l *linker) stmtPrune(n ast.Stmt, info *varInfo) ast.Stmt {
+func (l *linker) stmtPrune(n ast.Stmt, info *fnInfo) ast.Stmt {
 	switch x := n.(type) {
 	case *ast.AssignStmt:
 		for _, expr := range x.Lhs {
 			switch y := expr.(type) {
 			case *ast.Ident:
-				if c, ok := info.c[y.Name]; ok && c == 1 {
+				if c, ok := info.mentions[y.Name]; ok && c == 1 {
 					if len(x.Lhs) == 1 && l.goName(y.Name) == "__func__" {
+						panic(todo(""))
 						return nil
 					}
 
@@ -532,7 +540,7 @@ func (l *linker) stmtPrune(n ast.Stmt, info *varInfo) ast.Stmt {
 			vs := spec.(*ast.ValueSpec)
 			w2 := 0
 			for i, name := range vs.Names {
-				if c, ok := info.c[name.Name]; ok && c == 1 {
+				if c, ok := info.mentions[name.Name]; ok && c == 1 {
 					if len(vs.Names) == 1 {
 						break
 					}
@@ -565,40 +573,55 @@ func (l *linker) stmtPrune(n ast.Stmt, info *varInfo) ast.Stmt {
 	return n
 }
 
-var _ ast.Visitor = (*varInfo)(nil)
+var _ ast.Visitor = (*fnInfo)(nil)
 
-type varInfo struct {
-	c      map[string]int
-	dict   dict
-	linker *linker
-	object *object
+type fnInfo struct {
+	ns        nameSpace
+	linkNames nameSet
+	linker    *linker
+	mentions  map[string]int // key is link name
+	object    *object
 }
 
-func (l *linker) newVarInfo(object *object) *varInfo { return &varInfo{linker: l, object: object} }
+func (l *linker) newFnInfo(object *object, n *ast.FuncDecl) (r *fnInfo) {
+	r = &fnInfo{linker: l, object: object}
+	ast.Walk(r, n)
+	var a []string
+	for k := range r.linkNames {
+		a = append(a, k)
+	}
+	sort.Slice(a, func(i, j int) bool {
+		if symRank(a[i]) < symRank(a[j]) {
+			return true
+		}
 
-func (v *varInfo) Visit(n ast.Node) ast.Visitor {
+		return a[i] < a[j]
+	})
+	r.ns.registerSet(l, r.linkNames, false)
+	r.linkNames = nil
+	return r
+}
+
+func (fi *fnInfo) name(linkName string) string {
+	switch symKind(linkName) {
+	case external:
+		if goName := fi.linker.tld.dict[linkName]; goName != "" {
+			return goName
+		}
+	default:
+		if goName := fi.ns.dict[linkName]; goName != "" {
+			return goName
+		}
+	}
+	return linkName
+}
+
+func (fi *fnInfo) Visit(n ast.Node) ast.Visitor {
 	switch x := n.(type) {
 	case *ast.Ident:
-		switch {
-		case v.c == nil:
-			v.c = map[string]int{x.Name: 1}
-			if symKind(x.Name) == none {
-			}
-		default:
-			v.c[x.Name]++
-		}
-		if v.c[x.Name] == 1 && symKind(x.Name) == none {
-			v.dict.add(v.linker.goName(x.Name))
-		}
+		fi.linkNames.add(x.Name)
 	}
-	return v
-}
-
-func (v *varInfo) name(linkName string) (r string) {
-	if r = v.linker.goName(linkName); symKind(linkName) == none {
-		r = v.dict.m[r]
-	}
-	return r
+	return fi
 }
 
 func (l *linker) genDecl(n *ast.GenDecl) error {

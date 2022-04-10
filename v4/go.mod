@@ -6,7 +6,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3
 	golang.org/x/tools v0.1.10
-	modernc.org/cc/v4 v4.0.0-20220408164304-4d31a4b880c0
+	modernc.org/cc/v4 v4.0.0-20220410161346-157e1468b4fe
 	modernc.org/ccorpus2 v0.0.14
 	modernc.org/mathutil v1.4.1
 	modernc.org/opt v0.1.3

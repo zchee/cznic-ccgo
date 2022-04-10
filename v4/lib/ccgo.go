@@ -18,37 +18,40 @@ import (
 
 // Task represents a compilation job.
 type Task struct {
-	D                []string // -D
-	I                []string // -I
-	O                string   // -O
-	U                []string // -U
-	args             []string // command name in args[0]
-	cfg              *cc.Config
-	cfgArgs          []string
-	compiledfFiles   map[string]string // .c -> .go
-	defs             string
-	fs               fs.FS
-	goarch           string
-	goos             string
-	inputFiles       []string
-	l                []string // -l
-	linkFiles        []string
-	o                string // -o
-	packageName      string // --package-name
-	prefixDefine     string // --prefix-define <string>
-	prefixEnum       string // --prefix-enum <string>
-	prefixEnumerator string // --prefix-enumerator <string>
-	prefixExternal   string // --prefix-external <string>
-	prefixInternal   string // --prefix-internal <string>
-	prefixMacro      string // --prefix-macro <string>
-	prefixNone       string // --prefix-none <string>
-	prefixStruct     string // --prefix-struct <string>
-	prefixTypename   string // --prefix-typename <string>
-	prefixUnion      string // --prefix-union <string>
-	prefixUnpinned   string // --prefix-unpinned <string>
-	std              string // -std
-	stderr           io.Writer
-	stdout           io.Writer
+	D                     []string // -D
+	I                     []string // -I
+	O                     string   // -O
+	U                     []string // -U
+	args                  []string // command name in args[0]
+	cfg                   *cc.Config
+	cfgArgs               []string
+	compiledfFiles        map[string]string // .c -> .go
+	defs                  string
+	fs                    fs.FS
+	goarch                string
+	goos                  string
+	inputFiles            []string
+	l                     []string // -l
+	linkFiles             []string
+	o                     string // -o
+	packageName           string // --package-name
+	prefixCcgo            string // --prefix-ccgo <string>
+	prefixDefine          string // --prefix-define <string>
+	prefixEnum            string // --prefix-enum <string>
+	prefixEnumerator      string // --prefix-enumerator <string>
+	prefixExternal        string // --prefix-external <string>
+	prefixImportQualifier string // --prefix-import-qualifier <string>
+	prefixInternal        string // --prefix-internal <string>
+	prefixMacro           string // --prefix-macro <string>
+	prefixNone            string // --prefix-none <string>
+	prefixStruct          string // --prefix-struct <string>
+	prefixTypename        string // --prefix-typename <string>
+	prefixUnion           string // --prefix-union <string>
+	prefixUnpinned        string // --prefix-unpinned <string>
+	std                   string // -std
+	stderr                io.Writer
+	stdout                io.Writer
+	tlsQualifier          string
 
 	E              bool // -E
 	c              bool // -c
@@ -62,24 +65,27 @@ type Task struct {
 // NewTask returns a newly created Task. args[0] is the command name.
 func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs.FS) (r *Task) {
 	return &Task{
-		args:             args,
-		compiledfFiles:   map[string]string{},
-		fs:               fs,
-		goarch:           goarch,
-		goos:             goos,
-		prefixDefine:     "D",
-		prefixEnum:       "TE",
-		prefixEnumerator: "C",
-		prefixExternal:   "X",
-		prefixInternal:   "",
-		prefixMacro:      "M",
-		prefixNone:       "",
-		prefixStruct:     "TS",
-		prefixTypename:   "TN",
-		prefixUnion:      "TU",
-		prefixUnpinned:   "U",
-		stderr:           stderr,
-		stdout:           stdout,
+		args:                  args,
+		compiledfFiles:        map[string]string{},
+		fs:                    fs,
+		goarch:                goarch,
+		goos:                  goos,
+		prefixCcgo:            "_",
+		prefixDefine:          "D",
+		prefixEnum:            "TE",
+		prefixEnumerator:      "C",
+		prefixExternal:        "X",
+		prefixImportQualifier: "",
+		prefixInternal:        "",
+		prefixMacro:           "M",
+		prefixNone:            "",
+		prefixStruct:          "TS",
+		prefixTypename:        "T",
+		prefixUnion:           "TU",
+		prefixUnpinned:        "U",
+		stderr:                stderr,
+		stdout:                stdout,
+		tlsQualifier:          "libc.",
 	}
 }
 
@@ -94,10 +100,12 @@ func (t *Task) Main() (err error) {
 
 	set := opt.NewSet()
 	set.Arg("-package-name", false, func(opt, val string) error { t.packageName = val; t.packageNameSet = true; return nil })
+	set.Arg("-prefix-ccgo", false, func(opt, val string) error { t.prefixCcgo = val; return nil })
 	set.Arg("-prefix-define", false, func(opt, val string) error { t.prefixDefine = val; return nil })
 	set.Arg("-prefix-enum", false, func(opt, val string) error { t.prefixEnum = val; return nil })
 	set.Arg("-prefix-enumerator", false, func(opt, val string) error { t.prefixEnumerator = val; return nil })
 	set.Arg("-prefix-external", false, func(opt, val string) error { t.prefixExternal = val; return nil })
+	set.Arg("-prefix-import-qualifier", false, func(opt, val string) error { t.prefixImportQualifier = val; return nil })
 	set.Arg("-prefix-internal", false, func(opt, val string) error { t.prefixInternal = val; return nil })
 	set.Arg("-prefix-macro", false, func(opt, val string) error { t.prefixMacro = val; return nil })
 	set.Arg("-prefix-none", false, func(opt, val string) error { t.prefixNone = val; return nil })
@@ -193,7 +201,10 @@ func (t *Task) Main() (err error) {
 		return t.compile(t.o)
 	}
 
-	if !t.nostdlib {
+	switch {
+	case t.nostdlib:
+		t.tlsQualifier = ""
+	default:
 		t.linkFiles = append(t.linkFiles, "-l=modernc.org/libc")
 	}
 	return t.link()

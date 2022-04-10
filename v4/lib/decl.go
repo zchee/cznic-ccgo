@@ -39,8 +39,12 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 	ft0 := c.ft
 	c.ft = ft
 	defer func() { c.ft = ft0 }()
-	w.w("\nfunc %s%s%s ", c.linkageTag(d), d.Name(), c.signature(ft, true))
+	isMain := d.Linkage() == cc.External && d.Name() == "main"
+	w.w("\nfunc %s%s%s ", c.linkageTag(d), d.Name(), c.signature(ft, true, isMain))
 	c.compoundStatement(w, n.CompoundStatement)
+	if isMain && c.task.tlsQualifier != "" {
+		w.w("\n\nfunc main() { %sStart(%smain) }\n", c.task.tlsQualifier, tag(external))
+	}
 }
 
 func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement) {
@@ -66,10 +70,11 @@ func (c *ctx) blockItem(w writer, n *cc.BlockItem) {
 	}
 }
 
-func (c *ctx) signature(f *cc.FunctionType, names bool) string {
+func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	var b strings.Builder
-	b.WriteByte('(')
+	fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgo), c.task.tlsQualifier, tag(preserve))
 	for i, v := range f.Parameters() {
+		b.WriteString(", ")
 		if names {
 			nm := v.Name()
 			if nm == "" {
@@ -78,7 +83,12 @@ func (c *ctx) signature(f *cc.FunctionType, names bool) string {
 			fmt.Fprintf(&b, "%s%s ", tag(none), nm)
 		}
 		b.WriteString(c.typ(v.Type()))
-		b.WriteByte(',')
+	}
+	switch {
+	case isMain && len(f.Parameters()) == 0:
+		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(ccgo))
+	case isMain && len(f.Parameters()) == 1:
+		fmt.Fprintf(&b, ", %sargv uintptr", tag(ccgo))
 	}
 	b.WriteByte(')')
 	if f.Result().Kind() != cc.Void {
@@ -148,7 +158,14 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 		}
 	case cc.InitDeclaratorInit: // Declarator Asm '=' Initializer
 		c.defineEnumStructUnion(w, d.Type())
-		w.w("\n%s%s := %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+		switch {
+		case d.Linkage() == cc.Internal:
+			w.w("\nvar %s%s = %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+		case d.IsStatic():
+			w.w("\nvar %s%s = %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+		default:
+			w.w("\n%s%s := %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+		}
 
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
