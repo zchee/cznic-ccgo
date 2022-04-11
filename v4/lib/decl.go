@@ -6,7 +6,6 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"modernc.org/cc/v4"
@@ -40,10 +39,10 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 	c.ft = ft
 	defer func() { c.ft = ft0 }()
 	isMain := d.Linkage() == cc.External && d.Name() == "main"
-	w.w("\nfunc %s%s%s ", c.linkageTag(d), d.Name(), c.signature(ft, true, isMain))
+	w.w("\nfunc %s%s%s ", c.declaratorTag(d), d.Name(), c.signature(ft, true, isMain))
 	c.compoundStatement(w, n.CompoundStatement)
-	if isMain && c.task.tlsQualifier != "" {
-		w.w("\n\nfunc main() { %sStart(%smain) }\n", c.task.tlsQualifier, tag(external))
+	if isMain && c.task.tlsQualifier != "" { //TODO move to linker
+		w.w("\n\nfunc main() { %s%sStart(%smain) }\n", c.task.tlsQualifier, tag(preserve), tag(external))
 	}
 }
 
@@ -72,23 +71,23 @@ func (c *ctx) blockItem(w writer, n *cc.BlockItem) {
 
 func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgo), c.task.tlsQualifier, tag(preserve))
-	for i, v := range f.Parameters() {
+	fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(automatic), c.task.tlsQualifier, tag(preserve))
+	for _, v := range f.Parameters() {
 		b.WriteString(", ")
 		if names {
 			nm := v.Name()
 			if nm == "" {
-				nm = strconv.Itoa(i)
+				nm = "_"
 			}
-			fmt.Fprintf(&b, "%s%s ", tag(none), nm)
+			fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
 		}
 		b.WriteString(c.typ(v.Type()))
 	}
 	switch {
 	case isMain && len(f.Parameters()) == 0:
-		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(ccgo))
+		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(automatic))
 	case isMain && len(f.Parameters()) == 1:
-		fmt.Fprintf(&b, ", %sargv uintptr", tag(ccgo))
+		fmt.Fprintf(&b, ", %sargv uintptr", tag(automatic))
 	}
 	b.WriteByte(')')
 	if f.Result().Kind() != cc.Void {
@@ -154,17 +153,17 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 			}
 
 			c.defineEnumStructUnion(w, d.Type())
-			w.w("\nvar %s%s %s", c.linkageTag(d), nm, c.typ(d.Type()))
+			w.w("\nvar %s%s %s", c.declaratorTag(d), nm, c.typ(d.Type()))
 		}
 	case cc.InitDeclaratorInit: // Declarator Asm '=' Initializer
 		c.defineEnumStructUnion(w, d.Type())
 		switch {
 		case d.Linkage() == cc.Internal:
-			w.w("\nvar %s%s = %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
 		case d.IsStatic():
-			w.w("\nvar %s%s = %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
 		default:
-			w.w("\n%s%s := %s", c.linkageTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+			w.w("\n%s%s := %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
 		}
 
 	default:

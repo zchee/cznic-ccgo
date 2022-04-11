@@ -28,26 +28,20 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[ccgo-0]
-	_ = x[define-1]
-	_ = x[enumConst-2]
-	_ = x[external-3]
-	_ = x[importQualifier-4]
-	_ = x[internal-5]
-	_ = x[macro-6]
-	_ = x[none-7]
-	_ = x[noneStatic-8]
-	_ = x[preserve-9]
-	_ = x[taggedEum-10]
-	_ = x[taggedStruct-11]
-	_ = x[taggedUnion-12]
-	_ = x[typename-13]
-	_ = x[unpinned-14]
+	_ = x[external-0]
+	_ = x[typename-1]
+	_ = x[importQualifier-2]
+	_ = x[macro-3]
+	_ = x[define-4]
+	_ = x[staticInternal-5]
+	_ = x[staticNone-6]
+	_ = x[automatic-7]
+	_ = x[preserve-8]
 }
 
-const _name_name = "ccgodefineenumConstexternalimportQualifierinternalmacrononenoneStaticpreservetaggedEumtaggedStructtaggedUniontypenameunpinned"
+const _name_name = "externaltypenameimportQualifiermacrodefinestaticInternalstaticNoneautomaticpreserve"
 
-var _name_index = [...]uint8{0, 4, 10, 19, 27, 42, 50, 55, 59, 69, 77, 86, 98, 109, 117, 125}
+var _name_index = [...]uint8{0, 8, 16, 31, 36, 42, 56, 66, 75, 83}
 
 func (i name) String() string {
 	if i < 0 || i >= name(len(_name_index)-1) {

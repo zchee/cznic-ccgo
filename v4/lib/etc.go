@@ -304,32 +304,48 @@ type nameSpace struct {
 	dict dict
 }
 
-func (n *nameSpace) registerSet(l *linker, set nameSet, tld bool) {
+func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 	var linkNames []string
 	for nm := range set {
 		linkNames = append(linkNames, nm)
 	}
 
 	sort.Slice(linkNames, func(i, j int) bool {
-		return symRank(linkNames[i]) < symRank(linkNames[j]) || linkNames[i] < linkNames[j]
+		return symKind(linkNames[i]) < symKind(linkNames[j]) || linkNames[i] < linkNames[j]
 	})
 	for _, linkName := range linkNames {
 		switch k := symKind(linkName); k {
-		case ccgo, none, noneStatic, preserve:
-			switch {
-			case tld:
-				panic(todo("%q", linkName))
-			default:
-				if _, ok := n.dict[linkName]; !ok {
-					n.registerName(l, linkName)
-				}
-			}
+		//TODO case ccgo, none, noneStatic, preserve:
+		//TODO 	switch {
+		//TODO 	case tld:
+		//TODO 		panic(todo("%q", linkName))
+		//TODO 	default:
+		//TODO 		if _, ok := n.dict[linkName]; !ok {
+		//TODO 			n.registerName(l, linkName)
+		//TODO 		}
+		//TODO 	}
 		case external:
 			if !tld {
 				break
 			}
 
 			n.registerName(l, linkName)
+		case staticNone:
+			if tld {
+				panic(todo("", linkName))
+			}
+
+			n.dict.put(linkName, l.tld.registerName(l, linkName))
+		case automatic:
+			if tld {
+				panic(todo("", linkName))
+			}
+
+			if _, ok := n.dict[linkName]; !ok {
+				n.registerName(l, linkName)
+			}
+		case preserve:
+			// nop
 		default:
 			if k >= 0 {
 				panic(todo("%q %v", linkName, symKind(linkName)))
@@ -348,6 +364,7 @@ func (n *nameSpace) registerName(l *linker, linkName string) (goName string) {
 type nameRegister map[string]struct{}
 
 // Colliding names will be adjusted by adding a numeric suffix.
+//TODO quadratic when repeatedly adding the same name!
 func (n *nameRegister) put(nm string) (r string) {
 	// defer func(mn string) { trc("%q -> %q", nm, r) }(nm)
 	if *n == nil {
@@ -408,12 +425,4 @@ func symKind(s string) name {
 		}
 	}
 	return -1
-}
-
-func symRank(s string) (r int) {
-	if r = int(symKind(s)); r < 0 {
-		return len(symRanks)
-	}
-
-	return symRanks[r]
 }

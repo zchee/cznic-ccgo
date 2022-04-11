@@ -106,7 +106,7 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 				}
 				xargs = append(xargs, c.expr(w, v, t, value))
 			}
-			b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(ccgo))
+			b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(automatic))
 			for _, v := range xargs {
 				b.w(", %s", v)
 			}
@@ -142,14 +142,7 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 		case cc.PrimaryExpressionIdent: // IDENTIFIER
 			switch x := n.ResolvedTo().(type) {
 			case *cc.Declarator:
-				switch x.Linkage() {
-				case cc.None:
-					b.w("%s%s", tag(none), x.Name())
-				case cc.External:
-					b.w("*(*%s)(unsafe.Pointer(&%s%s))", c.typ(n.Type()), tag(external), x.Name())
-				default:
-					c.err(errorf("TODO %v", x.Linkage()))
-				}
+				b.w("%s%s", c.declaratorTag(x), x.Name())
 			default:
 				c.err(errorf("TODO %T", x))
 			}
@@ -215,12 +208,7 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 		case cc.PrimaryExpressionIdent: // IDENTIFIER
 			switch x := n.ResolvedTo().(type) {
 			case *cc.Declarator:
-				switch x.Linkage() {
-				case cc.None:
-					b.w("%s%s", tag(none), x.Name())
-				default:
-					c.err(errorf("TODO %v", x.Linkage()))
-				}
+				b.w("%s%s", c.declaratorTag(x), x.Name())
 			default:
 				c.err(errorf("TODO %T", x))
 			}
@@ -251,10 +239,10 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 			switch x := n.ResolvedTo().(type) {
 			case *cc.Declarator:
 				switch x.Linkage() {
-				case cc.External:
-					b.w("%s%s", tag(external), x.Name())
-				case cc.Internal:
-					b.w("%s%s", tag(internal), x.Name())
+				//TODO case cc.External:
+				//TODO 	b.w("%s%s", tag(external), x.Name())
+				//TODO case cc.Internal:
+				//TODO 	b.w("%s%s", tag(internal), x.Name())
 				default:
 					c.err(errorf("TODO %v", x.Linkage()))
 				}

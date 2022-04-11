@@ -25,8 +25,9 @@ func (c *ctx) typ(t cc.Type) string {
 
 func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag bool) {
 	if tn := t.Typedef(); tn != nil && useTypename && tn.LexicalScope().Parent == nil {
-		fmt.Fprintf(b, "%s%s", tag(typename), tn.Name())
-		return
+		panic(todo(""))
+		//TODO fmt.Fprintf(b, "%s%s", tag(typename), tn.Name())
+		//TODO return
 	}
 
 	switch x := t.(type) {
@@ -59,7 +60,8 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil:
-			fmt.Fprintf(b, "%s%s", tag(taggedEum), nm)
+			panic(todo(""))
+			//TODO fmt.Fprintf(b, "%s%s", tag(taggedEum), nm)
 		default:
 			c.typ0(b, x.UnderlyingType(), false, false)
 		}
@@ -67,7 +69,8 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil && useStructUnionTag:
-			fmt.Fprintf(b, "%s%s", tag(taggedStruct), nm)
+			panic(todo(""))
+			//TODO fmt.Fprintf(b, "%s%s", tag(taggedStruct), nm)
 		default:
 			b.WriteString("struct {")
 			for i := 0; ; i++ {
@@ -81,7 +84,8 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 				case nm == "":
 					c.err(errorf("TODO"))
 				default:
-					fmt.Fprintf(b, "%s%s", tag(none), nm)
+					panic(todo(""))
+					//TODO fmt.Fprintf(b, "%s%s", tag(none), nm)
 				}
 				b.WriteByte(' ')
 				c.typ0(b, f.Type(), true, true)
@@ -92,9 +96,11 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil && useStructUnionTag:
-			fmt.Fprintf(b, "%s%s", tag(taggedUnion), nm)
+			panic(todo(""))
+			//TODO fmt.Fprintf(b, "%s%s", tag(taggedUnion), nm)
 		default:
-			fmt.Fprintf(b, "struct {\n%s", tag(none))
+			panic(todo(""))
+			//TODO fmt.Fprintf(b, "struct {\n%s", tag(none))
 			switch t.Align() {
 			case 1:
 				// ok
@@ -105,7 +111,8 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			default:
 				b.WriteString("0 [0]uint64")
 			}
-			fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(none), t.Size())
+			panic(todo(""))
+			//TODO fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(none), t.Size())
 		}
 	case *cc.ArrayType:
 		fmt.Fprintf(b, "[%d]%s", x.Len(), c.typ(x.Elem()))
@@ -139,7 +146,8 @@ func (c *ctx) defineUnion(w writer, t *cc.UnionType) {
 			return
 		}
 
-		w.w("\ntype %s%s = %s // %v:\n", tag(taggedUnion), nm, c.unionLiteral(t), c.pos(nmt))
+		panic(todo(""))
+		//TODO w.w("\ntype %s%s = %s // %v:\n", tag(taggedUnion), nm, c.unionLiteral(t), c.pos(nmt))
 	}
 }
 
@@ -154,7 +162,8 @@ func (c *ctx) defineStruct(w writer, t *cc.StructType) {
 			return
 		}
 
-		w.w("\ntype %s%s = %s // %v:\n", tag(taggedStruct), nm, c.structLiteral(t), c.pos(nmt))
+		panic(todo(""))
+		//TODO w.w("\ntype %s%s = %s // %v:\n", tag(taggedStruct), nm, c.structLiteral(t), c.pos(nmt))
 	}
 }
 
@@ -169,7 +178,8 @@ func (c *ctx) defineEnum(w writer, t *cc.EnumType) {
 			return
 		}
 
-		w.w("\ntype %s%s = %s // %v:", tag(taggedEum), nm, c.typ(t.UnderlyingType()), c.pos(nmt))
+		panic(todo(""))
+		//TODO w.w("\ntype %s%s = %s // %v:", tag(taggedEum), nm, c.typ(t.UnderlyingType()), c.pos(nmt))
 	}
 	enums := t.Enumerators()
 	if len(enums) == 0 {
@@ -184,7 +194,8 @@ func (c *ctx) defineEnum(w writer, t *cc.EnumType) {
 	for _, v := range enums {
 		nm := v.Token.SrcStr()
 		c.enumerators.add(nm)
-		w.w("\n\t%s%s = %v // %v: ", tag(enumConst), nm, v.Value(), c.pos(v))
+		panic(todo(""))
+		//TODO w.w("\n\t%s%s = %v // %v: ", tag(enumConst), nm, v.Value(), c.pos(v))
 	}
 	w.w("\n)\n")
 }

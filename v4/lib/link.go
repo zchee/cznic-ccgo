@@ -264,15 +264,19 @@ func (t *Task) getFileSymbols(fset *token.FileSet, fn string) (r *object, err er
 }
 
 type linker struct {
-	errors  errors
-	externs map[string]*object
-	fset    *token.FileSet
-	goTags  []string
-	imports []*object
-	out     io.Writer
-	task    *Task
-	tld     nameSpace
-	tsName  string
+	errors           errors
+	externs          map[string]*object
+	fset             *token.FileSet
+	goTags           []string
+	imports          []*object
+	out              io.Writer
+	stringLiterals   map[string]int64
+	task             *Task
+	textSegment      strings.Builder
+	textSegmentName  string
+	textSegmentNameP string
+	textSegmentOff   int64
+	tld              nameSpace
 
 	closed bool
 }
@@ -281,43 +285,48 @@ func newLinker(task *Task) (*linker, error) {
 	goTags := tags
 	for i := range tags {
 		switch name(i) {
-		case ccgo, noneStatic:
-			goTags[i] = task.prefixCcgo
 		case define:
 			goTags[i] = task.prefixDefine
-		case enumConst:
-			goTags[i] = task.prefixEnumerator
+		//TODO case enumConst:
+		//TODO 	goTags[i] = task.prefixEnumerator
 		case external:
 			goTags[i] = task.prefixExternal
 		case importQualifier:
 			goTags[i] = task.prefixImportQualifier
-		case internal:
-			goTags[i] = task.prefixInternal
+		//TODO case internal:
+		//TODO 	goTags[i] = task.prefixInternal
 		case macro:
 			goTags[i] = task.prefixMacro
-		case none:
-			goTags[i] = task.prefixNone
+		case automatic:
+			goTags[i] = task.prefixAutomatic
+		case staticInternal:
+			goTags[i] = task.prefixStaticInternal
+		case staticNone:
+			goTags[i] = task.prefixStaticNone
 		case preserve:
 			goTags[i] = ""
-		case taggedEum:
-			goTags[i] = task.prefixEnum
-		case taggedStruct:
-			goTags[i] = task.prefixStruct
-		case taggedUnion:
-			goTags[i] = task.prefixUnion
+		//TODO case taggedEum:
+		//TODO 	goTags[i] = task.prefixEnum
+		//TODO case taggedStruct:
+		//TODO 	goTags[i] = task.prefixStruct
+		//TODO case taggedUnion:
+		//TODO 	goTags[i] = task.prefixUnion
 		case typename:
 			goTags[i] = task.prefixTypename
-		case unpinned:
-			goTags[i] = task.prefixUnpinned
+		//TODO case unpinned:
+		//TODO 	goTags[i] = task.prefixUnpinned
+		//TODO case externalUnpinned:
+		//TODO 	goTags[i] = task.prefixExternalUnpinned
 		default:
 			return nil, errorf("internal error: %v", name(i))
 		}
 	}
 	return &linker{
-		externs: map[string]*object{},
-		fset:    token.NewFileSet(),
-		goTags:  goTags[:],
-		task:    task,
+		externs:        map[string]*object{},
+		fset:           token.NewFileSet(),
+		goTags:         goTags[:],
+		stringLiterals: map[string]int64{},
+		task:           task,
 	}, nil
 }
 
@@ -339,7 +348,7 @@ func (l *linker) w(s string, args ...interface{}) {
 	}
 }
 
-func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object) error {
+func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object) (err error) {
 	var tld nameSet
 	// Build the symbol table.
 	for _, linkFile := range linkFiles {
@@ -347,14 +356,14 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		for nm := range object.externs {
 			if _, ok := l.externs[nm]; !ok {
 				l.externs[nm] = object
-				trc("extern %s is defined in %s", nm, object.id)
 			}
 			tld.add(nm)
 			//TODO other symbol kinds
 		}
 	}
-	l.tld.registerSet(l, tld, true)
-	l.tsName = l.tld.reg.put("ts")
+	l.tld.registerNameSet(l, tld, true)
+	l.textSegmentNameP = l.tld.reg.put("ts")
+	l.textSegmentName = l.tld.reg.put("ts")
 
 	// Check for unresolved references.
 	for _, linkFile := range linkFiles {
@@ -389,13 +398,14 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 	}
 
 	defer func() {
-		if err := f.Close(); err != nil {
-			l.err(errorf("%s", err))
+		if e := f.Close(); e != nil {
+			l.err(errorf("%s", e))
 		}
 
-		if err := exec.Command("gofmt", "-w", ofn).Run(); err != nil {
-			l.err(errorf("%s: gofmt: %v", ofn, err))
+		if e := exec.Command("gofmt", "-w", "-r", "(x) -> x", ofn).Run(); e != nil {
+			l.err(errorf("%s: gofmt: %v", ofn, e))
 		}
+		err = l.errors.err()
 	}()
 
 	out := bufio.NewWriter(f)
@@ -412,17 +422,20 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		nm = "main"
 	}
 	l.prologue(nm)
+	l.w("\n\nimport (")
+	l.w("\n\t\"reflect\"")
+	l.w("\n\t\"unsafe\"")
 	if len(l.imports) != 0 {
-		l.w("\n\nimport (")
-		for _, v := range l.imports {
-			l.w("\n\t")
-			if v.pkgName != v.qualifier {
-				l.w("%s ", v.qualifier)
-			}
-			l.w("%q", v.id)
-		}
-		l.w("\n)\n\n")
+		l.w("\n")
 	}
+	for _, v := range l.imports {
+		l.w("\n\t")
+		if v.pkgName != v.qualifier {
+			l.w("%s ", v.qualifier)
+		}
+		l.w("%q", v.id)
+	}
+	l.w("\n)\n\n")
 
 	for _, linkFile := range linkFiles {
 		object := objects[linkFile]
@@ -441,7 +454,17 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 			}
 		}
 	}
+	l.epilogue()
 	return l.errors.err()
+}
+
+func (l *linker) epilogue() {
+	if l.textSegment.Len() == 0 {
+		return
+	}
+
+	l.w("\n\nvar %s = %q\n", l.textSegmentName, l.textSegment.String())
+	l.w("\nvar %s = (*reflect.StringHeader)(unsafe.Pointer(&%s)).Data\n", l.textSegmentNameP, l.textSegmentName)
 }
 
 func (l *linker) prologue(nm string) {
@@ -451,6 +474,7 @@ func (l *linker) prologue(nm string) {
 // +build %[2]s,%[3]s
 
 package %[7]s
+
 `,
 		generatedFilePrefix,
 		l.task.goos, l.task.goarch,
@@ -472,19 +496,32 @@ func (l *linker) decl(file *ast.File, object *object, n ast.Decl) error {
 	}
 }
 
-func (l *linker) funcDecl(file *ast.File, object *object, n *ast.FuncDecl) error {
+func (l *linker) funcDecl(file *ast.File, object *object, n *ast.FuncDecl) (err error) {
 	l.w("\n\n")
 	info := l.newFnInfo(object, n)
+	var static []ast.Stmt
 	w := 0
 	for _, stmt := range n.Body.List {
-		if stmt := l.stmtPrune(stmt, info); stmt != nil {
+		if stmt := l.stmtPrune(stmt, info, &static); stmt != nil {
 			n.Body.List[w] = stmt
 			w++
 		}
 	}
 	n.Body.List = n.Body.List[:w]
 	ast.Walk(&renamer{info}, n)
-	return printer.Fprint(l.out, l.fset, n)
+	if err = printer.Fprint(l.out, l.fset, n); err != nil {
+		return err
+	}
+
+	for _, v := range static {
+		ast.Walk(&renamer{info}, v)
+		l.w("\n\n")
+		if err = printer.Fprint(l.out, l.fset, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 var _ ast.Visitor = (*renamer)(nil)
@@ -510,65 +547,24 @@ func (r *renamer) Visit(n ast.Node) ast.Visitor {
 	return r
 }
 
-func (l *linker) stmtPrune(n ast.Stmt, info *fnInfo) ast.Stmt {
+func (l *linker) stmtPrune(n ast.Stmt, info *fnInfo, static *[]ast.Stmt) ast.Stmt {
 	switch x := n.(type) {
-	case *ast.AssignStmt:
-		for _, expr := range x.Lhs {
-			switch y := expr.(type) {
-			case *ast.Ident:
-				if c, ok := info.mentions[y.Name]; ok && c == 1 {
-					if len(x.Lhs) == 1 && l.goName(y.Name) == "__func__" {
-						panic(todo(""))
-						return nil
-					}
-
-					y.Name = "_"
-					continue
-				}
-			default:
-				l.err(errorf("TODO %T", y))
-			}
-		}
 	case *ast.DeclStmt:
 		gd := x.Decl.(*ast.GenDecl)
-		if gd.Tok != token.VAR {
+		if gd.Tok != token.VAR || len(gd.Specs) != 1 {
 			return n
 		}
 
-		w := 0
-		for _, spec := range gd.Specs {
-			vs := spec.(*ast.ValueSpec)
-			w2 := 0
-			for i, name := range vs.Names {
-				if c, ok := info.mentions[name.Name]; ok && c == 1 {
-					if len(vs.Names) == 1 {
-						break
-					}
-
-					name.Name = "_"
-				}
-				vs.Names[w2] = name
-				if vs.Values != nil {
-					vs.Values[w2] = vs.Values[i]
-				}
-				w2++
-			}
-			if w2 == 0 {
-				continue
-			}
-
-			vs.Names = vs.Names[:w2]
-			if vs.Values != nil {
-				vs.Values = vs.Values[:w2]
-			}
-			gd.Specs[w] = spec
-			w++
+		vs := gd.Specs[0].(*ast.ValueSpec)
+		if len(vs.Names) != 1 {
+			return n
 		}
-		if w == 0 {
+
+		switch nm := vs.Names[0].Name; symKind(nm) {
+		case staticInternal, staticNone:
+			*static = append(*static, n)
 			return nil
 		}
-
-		gd.Specs = gd.Specs[:w]
 	}
 	return n
 }
@@ -579,25 +575,20 @@ type fnInfo struct {
 	ns        nameSpace
 	linkNames nameSet
 	linker    *linker
-	mentions  map[string]int // key is link name
 	object    *object
 }
 
 func (l *linker) newFnInfo(object *object, n *ast.FuncDecl) (r *fnInfo) {
 	r = &fnInfo{linker: l, object: object}
 	ast.Walk(r, n)
-	var a []string
+	var linkNames []string
 	for k := range r.linkNames {
-		a = append(a, k)
+		linkNames = append(linkNames, k)
 	}
-	sort.Slice(a, func(i, j int) bool {
-		if symRank(a[i]) < symRank(a[j]) {
-			return true
-		}
-
-		return a[i] < a[j]
+	sort.Slice(linkNames, func(i, j int) bool {
+		return symKind(linkNames[i]) < symKind(linkNames[j]) || linkNames[i] < linkNames[j]
 	})
-	r.ns.registerSet(l, r.linkNames, false)
+	r.ns.registerNameSet(l, r.linkNames, false)
 	r.linkNames = nil
 	return r
 }
@@ -608,6 +599,8 @@ func (fi *fnInfo) name(linkName string) string {
 		if goName := fi.linker.tld.dict[linkName]; goName != "" {
 			return goName
 		}
+	case preserve:
+		return fi.linker.goName(linkName)
 	default:
 		if goName := fi.ns.dict[linkName]; goName != "" {
 			return goName
@@ -620,8 +613,36 @@ func (fi *fnInfo) Visit(n ast.Node) ast.Visitor {
 	switch x := n.(type) {
 	case *ast.Ident:
 		fi.linkNames.add(x.Name)
+	case *ast.BasicLit:
+		if x.Kind != token.STRING {
+			break
+		}
+
+		x.Value = fi.linker.stringLit(x.Value)
 	}
 	return fi
+}
+
+func (l *linker) stringLit(s string) string {
+	s, err := strconv.Unquote(s)
+	if err != nil {
+		l.err(errorf("internal error: %v", err))
+	}
+	off := l.textSegmentOff
+	switch x, ok := l.stringLiterals[s]; {
+	case ok:
+		off = x
+	default:
+		l.stringLiterals[s] = off
+		l.textSegment.WriteString(s)
+		l.textSegmentOff += int64(len(s))
+	}
+	switch {
+	case off == 0:
+		return fmt.Sprintf("%s", l.textSegmentNameP)
+	default:
+		return fmt.Sprintf("(%s%+d)", l.textSegmentNameP, off)
+	}
 }
 
 func (l *linker) genDecl(n *ast.GenDecl) error {

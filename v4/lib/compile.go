@@ -32,21 +32,26 @@ const (
 )
 
 const (
-	ccgo name = iota
-	define
-	enumConst
-	external
-	importQualifier
-	internal
-	macro
-	none
-	noneStatic
-	preserve
-	taggedEum
-	taggedStruct
-	taggedUnion
+	// Lower number has higher priority in name allocation.
+	external name = iota // storage class static, linkage external
+	//TODO externalUnpinned
+
 	typename
-	unpinned
+	//TODO taggedStruct
+	//TODO taggedUnion
+	//TODO taggedEum
+	//TODO enumConst
+	importQualifier
+
+	macro
+	define
+
+	staticInternal // storage class static, linkage internal
+	staticNone     // storage class static, linkage none
+	automatic      // storage class automatic, linkage none
+
+	//TODO unpinned
+	preserve
 )
 
 var (
@@ -58,39 +63,21 @@ var (
 	// The concatenation of a tag and a valid C identifier must not create a Go
 	// keyword neither it can be a prefix of a Go predefined identifier.
 	tags = [...]string{
-		ccgo:            "_",  // internal use
-		define:          "df", // #define
-		enumConst:       "ec", // enumerator constant
-		external:        "X",  // external linkage
+		define: "df", // #define
+		//TODO enumConst:       "ec", // enumerator constant
+		external:        "X", // external linkage
 		importQualifier: "iq",
-		internal:        "il", // internal linkage
-		macro:           "mv", // macro value
-		none:            "ln", // linkage none
-		noneStatic:      "ns", // linkage none + static
-		preserve:        "pp", // eg. TLS in iqlibc.ppTLS -> libc.TLS
-		taggedEum:       "te", // tagged enum
-		taggedStruct:    "ts", // tagged struct
-		taggedUnion:     "tu", // tagged union
-		typename:        "tn", // type name
-		unpinned:        "un", // unpinned
-	}
-
-	symRanks = [...]int{
-		ccgo:            13,
-		define:          9,
-		enumConst:       7,
-		external:        0,
-		importQualifier: 2,
-		internal:        1,
-		macro:           8,
-		none:            10,
-		noneStatic:      11,
-		preserve:        14,
-		taggedEum:       6,
-		taggedStruct:    4,
-		taggedUnion:     5,
-		typename:        3,
-		unpinned:        12,
+		//TODO internal:        "il", // internal linkage
+		macro:          "mv", // macro value
+		automatic:      "an", // storage class automatic, linkage none
+		staticInternal: "si", // storage class static, linkage internal
+		staticNone:     "sn", // storage class static, linkage none
+		preserve:       "pp", // eg. TLS in iqlibc.ppTLS -> libc.TLS
+		//TODO taggedEum:       "te", // tagged enum
+		//TODO taggedStruct:    "ts", // tagged struct
+		//TODO taggedUnion:     "tu", // tagged union
+		typename: "tn", // type name
+		//TODO unpinned:        "un", // unpinned
 	}
 )
 
@@ -269,21 +256,21 @@ package %s
 	)
 }
 
-func (c *ctx) linkageTag(d *cc.Declarator) string {
+func (c *ctx) declaratorTag(d *cc.Declarator) string {
 	switch d.Linkage() {
 	case cc.External:
 		return tag(external)
-	case cc.Internal:
-		return tag(internal)
+	//TODO case cc.Internal:
+	//TODO 	return tag(internal)
 	case cc.None:
 		switch {
 		case d.IsStatic():
-			return tag(noneStatic)
+			return tag(staticNone)
 		default:
-			return tag(none)
+			return tag(automatic)
 		}
 	default:
 		c.err(errorf("%v: internal error: %v", d.Position(), d.Linkage()))
-		return tag(none)
+		return ""
 	}
 }
