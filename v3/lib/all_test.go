@@ -2246,7 +2246,10 @@ func TestGCCExecute(t *testing.T) {
 	case "windows/arm64":
 		blacklist["941014-2.c"] = struct{}{} //TODO
 		blacklist["pr36339.c"] = struct{}{}  //TODO
+		blacklist["pr61375.c"] = struct{}{}  //TODO
+		blacklist["pr65170.c"] = struct{}{}  //TODO
 		blacklist["pr78622.c"] = struct{}{}  //TODO
+		blacklist["pr84169.c"] = struct{}{}  //TODO
 	case "windows/386":
 		blacklist["941014-2.c"] = struct{}{} //TODO
 		blacklist["960830-1.c"] = struct{}{} //TODO
@@ -2402,6 +2405,7 @@ func TestGCCExecuteIEEE(t *testing.T) {
 		blacklist["fp-cmp-1.c"] = struct{}{} //TODO
 		blacklist["fp-cmp-2.c"] = struct{}{} //TODO
 		blacklist["fp-cmp-3.c"] = struct{}{} //TODO
+		blacklist["fp-cmp-7.c"] = struct{}{} //TODO
 	case "windows/386":
 		blacklist["fp-cmp-1.c"] = struct{}{} //TODO
 		blacklist["fp-cmp-2.c"] = struct{}{} //TODO
