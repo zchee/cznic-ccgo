@@ -9,12 +9,15 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"modernc.org/cc/v4"
 )
 
 var (
@@ -344,6 +347,12 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 			if _, ok := n.dict[linkName]; !ok {
 				n.registerName(l, linkName)
 			}
+		case ccgoAutomatic:
+			if tld {
+				panic(todo("", linkName))
+			}
+
+			n.dict.put(linkName, l.tld.registerName(l, linkName))
 		case preserve:
 			// nop
 		default:
@@ -425,4 +434,61 @@ func symKind(s string) name {
 		}
 	}
 	return -1
+}
+
+func visit(n cc.Node, visitor func(cc cc.Node) bool) bool {
+	if n == nil {
+		return true
+	}
+
+	if x, ok := n.(cc.Token); ok {
+		return visitor(x)
+	}
+
+	if !visitor(n) {
+		return true
+	}
+
+	typ := reflect.TypeOf(n)
+	val := reflect.ValueOf(n)
+	var zero reflect.Value
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+		val = val.Elem()
+		if val == zero {
+			return true
+		}
+	}
+
+	if typ.Kind() != reflect.Struct {
+		return true
+	}
+
+	nf := typ.NumField()
+	for i := 0; i < nf; i++ {
+		f := typ.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+
+		if strings.HasPrefix(f.Name, "Token") {
+			if x, ok := val.Field(i).Interface().(cc.Token); ok {
+				if !visitor(x) {
+					return true
+				}
+			}
+			continue
+		}
+
+		if val == zero || val.IsZero() {
+			continue
+		}
+
+		if x, ok := val.Field(i).Interface().(cc.Node); ok {
+			if !visit(x, visitor) {
+				return true
+			}
+		}
+	}
+	return true
 }

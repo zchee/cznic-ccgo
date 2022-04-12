@@ -37,7 +37,7 @@ const (
 	//TODO externalUnpinned
 
 	typename
-	//TODO taggedStruct
+	taggedStruct
 	//TODO taggedUnion
 	//TODO taggedEum
 	//TODO enumConst
@@ -49,6 +49,7 @@ const (
 	staticInternal // storage class static, linkage internal
 	staticNone     // storage class static, linkage none
 	automatic      // storage class automatic, linkage none
+	ccgoAutomatic  // storage class automatic, linkage none
 
 	//TODO unpinned
 	preserve
@@ -63,7 +64,8 @@ var (
 	// The concatenation of a tag and a valid C identifier must not create a Go
 	// keyword neither it can be a prefix of a Go predefined identifier.
 	tags = [...]string{
-		define: "df", // #define
+		ccgoAutomatic: "cc", // eg. tls
+		define:        "df", // #define
 		//TODO enumConst:       "ec", // enumerator constant
 		external:        "X", // external linkage
 		importQualifier: "iq",
@@ -74,7 +76,7 @@ var (
 		staticNone:     "sn", // storage class static, linkage none
 		preserve:       "pp", // eg. TLS in iqlibc.ppTLS -> libc.TLS
 		//TODO taggedEum:       "te", // tagged enum
-		//TODO taggedStruct:    "ts", // tagged struct
+		taggedStruct: "ts", // tagged struct
 		//TODO taggedUnion:     "tu", // tagged union
 		typename: "tn", // type name
 		//TODO unpinned:        "un", // unpinned
@@ -106,7 +108,7 @@ type ctx struct {
 	cfg           *cc.Config
 	eh            errHandler
 	enumerators   nameSet
-	ft            *cc.FunctionType
+	f             *fctx
 	ifn           string
 	imports       map[string]string // import path: qualifier
 	out           io.Writer

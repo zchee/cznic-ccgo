@@ -30,7 +30,7 @@ edit:
 	@if [ -f "Session.vim" ]; then gvim -S & else gvim -p Makefile *.go & fi
 
 editor:
-	stringer -type mode,name
+	stringer -output stringer.go -type mode,name
 	gofmt -l -s -w *.go
 	go test -o /dev/null -c
 	go install -v modernc.org/ccgo/v4 2>&1 | tee log-editor

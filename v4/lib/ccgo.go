@@ -35,23 +35,24 @@ type Task struct {
 	linkFiles      []string
 	o              string // -o
 	packageName    string // --package-name
-	prefixDefine   string // --prefix-define <string>
 	//TODO prefixEnum            string // --prefix-enum <string>
 	//TODO prefixEnumerator      string // --prefix-enumerator <string>
-	prefixExternal        string // --prefix-external <string>
-	prefixImportQualifier string // --prefix-import-qualifier <string>
-	prefixStaticInternal  string // --prefix-static-internal <string>
-	prefixMacro           string // --prefix-macro <string>
-	prefixStaticNone      string // --prefix-static-none <string>
-	prefixAutomatic       string // --prefix-automatic <string>
-	//TODO prefixStruct          string // --prefix-struct <string>
-	prefixTypename string // --prefix-typename <string>
 	//TODO prefixUnion           string // --prefix-union <string>
 	//TODO prefixUnpinned        string // --prefix-unpinned <string>
-	std          string // -std
-	stderr       io.Writer
-	stdout       io.Writer
-	tlsQualifier string
+	prefixAutomatic       string // --prefix-automatic <string>
+	prefixCcgoAutomatic   string
+	prefixDefine          string // --prefix-define <string>
+	prefixExternal        string // --prefix-external <string>
+	prefixImportQualifier string // --prefix-import-qualifier <string>
+	prefixMacro           string // --prefix-macro <string>
+	prefixStaticInternal  string // --prefix-static-internal <string>
+	prefixStaticNone      string // --prefix-static-none <string>
+	prefixTaggedStruct    string // --prefix-tagged-struct <string>
+	prefixTypename        string // --prefix-typename <string>
+	std                   string // -std
+	stderr                io.Writer
+	stdout                io.Writer
+	tlsQualifier          string
 
 	E              bool // -E
 	c              bool // -c
@@ -65,13 +66,13 @@ type Task struct {
 // NewTask returns a newly created Task. args[0] is the command name.
 func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs.FS) (r *Task) {
 	return &Task{
-		args:           args,
-		compiledfFiles: map[string]string{},
-		fs:             fs,
-		goarch:         goarch,
-		goos:           goos,
-		//TODO prefixCcgo:            "_",
-		prefixDefine: "D",
+		args:                args,
+		compiledfFiles:      map[string]string{},
+		fs:                  fs,
+		goarch:              goarch,
+		goos:                goos,
+		prefixCcgoAutomatic: "",
+		prefixDefine:        "D",
 		//TODO prefixEnum:            "TE",
 		//TODO prefixEnumerator:      "C",
 		prefixExternal:        "X",
@@ -80,9 +81,9 @@ func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs
 		prefixMacro:          "D",
 		prefixAutomatic:      "",
 		prefixStaticInternal: "s",
-		prefixStaticNone:     "t",
-		//TODO prefixStruct:          "TS",
-		prefixTypename: "T",
+		prefixStaticNone:     "s",
+		prefixTaggedStruct:   "TS",
+		prefixTypename:       "T",
 		//TODO prefixUnion:           "TU",
 		//TODO prefixUnpinned:        "U",
 		stderr:       stderr,

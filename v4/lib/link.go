@@ -285,6 +285,8 @@ func newLinker(task *Task) (*linker, error) {
 	goTags := tags
 	for i := range tags {
 		switch name(i) {
+		case ccgoAutomatic:
+			goTags[i] = task.prefixCcgoAutomatic
 		case define:
 			goTags[i] = task.prefixDefine
 		//TODO case enumConst:
@@ -307,8 +309,8 @@ func newLinker(task *Task) (*linker, error) {
 			goTags[i] = ""
 		//TODO case taggedEum:
 		//TODO 	goTags[i] = task.prefixEnum
-		//TODO case taggedStruct:
-		//TODO 	goTags[i] = task.prefixStruct
+		case taggedStruct:
+			goTags[i] = task.prefixTaggedStruct
 		//TODO case taggedUnion:
 		//TODO 	goTags[i] = task.prefixUnion
 		case typename:

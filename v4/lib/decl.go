@@ -11,6 +11,48 @@ import (
 	"modernc.org/cc/v4"
 )
 
+type fctx struct {
+	maxValist int
+	t         *cc.FunctionType
+	tlsAllocs int
+}
+
+func newFctx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fctx) {
+	r = &fctx{t: t}
+	visit(n, r.visitor)
+	return r
+}
+
+func (c *fctx) visitor(n cc.Node) bool {
+	switch x := n.(type) {
+	case *cc.PostfixExpression:
+		switch x.Case {
+		case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
+			ft := x.PostfixExpression.Type().(*cc.PointerType).Elem().(*cc.FunctionType)
+			if ft.MaxArgs() >= 0 {
+				break
+			}
+
+			nargs := 0
+			for l := x.ArgumentExpressionList; l != nil; l = l.ArgumentExpressionList {
+				nargs++
+			}
+			if nargs < ft.MinArgs() {
+				break
+			}
+
+			if nargs > ft.MaxArgs() && ft.MaxArgs() >= 0 {
+				break
+			}
+
+			if v := nargs - ft.MinArgs(); v > c.maxValist {
+				c.maxValist = v
+			}
+		}
+	}
+	return true
+}
+
 func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
 	w.w("\n")
 	switch n.Case {
@@ -35,19 +77,22 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 		return
 	}
 
-	ft0 := c.ft
-	c.ft = ft
-	defer func() { c.ft = ft0 }()
+	f0 := c.f
+	c.f = newFctx(ft, n)
+	defer func() { c.f = f0 }()
 	isMain := d.Linkage() == cc.External && d.Name() == "main"
 	w.w("\nfunc %s%s%s ", c.declaratorTag(d), d.Name(), c.signature(ft, true, isMain))
-	c.compoundStatement(w, n.CompoundStatement)
+	c.compoundStatement(w, n.CompoundStatement, true)
 	if isMain && c.task.tlsQualifier != "" { //TODO move to linker
 		w.w("\n\nfunc main() { %s%sStart(%smain) }\n", c.task.tlsQualifier, tag(preserve), tag(external))
 	}
 }
 
-func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement) {
+func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool) {
 	w.w(" { // %v:", c.pos(n))
+	if fnBlock && c.f.tlsAllocs+c.f.maxValist != 0 {
+		w.w("\n%sbp := %[1]stls.Alloc(%d)", tag(ccgoAutomatic), c.f.tlsAllocs+8*(c.f.maxValist+1))
+	}
 	for l := n.BlockItemList; l != nil; l = l.BlockItemList {
 		c.blockItem(w, l.BlockItem)
 	}
@@ -71,7 +116,7 @@ func (c *ctx) blockItem(w writer, n *cc.BlockItem) {
 
 func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(automatic), c.task.tlsQualifier, tag(preserve))
+	fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgoAutomatic), c.task.tlsQualifier, tag(preserve))
 	for _, v := range f.Parameters() {
 		b.WriteString(", ")
 		if names {
@@ -85,9 +130,9 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	}
 	switch {
 	case isMain && len(f.Parameters()) == 0:
-		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(automatic))
+		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(ccgoAutomatic))
 	case isMain && len(f.Parameters()) == 1:
-		fmt.Fprintf(&b, ", %sargv uintptr", tag(automatic))
+		fmt.Fprintf(&b, ", %sargv uintptr", tag(ccgoAutomatic))
 	}
 	b.WriteByte(')')
 	if f.Result().Kind() != cc.Void {

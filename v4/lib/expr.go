@@ -106,9 +106,21 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 				}
 				xargs = append(xargs, c.expr(w, v, t, value))
 			}
-			b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(automatic))
-			for _, v := range xargs {
-				b.w(", %s", v)
+			b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(ccgoAutomatic))
+			switch {
+			case ft.MaxArgs() < 0:
+				for _, v := range xargs[:ft.MinArgs()] {
+					b.w(", %s", v)
+				}
+				b.w(", %s%sVaList(%sbp+%d", c.task.tlsQualifier, tag(preserve), tag(ccgoAutomatic), c.f.tlsAllocs+8)
+				for _, v := range xargs[ft.MinArgs():] {
+					b.w(", %s", v)
+				}
+				b.w(")")
+			default:
+				for _, v := range xargs {
+					b.w(", %s", v)
+				}
 			}
 			b.w(")")
 		case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
@@ -238,14 +250,7 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 		case cc.PrimaryExpressionIdent: // IDENTIFIER
 			switch x := n.ResolvedTo().(type) {
 			case *cc.Declarator:
-				switch x.Linkage() {
-				//TODO case cc.External:
-				//TODO 	b.w("%s%s", tag(external), x.Name())
-				//TODO case cc.Internal:
-				//TODO 	b.w("%s%s", tag(internal), x.Name())
-				default:
-					c.err(errorf("TODO %v", x.Linkage()))
-				}
+				b.w("%s%s", c.declaratorTag(x), x.Name())
 			case nil:
 				b.w("%s%s", tag(external), n.Token.Src())
 			default:

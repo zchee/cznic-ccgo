@@ -25,9 +25,8 @@ func (c *ctx) typ(t cc.Type) string {
 
 func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag bool) {
 	if tn := t.Typedef(); tn != nil && useTypename && tn.LexicalScope().Parent == nil {
-		panic(todo(""))
-		//TODO fmt.Fprintf(b, "%s%s", tag(typename), tn.Name())
-		//TODO return
+		fmt.Fprintf(b, "%s%s", tag(typename), tn.Name())
+		return
 	}
 
 	switch x := t.(type) {
@@ -84,8 +83,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 				case nm == "":
 					c.err(errorf("TODO"))
 				default:
-					panic(todo(""))
-					//TODO fmt.Fprintf(b, "%s%s", tag(none), nm)
+					fmt.Fprintf(b, "%s%s", tag(automatic), nm)
 				}
 				b.WriteByte(' ')
 				c.typ0(b, f.Type(), true, true)
@@ -99,8 +97,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			panic(todo(""))
 			//TODO fmt.Fprintf(b, "%s%s", tag(taggedUnion), nm)
 		default:
-			panic(todo(""))
-			//TODO fmt.Fprintf(b, "struct {\n%s", tag(none))
+			fmt.Fprintf(b, "struct {\n%s", tag(automatic))
 			switch t.Align() {
 			case 1:
 				// ok
@@ -111,8 +108,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			default:
 				b.WriteString("0 [0]uint64")
 			}
-			panic(todo(""))
-			//TODO fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(none), t.Size())
+			fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(automatic), t.Size())
 		}
 	case *cc.ArrayType:
 		fmt.Fprintf(b, "[%d]%s", x.Len(), c.typ(x.Elem()))
@@ -162,8 +158,7 @@ func (c *ctx) defineStruct(w writer, t *cc.StructType) {
 			return
 		}
 
-		panic(todo(""))
-		//TODO w.w("\ntype %s%s = %s // %v:\n", tag(taggedStruct), nm, c.structLiteral(t), c.pos(nmt))
+		w.w("\ntype %s%s = %s // %v:\n", tag(taggedStruct), nm, c.structLiteral(t), c.pos(nmt))
 	}
 }
 
