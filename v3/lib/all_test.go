@@ -1240,6 +1240,9 @@ func TestMirBenchmarks(t *testing.T) {
 	case "windows/amd64":
 		blacklist["except.c"] = struct{}{}     //TODO
 		blacklist["mandelbrot.c"] = struct{}{} //TODO
+	case "windows/arm64":
+		blacklist["except.c"] = struct{}{}     //TODO
+		blacklist["mandelbrot.c"] = struct{}{} //TODO
 	case "windows/386":
 		blacklist["mandelbrot.c"] = struct{}{} //TODO
 	}
@@ -1534,6 +1537,10 @@ func TestMirLacc(t *testing.T) {
 		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
 		blacklist["immediate-pointer.c"] = struct{}{}      //TODO
 		blacklist["unsigned-sign-extend.c"] = struct{}{}   //TODO
+	case "windows/arm64":
+		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
+		blacklist["immediate-pointer.c"] = struct{}{}      //TODO
+		blacklist["unsigned-sign-extend.c"] = struct{}{}   //TODO
 	case "windows/386":
 		blacklist["convert-unsigned-float.c"] = struct{}{} //TODO  Go1.18 https://github.com/golang/go/issues/48807 ?
 		blacklist["unsigned-sign-extend.c"] = struct{}{}   //TODO
@@ -1794,6 +1801,8 @@ func TestCompCert(t *testing.T) {
 		blacklist["mandelbrot.c"] = struct{}{} //TODO
 		blacklist["perlin.c"] = struct{}{}     //TODO
 	case "windows/amd64":
+		blacklist["mandelbrot.c"] = struct{}{} //TODO
+	case "windows/arm64":
 		blacklist["mandelbrot.c"] = struct{}{} //TODO
 	}
 	binary := map[string]bool{
@@ -2234,6 +2243,10 @@ func TestGCCExecute(t *testing.T) {
 		blacklist["941014-2.c"] = struct{}{} //TODO
 		blacklist["pr36339.c"] = struct{}{}  //TODO
 		blacklist["pr78622.c"] = struct{}{}  //TODO
+	case "windows/arm64":
+		blacklist["941014-2.c"] = struct{}{} //TODO
+		blacklist["pr36339.c"] = struct{}{}  //TODO
+		blacklist["pr78622.c"] = struct{}{}  //TODO
 	case "windows/386":
 		blacklist["941014-2.c"] = struct{}{} //TODO
 		blacklist["960830-1.c"] = struct{}{} //TODO
@@ -2382,6 +2395,10 @@ func TestGCCExecuteIEEE(t *testing.T) {
 	case "linux/s390x":
 		blacklist["compare-fp-3.c"] = struct{}{} //TODO
 	case "windows/amd64":
+		blacklist["fp-cmp-1.c"] = struct{}{} //TODO
+		blacklist["fp-cmp-2.c"] = struct{}{} //TODO
+		blacklist["fp-cmp-3.c"] = struct{}{} //TODO
+	case "windows/arm64":
 		blacklist["fp-cmp-1.c"] = struct{}{} //TODO
 		blacklist["fp-cmp-2.c"] = struct{}{} //TODO
 		blacklist["fp-cmp-3.c"] = struct{}{} //TODO
