@@ -226,39 +226,114 @@ func checkFailOk(t *testing.T, p *parallel, ccgoErr error, tmp, src, ofn string,
 	p.err(ccgoErr)
 }
 
+func inDir(dir string, f func() error) (err error) {
+	var cwd string
+	if cwd, err = os.Getwd(); err != nil {
+		return err
+	}
+
+	defer func() {
+		if err2 := os.Chdir(cwd); err2 != nil {
+			err = err2
+		}
+	}()
+
+	if err = os.Chdir(filepath.FromSlash(dir)); err != nil {
+		return err
+	}
+
+	return f()
+}
+
+func absCwd() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	if wd, err = filepath.Abs(wd); err != nil {
+		return "", err
+	}
+
+	return wd, nil
+}
+
+type echoWriter struct {
+	w bytes.Buffer
+}
+
+func (w *echoWriter) Write(b []byte) (int, error) {
+	os.Stdout.Write(b)
+	return w.w.Write(b)
+}
+
+func shell(cmd string, args ...string) ([]byte, error) {
+	cmd, err := exec.LookPath(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	wd, err := absCwd()
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("execute %s %q in %s\n", cmd, args, wd)
+	var b echoWriter
+	c := exec.Command(cmd, args...)
+	c.Stdout = &b
+	c.Stderr = &b
+	err = c.Run()
+	return b.w.Bytes(), err
+}
+
 func TestExec(t *testing.T) {
 	return //TODO-
 	tmp := t.TempDir()
-	blacklistCompCert := map[string]struct{}{}
-	// blacklistGCC := map[string]struct{}{
-	// 	// Assertions are deprecated, not supported.
-	// 	"950919-1.c": {},
-	// }
-	blacklistTCC := map[string]struct{}{
-		"76_dollars_in_identifiers.c": {},
-	}
-	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
-	case "linux/s390x":
-		blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
-	}
-	for _, v := range []struct {
-		dir       string
-		blacklist map[string]struct{}
-	}{
-		//TODO {"CompCert-3.6/test/c", blacklistCompCert},
-		//TODO {"ccgo", nil},
-		//TODO {"gcc-9.1.0/gcc/testsuite/gcc.c-torture", blacklistGCC},
-		//TODO {"github.com/AbsInt/CompCert/test/c", blacklistCompCert},
-		//TODO {"github.com/cxgo", nil},
-		//TODO {"github.com/gcc-mirror/gcc/gcc/testsuite", blacklistGCC},
-		//TODO {"github.com/vnmakarov", nil},
-		//TODO {"sqlite-amalgamation-3380100", nil},
-		{"tcc-0.9.27/tests/tests2", blacklistTCC},
-		//TODO {"benchmarksgame-team.pages.debian.net", nil},
-	} {
-		t.Run(v.dir, func(t *testing.T) {
-			testExec(t, tmp, "assets/"+v.dir, v.blacklist)
-		})
+	if err := inDir(tmp, func() error {
+		if out, err := shell("go", "mod", "init", "test"); err != nil {
+			return fmt.Errorf("%s\vFAIL: %v", out, err)
+		}
+
+		if out, err := shell("go", "get", "modernc.org/libc"); err != nil {
+			return fmt.Errorf("%s\vFAIL: %v", out, err)
+		}
+
+		blacklistCompCert := map[string]struct{}{}
+		// blacklistGCC := map[string]struct{}{
+		// 	// Assertions are deprecated, not supported.
+		// 	"950919-1.c": {},
+		// }
+		blacklistTCC := map[string]struct{}{
+			"76_dollars_in_identifiers.c": {},
+		}
+		switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
+		case "linux/s390x":
+			blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
+		}
+		for _, v := range []struct {
+			dir       string
+			blacklist map[string]struct{}
+		}{
+			//TODO {"CompCert-3.6/test/c", blacklistCompCert},
+			//TODO {"ccgo", nil},
+			//TODO {"gcc-9.1.0/gcc/testsuite/gcc.c-torture", blacklistGCC},
+			//TODO {"github.com/AbsInt/CompCert/test/c", blacklistCompCert},
+			//TODO {"github.com/cxgo", nil},
+			//TODO {"github.com/gcc-mirror/gcc/gcc/testsuite", blacklistGCC},
+			//TODO {"github.com/vnmakarov", nil},
+			//TODO {"sqlite-amalgamation-3380100", nil},
+			{"tcc-0.9.27/tests/tests2", blacklistTCC},
+			//TODO {"benchmarksgame-team.pages.debian.net", nil},
+		} {
+			t.Run(v.dir, func(t *testing.T) {
+				testExec(t, tmp, "assets/"+v.dir, v.blacklist)
+			})
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -317,6 +392,15 @@ func testExec(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 					checkFailOk(t, p, ccgoErr, tmp, apth, ofn, afi, task)
 					return
 				}
+
+				b, err := exec.Command("go", "run", ofn).CombinedOutput()
+				if err != nil {
+					p.err(errorf("%s: %s: FAIL: %v", filepath.Base(apth), b, err))
+					p.fail()
+					return
+				}
+
+				p.ok()
 			}()
 			return nil
 		})

@@ -289,14 +289,12 @@ func newLinker(task *Task) (*linker, error) {
 			goTags[i] = task.prefixCcgoAutomatic
 		case define:
 			goTags[i] = task.prefixDefine
-		//TODO case enumConst:
-		//TODO 	goTags[i] = task.prefixEnumerator
+		case enumConst:
+			goTags[i] = task.prefixEnumerator
 		case external:
 			goTags[i] = task.prefixExternal
 		case importQualifier:
 			goTags[i] = task.prefixImportQualifier
-		//TODO case internal:
-		//TODO 	goTags[i] = task.prefixInternal
 		case macro:
 			goTags[i] = task.prefixMacro
 		case automatic:
@@ -307,12 +305,12 @@ func newLinker(task *Task) (*linker, error) {
 			goTags[i] = task.prefixStaticNone
 		case preserve:
 			goTags[i] = ""
-		//TODO case taggedEum:
-		//TODO 	goTags[i] = task.prefixEnum
+		case taggedEum:
+			goTags[i] = task.prefixTaggedEnum
 		case taggedStruct:
 			goTags[i] = task.prefixTaggedStruct
-		//TODO case taggedUnion:
-		//TODO 	goTags[i] = task.prefixUnion
+		case taggedUnion:
+			goTags[i] = task.prefixTaggedUnion
 		case typename:
 			goTags[i] = task.prefixTypename
 		//TODO case unpinned:
@@ -437,7 +435,8 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		}
 		l.w("%q", v.id)
 	}
-	l.w("\n)\n\n")
+	l.w("\n)")
+	l.w("\n\nvar _ reflect.Type\nvar _ unsafe.Pointer")
 
 	for _, linkFile := range linkFiles {
 		object := objects[linkFile]

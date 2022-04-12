@@ -38,9 +38,9 @@ const (
 
 	typename
 	taggedStruct
-	//TODO taggedUnion
-	//TODO taggedEum
-	//TODO enumConst
+	taggedUnion
+	taggedEum
+	enumConst
 	importQualifier
 
 	macro
@@ -64,21 +64,20 @@ var (
 	// The concatenation of a tag and a valid C identifier must not create a Go
 	// keyword neither it can be a prefix of a Go predefined identifier.
 	tags = [...]string{
-		ccgoAutomatic: "cc", // eg. tls
-		define:        "df", // #define
-		//TODO enumConst:       "ec", // enumerator constant
-		external:        "X", // external linkage
+		ccgoAutomatic:   "cc", // eg. tls
+		define:          "df", // #define
+		enumConst:       "ec", // enumerator constant
+		external:        "X",  // external linkage
 		importQualifier: "iq",
-		//TODO internal:        "il", // internal linkage
-		macro:          "mv", // macro value
-		automatic:      "an", // storage class automatic, linkage none
-		staticInternal: "si", // storage class static, linkage internal
-		staticNone:     "sn", // storage class static, linkage none
-		preserve:       "pp", // eg. TLS in iqlibc.ppTLS -> libc.TLS
-		//TODO taggedEum:       "te", // tagged enum
-		taggedStruct: "ts", // tagged struct
-		//TODO taggedUnion:     "tu", // tagged union
-		typename: "tn", // type name
+		macro:           "mv", // macro value
+		automatic:       "an", // storage class automatic, linkage none
+		staticInternal:  "si", // storage class static, linkage internal
+		staticNone:      "sn", // storage class static, linkage none
+		preserve:        "pp", // eg. TLS in iqlibc.ppTLS -> libc.TLS
+		taggedEum:       "te", // tagged enum
+		taggedStruct:    "ts", // tagged struct
+		taggedUnion:     "tu", // tagged union
+		typename:        "tn", // type name
 		//TODO unpinned:        "un", // unpinned
 	}
 )

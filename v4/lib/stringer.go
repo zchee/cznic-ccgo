@@ -12,11 +12,12 @@ func _() {
 	_ = x[lvalue-1]
 	_ = x[value-2]
 	_ = x[call-3]
+	_ = x[dselect-4]
 }
 
-const _mode_name = "voidlvaluevaluecall"
+const _mode_name = "voidlvaluevaluecalldselect"
 
-var _mode_index = [...]uint8{0, 4, 10, 15, 19}
+var _mode_index = [...]uint8{0, 4, 10, 15, 19, 26}
 
 func (i mode) String() string {
 	if i < 0 || i >= mode(len(_mode_index)-1) {
@@ -31,19 +32,22 @@ func _() {
 	_ = x[external-0]
 	_ = x[typename-1]
 	_ = x[taggedStruct-2]
-	_ = x[importQualifier-3]
-	_ = x[macro-4]
-	_ = x[define-5]
-	_ = x[staticInternal-6]
-	_ = x[staticNone-7]
-	_ = x[automatic-8]
-	_ = x[ccgoAutomatic-9]
-	_ = x[preserve-10]
+	_ = x[taggedUnion-3]
+	_ = x[taggedEum-4]
+	_ = x[enumConst-5]
+	_ = x[importQualifier-6]
+	_ = x[macro-7]
+	_ = x[define-8]
+	_ = x[staticInternal-9]
+	_ = x[staticNone-10]
+	_ = x[automatic-11]
+	_ = x[ccgoAutomatic-12]
+	_ = x[preserve-13]
 }
 
-const _name_name = "externaltypenametaggedStructimportQualifiermacrodefinestaticInternalstaticNoneautomaticccgoAutomaticpreserve"
+const _name_name = "externaltypenametaggedStructtaggedUniontaggedEumenumConstimportQualifiermacrodefinestaticInternalstaticNoneautomaticccgoAutomaticpreserve"
 
-var _name_index = [...]uint8{0, 8, 16, 28, 43, 48, 54, 68, 78, 87, 100, 108}
+var _name_index = [...]uint8{0, 8, 16, 28, 39, 48, 57, 72, 77, 83, 97, 107, 116, 129, 137}
 
 func (i name) String() string {
 	if i < 0 || i >= name(len(_name_index)-1) {

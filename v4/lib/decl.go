@@ -28,7 +28,16 @@ func (c *fctx) visitor(n cc.Node) bool {
 	case *cc.PostfixExpression:
 		switch x.Case {
 		case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-			ft := x.PostfixExpression.Type().(*cc.PointerType).Elem().(*cc.FunctionType)
+			p, ok := x.PostfixExpression.Type().(*cc.PointerType)
+			if !ok {
+				break
+			}
+
+			ft, ok := p.Elem().(*cc.FunctionType)
+			if !ok {
+				break
+			}
+
 			if ft.MaxArgs() >= 0 {
 				break
 			}

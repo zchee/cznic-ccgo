@@ -9,16 +9,16 @@ import (
 	"strconv"
 
 	"modernc.org/cc/v4"
-	"modernc.org/mathutil"
 )
 
 type mode int
 
 const (
-	void   mode = iota
-	lvalue      // so it can stand on LHS of lhs = rhs
-	value       // so it can stand on RHS of lhs = rhs
-	call        // so it can stand in expr(...)
+	void    mode = iota
+	lvalue       // so it can stand on LHS of lvalue = rhs
+	value        // so it can stand on RHS of lhs = value
+	call         // so it can stand in call(...)
+	dselect      // dselect.field
 )
 
 func (c *ctx) convert(n cc.Node, b []byte, from, to cc.Type) (r []byte) {
@@ -34,7 +34,11 @@ func (c *ctx) expressionList(w writer, n *cc.ExpressionList, t cc.Type, mode mod
 	if t.Kind() == cc.Void {
 		mode = void
 	}
-	defer func() { r = c.convert(n, r, n.Type(), t) }()
+	defer func(n *cc.ExpressionList) {
+		if n != nil {
+			r = c.convert(n, r, n.Type(), t)
+		}
+	}(n)
 	for ; n != nil; n = n.ExpressionList {
 		switch {
 		case n.ExpressionList == nil:
@@ -74,57 +78,30 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 		case cc.PostfixExpressionIndex: // PostfixExpression '[' ExpressionList ']'
 			c.err(errorf("TODO %v", n.Case))
 		case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-			ft := n.PostfixExpression.Type().(*cc.PointerType).Elem().(*cc.FunctionType)
-			var args []cc.ExpressionNode
-			for l := n.ArgumentExpressionList; l != nil; l = l.ArgumentExpressionList {
-				args = append(args, l.AssignmentExpression)
-			}
-			if len(args) < ft.MinArgs() {
-				c.err(errorf("%v: too few arguments to function '%s'", c.pos(n.PostfixExpression), cc.NodeSource(n.PostfixExpression)))
-				break
-			}
-
-			if len(args) > ft.MaxArgs() && ft.MaxArgs() >= 0 {
-				c.err(errorf("%v: too many arguments to function '%s'", c.pos(n.PostfixExpression), cc.NodeSource(n.PostfixExpression)))
-				break
-			}
-
-			params := ft.Parameters()
-			var xargs [][]byte
-			for i, v := range args {
-				var t cc.Type
-				switch {
-				case i < len(params):
-					t = params[i].Type()
-				default:
-					switch t = v.Type(); {
-					case cc.IsIntegerType(t):
-						t = cc.IntegerPromotion(t)
-					case t.Kind() == cc.Float:
-						c.err(errorf("TODO"))
-					}
-				}
-				xargs = append(xargs, c.expr(w, v, t, value))
-			}
-			b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(ccgoAutomatic))
-			switch {
-			case ft.MaxArgs() < 0:
-				for _, v := range xargs[:ft.MinArgs()] {
-					b.w(", %s", v)
-				}
-				b.w(", %s%sVaList(%sbp+%d", c.task.tlsQualifier, tag(preserve), tag(ccgoAutomatic), c.f.tlsAllocs+8)
-				for _, v := range xargs[ft.MinArgs():] {
-					b.w(", %s", v)
-				}
-				b.w(")")
-			default:
-				for _, v := range xargs {
-					b.w(", %s", v)
-				}
-			}
-			b.w(")")
+			return c.postfixExpressionCall(w, n)
 		case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 			c.err(errorf("TODO %v", n.Case))
+		case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PostfixExpressionInc: // PostfixExpression "++"
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PostfixExpressionDec: // PostfixExpression "--"
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
+			c.err(errorf("TODO %v", n.Case))
+		default:
+			c.err(errorf("internal error %T %v", n, n.Case))
+		}
+	case value:
+		switch n.Case {
+		case cc.PostfixExpressionPrimary: // PrimaryExpression
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PostfixExpressionIndex: // PostfixExpression '[' ExpressionList ']'
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
+			return c.postfixExpressionCall(w, n)
+		case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
+			b.w("%s.FTODO", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), dselect))
 		case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
 			c.err(errorf("TODO %v", n.Case))
 		case cc.PostfixExpressionInc: // PostfixExpression "++"
@@ -139,6 +116,60 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 	default:
 		c.err(errorf("TODO %v", mode))
 	}
+	return b.bytes()
+}
+
+func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression) (r []byte) {
+	var b buf
+	ft := n.PostfixExpression.Type().(*cc.PointerType).Elem().(*cc.FunctionType)
+	var args []cc.ExpressionNode
+	for l := n.ArgumentExpressionList; l != nil; l = l.ArgumentExpressionList {
+		args = append(args, l.AssignmentExpression)
+	}
+	if len(args) < ft.MinArgs() {
+		c.err(errorf("%v: too few arguments to function '%s'", c.pos(n.PostfixExpression), cc.NodeSource(n.PostfixExpression)))
+		return nil
+	}
+
+	if len(args) > ft.MaxArgs() && ft.MaxArgs() >= 0 {
+		c.err(errorf("%v: too many arguments to function '%s'", c.pos(n.PostfixExpression), cc.NodeSource(n.PostfixExpression)))
+		return nil
+	}
+
+	params := ft.Parameters()
+	var xargs [][]byte
+	for i, v := range args {
+		var t cc.Type
+		switch {
+		case i < len(params):
+			t = params[i].Type()
+		default:
+			switch t = v.Type(); {
+			case cc.IsIntegerType(t):
+				t = cc.IntegerPromotion(t)
+			case t.Kind() == cc.Float:
+				c.err(errorf("TODO"))
+			}
+		}
+		xargs = append(xargs, c.expr(w, v, t, value))
+	}
+	b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(ccgoAutomatic))
+	switch {
+	case ft.MaxArgs() < 0:
+		for _, v := range xargs[:ft.MinArgs()] {
+			b.w(", %s", v)
+		}
+		b.w(", %s%sVaList(%sbp+%d", c.task.tlsQualifier, tag(preserve), tag(ccgoAutomatic), c.f.tlsAllocs+8)
+		for _, v := range xargs[ft.MinArgs():] {
+			b.w(", %s", v)
+		}
+		b.w(")")
+	default:
+		for _, v := range xargs {
+			b.w(", %s", v)
+		}
+	}
+	b.w(")")
 	return b.bytes()
 }
 
@@ -189,12 +220,12 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 			switch x := t.(type) {
 			case *cc.ArrayType:
 				v := n.Value().(cc.StringValue)
-				v = v[:mathutil.MaxInt64(x.Len(), int64(len(v)))]
+				max := x.Len()
 				for len(v) != 0 && v[len(v)-1] == 0 {
 					v = v[:len(v)-1]
 				}
 				b.w("%s{", c.typ(t))
-				for i := 0; i < len(v); i++ {
+				for i := 0; i < len(v) && int64(i) < max; i++ {
 					b.w("%s, ", c.charConst(v[i]))
 				}
 				b.w("}")
@@ -253,6 +284,36 @@ func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mo
 				b.w("%s%s", c.declaratorTag(x), x.Name())
 			case nil:
 				b.w("%s%s", tag(external), n.Token.Src())
+			default:
+				c.err(errorf("TODO %T", x))
+			}
+		case cc.PrimaryExpressionInt: // INTCONST
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionFloat: // FLOATCONST
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionChar: // CHARCONST
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionLChar: // LONGCHARCONST
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionString: // STRINGLITERAL
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionExpr: // '(' ExpressionList ')'
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
+			c.err(errorf("TODO %v", n.Case))
+		case cc.PrimaryExpressionGeneric: // GenericSelection
+			c.err(errorf("TODO %v", n.Case))
+		default:
+			c.err(errorf("internal error %T %v", n, n.Case))
+		}
+	case dselect:
+		switch n.Case {
+		case cc.PrimaryExpressionIdent: // IDENTIFIER
+			switch x := n.ResolvedTo().(type) {
+			case *cc.Declarator:
+				b.w("%s%s", c.declaratorTag(x), x.Name())
 			default:
 				c.err(errorf("TODO %T", x))
 			}

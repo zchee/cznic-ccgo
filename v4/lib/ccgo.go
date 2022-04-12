@@ -35,20 +35,20 @@ type Task struct {
 	linkFiles      []string
 	o              string // -o
 	packageName    string // --package-name
-	//TODO prefixEnum            string // --prefix-enum <string>
-	//TODO prefixEnumerator      string // --prefix-enumerator <string>
-	//TODO prefixUnion           string // --prefix-union <string>
 	//TODO prefixUnpinned        string // --prefix-unpinned <string>
 	prefixAutomatic       string // --prefix-automatic <string>
 	prefixCcgoAutomatic   string
 	prefixDefine          string // --prefix-define <string>
+	prefixEnumerator      string // --prefix-enumerator <string>
 	prefixExternal        string // --prefix-external <string>
 	prefixImportQualifier string // --prefix-import-qualifier <string>
 	prefixMacro           string // --prefix-macro <string>
 	prefixStaticInternal  string // --prefix-static-internal <string>
 	prefixStaticNone      string // --prefix-static-none <string>
+	prefixTaggedEnum      string // --prefix-tagfed-enum <string>
 	prefixTaggedStruct    string // --prefix-tagged-struct <string>
 	prefixTypename        string // --prefix-typename <string>
+	prefixTaggedUnion     string // --prefix-taged-union <string>
 	std                   string // -std
 	stderr                io.Writer
 	stdout                io.Writer
@@ -66,29 +66,28 @@ type Task struct {
 // NewTask returns a newly created Task. args[0] is the command name.
 func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs.FS) (r *Task) {
 	return &Task{
-		args:                args,
-		compiledfFiles:      map[string]string{},
-		fs:                  fs,
-		goarch:              goarch,
-		goos:                goos,
-		prefixCcgoAutomatic: "",
-		prefixDefine:        "D",
-		//TODO prefixEnum:            "TE",
-		//TODO prefixEnumerator:      "C",
+		args:           args,
+		compiledfFiles: map[string]string{},
+		fs:             fs,
+		goarch:         goarch,
+		goos:           goos,
+		//TODO prefixUnpinned:        "U",
+		prefixAutomatic:       "",
+		prefixCcgoAutomatic:   "",
+		prefixDefine:          "D",
+		prefixEnumerator:      "C",
 		prefixExternal:        "X",
 		prefixImportQualifier: "",
-		//TODO prefixInternal:        "s",
-		prefixMacro:          "D",
-		prefixAutomatic:      "",
-		prefixStaticInternal: "s",
-		prefixStaticNone:     "s",
-		prefixTaggedStruct:   "TS",
-		prefixTypename:       "T",
-		//TODO prefixUnion:           "TU",
-		//TODO prefixUnpinned:        "U",
-		stderr:       stderr,
-		stdout:       stdout,
-		tlsQualifier: "libc.",
+		prefixMacro:           "D",
+		prefixStaticInternal:  "s",
+		prefixStaticNone:      "s",
+		prefixTaggedEnum:      "TE",
+		prefixTaggedStruct:    "TS",
+		prefixTypename:        "T",
+		prefixTaggedUnion:     "TU",
+		stderr:                stderr,
+		stdout:                stdout,
+		tlsQualifier:          "libc.",
 	}
 }
 
@@ -103,18 +102,17 @@ func (t *Task) Main() (err error) {
 
 	set := opt.NewSet()
 	set.Arg("-package-name", false, func(opt, val string) error { t.packageName = val; t.packageNameSet = true; return nil })
+	set.Arg("-prefix-automatic", false, func(opt, val string) error { t.prefixAutomatic = val; return nil })
 	set.Arg("-prefix-define", false, func(opt, val string) error { t.prefixDefine = val; return nil })
-	//TODO set.Arg("-prefix-enum", false, func(opt, val string) error { t.prefixEnum = val; return nil })
-	//TODO set.Arg("-prefix-enumerator", false, func(opt, val string) error { t.prefixEnumerator = val; return nil })
+	set.Arg("-prefix-enumerator", false, func(opt, val string) error { t.prefixEnumerator = val; return nil })
 	set.Arg("-prefix-external", false, func(opt, val string) error { t.prefixExternal = val; return nil })
 	set.Arg("-prefix-import-qualifier", false, func(opt, val string) error { t.prefixImportQualifier = val; return nil })
-	//TODO set.Arg("-prefix-internal", false, func(opt, val string) error { t.prefixInternal = val; return nil })
 	set.Arg("-prefix-macro", false, func(opt, val string) error { t.prefixMacro = val; return nil })
 	set.Arg("-prefix-static-none", false, func(opt, val string) error { t.prefixStaticNone = val; return nil })
-	set.Arg("-prefix-automatic", false, func(opt, val string) error { t.prefixAutomatic = val; return nil })
-	//TODO set.Arg("-prefix-struct", false, func(opt, val string) error { t.prefixStruct = val; return nil })
+	set.Arg("-prefix-tagged-enum", false, func(opt, val string) error { t.prefixTaggedEnum = val; return nil })
+	set.Arg("-prefix-tagged-struct", false, func(opt, val string) error { t.prefixTaggedStruct = val; return nil })
+	set.Arg("-prefix-tagged-union", false, func(opt, val string) error { t.prefixTaggedUnion = val; return nil })
 	set.Arg("-prefix-typename", false, func(opt, val string) error { t.prefixTypename = val; return nil })
-	//TODO set.Arg("-prefix-union", false, func(opt, val string) error { t.prefixUnion = val; return nil })
 	//TODO set.Arg("-prefix-unpinned", false, func(opt, val string) error { t.prefixUnpinned = val; return nil })
 	set.Arg("D", true, func(opt, val string) error { t.D = append(t.D, fmt.Sprintf("%s%s", opt, val)); return nil })
 	set.Arg("I", true, func(opt, val string) error { t.I = append(t.I, val); return nil })

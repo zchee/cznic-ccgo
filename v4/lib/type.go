@@ -59,8 +59,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil:
-			panic(todo(""))
-			//TODO fmt.Fprintf(b, "%s%s", tag(taggedEum), nm)
+			fmt.Fprintf(b, "%s%s", tag(taggedEum), nm)
 		default:
 			c.typ0(b, x.UnderlyingType(), false, false)
 		}
@@ -68,8 +67,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil && useStructUnionTag:
-			panic(todo(""))
-			//TODO fmt.Fprintf(b, "%s%s", tag(taggedStruct), nm)
+			fmt.Fprintf(b, "%s%s", tag(taggedStruct), nm)
 		default:
 			b.WriteString("struct {")
 			for i := 0; ; i++ {
@@ -94,8 +92,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		nmTag := x.Tag()
 		switch nm := nmTag.SrcStr(); {
 		case nm != "" && x.LexicalScope().Parent == nil && useStructUnionTag:
-			panic(todo(""))
-			//TODO fmt.Fprintf(b, "%s%s", tag(taggedUnion), nm)
+			fmt.Fprintf(b, "%s%s", tag(taggedUnion), nm)
 		default:
 			fmt.Fprintf(b, "struct {\n%s", tag(automatic))
 			switch t.Align() {
@@ -142,8 +139,7 @@ func (c *ctx) defineUnion(w writer, t *cc.UnionType) {
 			return
 		}
 
-		panic(todo(""))
-		//TODO w.w("\ntype %s%s = %s // %v:\n", tag(taggedUnion), nm, c.unionLiteral(t), c.pos(nmt))
+		w.w("\ntype %s%s = %s // %v:\n", tag(taggedUnion), nm, c.unionLiteral(t), c.pos(nmt))
 	}
 }
 
@@ -173,8 +169,7 @@ func (c *ctx) defineEnum(w writer, t *cc.EnumType) {
 			return
 		}
 
-		panic(todo(""))
-		//TODO w.w("\ntype %s%s = %s // %v:", tag(taggedEum), nm, c.typ(t.UnderlyingType()), c.pos(nmt))
+		w.w("\ntype %s%s = %s // %v:", tag(taggedEum), nm, c.typ(t.UnderlyingType()), c.pos(nmt))
 	}
 	enums := t.Enumerators()
 	if len(enums) == 0 {
@@ -189,8 +184,7 @@ func (c *ctx) defineEnum(w writer, t *cc.EnumType) {
 	for _, v := range enums {
 		nm := v.Token.SrcStr()
 		c.enumerators.add(nm)
-		panic(todo(""))
-		//TODO w.w("\n\t%s%s = %v // %v: ", tag(enumConst), nm, v.Value(), c.pos(v))
+		w.w("\n\t%s%s = %v // %v: ", tag(enumConst), nm, v.Value(), c.pos(v))
 	}
 	w.w("\n)\n")
 }
