@@ -318,15 +318,6 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 	})
 	for _, linkName := range linkNames {
 		switch k := symKind(linkName); k {
-		//TODO case ccgo, none, noneStatic, preserve:
-		//TODO 	switch {
-		//TODO 	case tld:
-		//TODO 		panic(todo("%q", linkName))
-		//TODO 	default:
-		//TODO 		if _, ok := n.dict[linkName]; !ok {
-		//TODO 			n.registerName(l, linkName)
-		//TODO 		}
-		//TODO 	}
 		case external:
 			if !tld {
 				break
@@ -339,7 +330,7 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 			}
 
 			n.dict.put(linkName, l.tld.registerName(l, linkName))
-		case automatic:
+		case automatic, ccgoAutomatic:
 			if tld {
 				panic(todo("", linkName))
 			}
@@ -347,14 +338,18 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 			if _, ok := n.dict[linkName]; !ok {
 				n.registerName(l, linkName)
 			}
-		case ccgoAutomatic:
+		case preserve:
+			// nop
+		case field:
+			if _, ok := l.fields.dict[linkName]; !ok {
+				l.fields.registerName(l, linkName)
+			}
+		case typename, taggedEum, taggedStruct, taggedUnion:
 			if tld {
 				panic(todo("", linkName))
 			}
 
-			n.dict.put(linkName, l.tld.registerName(l, linkName))
-		case preserve:
-			// nop
+			l.registerType(linkName)
 		default:
 			if k >= 0 {
 				panic(todo("%q %v", linkName, symKind(linkName)))
@@ -491,4 +486,18 @@ func visit(n cc.Node, visitor func(cc cc.Node) bool) bool {
 		}
 	}
 	return true
+}
+
+func binary(s string) string {
+	switch runtime.GOOS {
+	case "windows":
+		if !strings.HasSuffix(s, ".exe") {
+			return s + ".exe"
+		}
+	default:
+		if strings.HasSuffix(s, ".exe") {
+			return s[:len(s)-len(".exe")]
+		}
+	}
+	return s
 }

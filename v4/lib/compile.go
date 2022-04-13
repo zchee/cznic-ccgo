@@ -50,6 +50,7 @@ const (
 	staticNone     // storage class static, linkage none
 	automatic      // storage class automatic, linkage none
 	ccgoAutomatic  // storage class automatic, linkage none
+	field          // field name
 
 	//TODO unpinned
 	preserve
@@ -68,6 +69,7 @@ var (
 		define:          "df", // #define
 		enumConst:       "ec", // enumerator constant
 		external:        "X",  // external linkage
+		field:           "fd", // struct field
 		importQualifier: "iq",
 		macro:           "mv", // macro value
 		automatic:       "an", // storage class automatic, linkage none
@@ -95,6 +97,7 @@ type writer interface {
 type buf bytes.Buffer
 
 func (b *buf) bytes() []byte                   { return (*bytes.Buffer)(b).Bytes() }
+func (b *buf) len() int                        { return (*bytes.Buffer)(b).Len() }
 func (b *buf) w(s string, args ...interface{}) { fmt.Fprintf((*bytes.Buffer)(b), s, args...) }
 
 func tag(nm name) string { return tags[nm] }
@@ -157,6 +160,10 @@ func (c *ctx) compile(ifn, ofn string) error {
 
 		if err := exec.Command("gofmt", "-w", "-r", "(x) -> x", ofn).Run(); err != nil {
 			c.err(errorf("%s: gofmt: %v", ifn, err))
+		}
+		if *oTraceL {
+			b, _ := os.ReadFile(ofn)
+			fmt.Fprintf(os.Stderr, "%s\n", b)
 		}
 	}()
 

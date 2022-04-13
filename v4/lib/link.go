@@ -34,6 +34,7 @@ type object struct {
 	id        string // file name or import path
 	pkgName   string // for kind == objectPkg
 	qualifier string
+	types     map[string]string // linkName: typeID
 
 	kind int // {objectFile, objectPkg}
 }
@@ -51,7 +52,45 @@ func (o *object) load(fset *token.FileSet) (file *ast.File, err error) {
 	}
 
 	o.fset = fset
-	return parser.ParseFile(fset, o.id, nil, parser.DeclarationErrors|parser.ParseComments)
+	if file, err = parser.ParseFile(fset, o.id, nil, parser.DeclarationErrors|parser.ParseComments); err != nil {
+		return nil, err
+	}
+
+	return file, nil
+}
+
+func (o *object) collectTypes(file *ast.File) (err error) {
+	var a []string
+	in := map[string]ast.Expr{}
+	for _, decl := range file.Decls {
+		switch x := decl.(type) {
+		case *ast.GenDecl:
+			if x.Tok != token.TYPE {
+				break
+			}
+
+			for _, spec := range x.Specs {
+				ts := spec.(*ast.TypeSpec)
+				if _, ok := in[ts.Name.Name]; ok {
+					return errorf("%v: type %s redeclared", o.id, ts.Name.Name)
+				}
+
+				in[ts.Name.Name] = ts.Type
+				a = append(a, ts.Name.Name)
+			}
+		}
+	}
+	sort.Strings(a)
+	types := map[string]string{}
+	for _, linkName := range a {
+		if _, ok := types[linkName]; !ok {
+			if types[linkName], err = typeID(o.fset, in, types, in[linkName]); err != nil {
+				return err
+			}
+		}
+	}
+	o.types = types
+	return nil
 }
 
 func (t *Task) link() (err error) {
@@ -266,6 +305,7 @@ func (t *Task) getFileSymbols(fset *token.FileSet, fn string) (r *object, err er
 type linker struct {
 	errors           errors
 	externs          map[string]*object
+	fields           nameSpace
 	fset             *token.FileSet
 	goTags           []string
 	imports          []*object
@@ -277,6 +317,7 @@ type linker struct {
 	textSegmentNameP string
 	textSegmentOff   int64
 	tld              nameSpace
+	types            nameSpace
 
 	closed bool
 }
@@ -293,6 +334,8 @@ func newLinker(task *Task) (*linker, error) {
 			goTags[i] = task.prefixEnumerator
 		case external:
 			goTags[i] = task.prefixExternal
+		case field:
+			goTags[i] = task.prefixField
 		case importQualifier:
 			goTags[i] = task.prefixImportQualifier
 		case macro:
@@ -405,6 +448,10 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		if e := exec.Command("gofmt", "-w", "-r", "(x) -> x", ofn).Run(); e != nil {
 			l.err(errorf("%s: gofmt: %v", ofn, e))
 		}
+		if *oTraceG {
+			b, _ := os.ReadFile(ofn)
+			fmt.Fprintf(os.Stderr, "%s\n", b)
+		}
 		err = l.errors.err()
 	}()
 
@@ -449,6 +496,10 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 			return errorf("loading %s: %v", object.id, err)
 		}
 
+		if err := object.collectTypes(file); err != nil {
+			return errorf("loading %s: %v", object.id, err)
+		}
+
 		for _, decl := range file.Decls {
 			if err := l.decl(file, object, decl); err != nil {
 				return err
@@ -489,7 +540,7 @@ package %[7]s
 func (l *linker) decl(file *ast.File, object *object, n ast.Decl) error {
 	switch x := n.(type) {
 	case *ast.GenDecl:
-		return l.genDecl(x)
+		return l.genDecl(file, x)
 	case *ast.FuncDecl:
 		return l.funcDecl(file, object, x)
 	default:
@@ -596,17 +647,19 @@ func (l *linker) newFnInfo(object *object, n *ast.FuncDecl) (r *fnInfo) {
 
 func (fi *fnInfo) name(linkName string) string {
 	switch symKind(linkName) {
-	case external:
+	case external, staticNone:
 		if goName := fi.linker.tld.dict[linkName]; goName != "" {
 			return goName
 		}
 	case preserve:
 		return fi.linker.goName(linkName)
-	default:
-		if goName := fi.ns.dict[linkName]; goName != "" {
-			return goName
-		}
+	case automatic, ccgoAutomatic:
+		return fi.ns.dict[linkName]
+	case -1:
+		return linkName
 	}
+
+	fi.linker.err(errorf("TODO %q %v", linkName, symKind(linkName)))
 	return linkName
 }
 
@@ -646,7 +699,7 @@ func (l *linker) stringLit(s string) string {
 	}
 }
 
-func (l *linker) genDecl(n *ast.GenDecl) error {
+func (l *linker) genDecl(file *ast.File, n *ast.GenDecl) error {
 	switch n.Tok {
 	case token.VAR:
 		for _, spec := range n.Specs {
@@ -660,4 +713,8 @@ func (l *linker) genDecl(n *ast.GenDecl) error {
 
 func (l *linker) varSpec(n *ast.ValueSpec) error {
 	return errorf("TODO %v:", l.fset.Position(n.Pos()))
+}
+
+func (l *linker) registerType(linkName string) {
+	panic(todo(""))
 }

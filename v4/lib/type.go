@@ -6,6 +6,9 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"fmt"
+	"go/ast"
+	"go/printer"
+	"go/token"
 	"strings"
 
 	"modernc.org/cc/v4"
@@ -52,7 +55,6 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			b.WriteString("struct{}")
 		default:
 			b.WriteString("int")
-			// fmt.Fprintf(b, "/* %v %v */", x, x.Kind()) //TODO-
 			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
 		}
 	case *cc.EnumType:
@@ -81,7 +83,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 				case nm == "":
 					c.err(errorf("TODO"))
 				default:
-					fmt.Fprintf(b, "%s%s", tag(automatic), nm)
+					fmt.Fprintf(b, "%s%s", tag(field), nm)
 				}
 				b.WriteByte(' ')
 				c.typ0(b, f.Type(), true, true)
@@ -94,24 +96,24 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		case nm != "" && x.LexicalScope().Parent == nil && useStructUnionTag:
 			fmt.Fprintf(b, "%s%s", tag(taggedUnion), nm)
 		default:
-			fmt.Fprintf(b, "struct {\n%s", tag(automatic))
+			fmt.Fprintf(b, "struct {")
 			switch t.Align() {
 			case 1:
 				// ok
 			case 2:
-				b.WriteString("0 [0]uint16")
+				fmt.Fprintf(b, "\n%s0 [0]uint16", tag(field))
 			case 3, 4:
-				b.WriteString("0 [0]uint32")
+				fmt.Fprintf(b, "\n%s0 [0]uint32", tag(field))
 			default:
-				b.WriteString("0 [0]uint64")
+				fmt.Fprintf(b, "\n%s0 [0]uint64", tag(field))
 			}
-			fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(automatic), t.Size())
+			fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(field), t.Size())
 		}
 	case *cc.ArrayType:
-		fmt.Fprintf(b, "[%d]%s", x.Len(), c.typ(x.Elem()))
+		fmt.Fprintf(b, "[%d]", x.Len())
+		c.typ0(b, x.Elem(), true, true)
 	default:
 		b.WriteString("int")
-		trc("", t)
 		c.err(errorf("TODO %T", x))
 	}
 }
@@ -188,6 +190,7 @@ func (c *ctx) defineEnum(w writer, t *cc.EnumType) {
 	}
 	w.w("\n)\n")
 }
+
 func (c *ctx) defineEnumStructUnion(w writer, t cc.Type) {
 	switch x := t.(type) {
 	case *cc.EnumType:
@@ -197,4 +200,71 @@ func (c *ctx) defineEnumStructUnion(w writer, t cc.Type) {
 	case *cc.UnionType:
 		c.defineUnion(w, x)
 	}
+}
+
+func typeID(fset *token.FileSet, in map[string]ast.Expr, out map[string]string, typ ast.Expr) (r string, err error) {
+	var b strings.Builder
+	if err = typeID0(&b, fset, in, out, typ, map[string]struct{}{}); err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
+}
+
+func typeID0(b *strings.Builder, fset *token.FileSet, in map[string]ast.Expr, out map[string]string, typ ast.Expr, m map[string]struct{}) (err error) {
+	switch x := typ.(type) {
+	case *ast.Ident:
+		switch symKind(x.Name) {
+		case -1:
+			b.WriteString(x.Name)
+		case typename:
+			if id, ok := out[x.Name]; ok {
+				b.WriteString(id)
+				break
+			}
+
+			t2, ok := in[x.Name]
+			if !ok {
+				return errorf("undefined type %s", x.Name)
+			}
+
+			if _, ok := m[x.Name]; ok {
+				return errorf("invalid recursive type %s", x.Name)
+			}
+
+			m[x.Name] = struct{}{}
+			id, err := typeID(fset, in, out, t2)
+			if err != nil {
+				return err
+			}
+
+			out[x.Name] = id
+			b.WriteString(id)
+		default:
+			panic(todo("", x.Name, symKind(x.Name)))
+		}
+	case *ast.StructType:
+		b.WriteString("struct{")
+		for _, f := range x.Fields.List {
+			ft, err := typeID(fset, in, out, f.Type)
+			if err != nil {
+				return err
+			}
+
+			for _, nm := range f.Names {
+				fmt.Fprintf(b, "%s %s;", nm, ft)
+			}
+		}
+		b.WriteByte('}')
+	case *ast.ArrayType:
+		fmt.Fprintf(b, "[")
+		printer.Fprint(b, fset, x.Len)
+		b.WriteByte(']')
+		if err = typeID0(b, fset, in, out, x.Elt, m); err != nil {
+			return err
+		}
+	default:
+		panic(todo("%T", x))
+	}
+	return nil
 }

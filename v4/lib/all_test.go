@@ -6,8 +6,11 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"bytes"
+	"context"
+	"encoding/hex"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"os/exec"
@@ -16,17 +19,22 @@ import (
 	"runtime"
 	"runtime/debug"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/pmezard/go-difflib/difflib"
+	"modernc.org/cc/v4"
 	"modernc.org/ccorpus2"
 )
 
 var (
+	oTrace = flag.Bool("trc", false, "Print tested paths.")
+
 	cfs    = ccorpus2.FS
 	goarch = runtime.GOARCH
 	goos   = runtime.GOOS
-	oTrace = flag.Bool("trc", false, "Print tested paths.")
 	re     *regexp.Regexp
+	hostCC string
 )
 
 func TestMain(m *testing.M) {
@@ -36,6 +44,12 @@ func TestMain(m *testing.M) {
 	if *oRE != "" {
 		re = regexp.MustCompile(*oRE)
 	}
+	cfg, err := cc.NewConfig(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		panic(err)
+	}
+
+	hostCC = cfg.CC
 	os.Exit(m.Run())
 }
 
@@ -259,15 +273,18 @@ func absCwd() (string, error) {
 }
 
 type echoWriter struct {
-	w bytes.Buffer
+	w      bytes.Buffer
+	silent bool
 }
 
 func (w *echoWriter) Write(b []byte) (int, error) {
-	os.Stdout.Write(b)
+	if !w.silent {
+		os.Stderr.Write(b)
+	}
 	return w.w.Write(b)
 }
 
-func shell(cmd string, args ...string) ([]byte, error) {
+func shell(echo bool, cmd string, args ...string) ([]byte, error) {
 	cmd, err := exec.LookPath(cmd)
 	if err != nil {
 		return nil, err
@@ -280,7 +297,10 @@ func shell(cmd string, args ...string) ([]byte, error) {
 
 	fmt.Printf("execute %s %q in %s\n", cmd, args, wd)
 	var b echoWriter
-	c := exec.Command(cmd, args...)
+	b.silent = !echo
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	c := exec.CommandContext(ctx, cmd, args...)
 	c.Stdout = &b
 	c.Stderr = &b
 	err = c.Run()
@@ -291,11 +311,11 @@ func TestExec(t *testing.T) {
 	return //TODO-
 	tmp := t.TempDir()
 	if err := inDir(tmp, func() error {
-		if out, err := shell("go", "mod", "init", "test"); err != nil {
+		if out, err := shell(true, "go", "mod", "init", "test"); err != nil {
 			return fmt.Errorf("%s\vFAIL: %v", out, err)
 		}
 
-		if out, err := shell("go", "get", "modernc.org/libc"); err != nil {
+		if out, err := shell(true, "go", "get", "modernc.org/libc"); err != nil {
 			return fmt.Errorf("%s\vFAIL: %v", out, err)
 		}
 
@@ -327,7 +347,7 @@ func TestExec(t *testing.T) {
 			//TODO {"benchmarksgame-team.pages.debian.net", nil},
 		} {
 			t.Run(v.dir, func(t *testing.T) {
-				testExec(t, tmp, "assets/"+v.dir, v.blacklist)
+				testExec(t, "assets/"+v.dir, v.blacklist)
 			})
 		}
 
@@ -337,7 +357,7 @@ func TestExec(t *testing.T) {
 	}
 }
 
-func testExec(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
+func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 	p := newParallel()
 
 	defer func() { p.close(t) }()
@@ -366,7 +386,6 @@ func testExec(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 		}
 
 		apth := pth
-		afi := fi
 		p.exec(func() error {
 			if *oTrace {
 				fmt.Fprintln(os.Stderr, apth)
@@ -381,29 +400,94 @@ func testExec(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 					}
 				}()
 
-				ofn := filepath.Join(tmp, fmt.Sprintf("%d.go", p.id()))
-
-				defer os.Remove(ofn)
-
-				var out bytes.Buffer
-				task := NewTask(goos, goarch, []string{"ccgo", "-o", ofn, apth}, &out, &out, cfs)
-				ccgoErr := task.Main()
-				if ccgoErr != nil {
-					checkFailOk(t, p, ccgoErr, tmp, apth, ofn, afi, task)
-					return
-				}
-
-				b, err := exec.Command("go", "run", ofn).CombinedOutput()
+				id := p.id()
+				b, err := getCorpusFile(apth)
 				if err != nil {
-					p.err(errorf("%s: %s: FAIL: %v", filepath.Base(apth), b, err))
+					p.err(errorf("", err))
 					p.fail()
 					return
 				}
 
-				p.ok()
+				cfn := fmt.Sprintf("%d.c", id)
+				if err := os.WriteFile(cfn, b, 0660); err != nil {
+					p.err(errorf("", err))
+					p.fail()
+					return
+				}
+
+				ofn := fmt.Sprintf("%d", id)
+				if _, err := shell(false, hostCC, "-o", binary(ofn), cfn); err != nil {
+					p.skip()
+					return
+				}
+
+				defer os.Remove(ofn)
+
+				cOut, err := shell(false, "./"+binary(ofn))
+
+				ofn += ".go"
+
+				defer os.Remove(ofn)
+
+				var out bytes.Buffer
+				if err := NewTask(goos, goarch, []string{"ccgo", "-o", binary(ofn), apth}, &out, &out, cfs).Main(); err != nil {
+					p.err(errorf("%s: %s: FAIL: %v", filepath.Base(apth), out.Bytes(), err))
+					p.fail()
+					return
+				}
+
+				goOut, err := exec.Command("go", "run", ofn).CombinedOutput()
+				if err != nil {
+					p.err(errorf("%s: %s: FAIL: %v", apth, goOut, err))
+					p.fail()
+					return
+				}
+
+				if bytes.Equal(cOut, goOut) {
+					p.ok()
+					return
+				}
+
+				cOut = bytes.TrimSpace(cOut)
+				goOut = bytes.TrimSpace(goOut)
+				if bytes.Equal(cOut, goOut) {
+					p.ok()
+					return
+				}
+
+				if bytes.Contains(cOut, []byte("\r\n")) {
+					cOut = bytes.ReplaceAll(cOut, []byte("\r\n"), []byte{'\n'})
+				}
+				if bytes.Contains(goOut, []byte("\r\n")) {
+					goOut = bytes.ReplaceAll(goOut, []byte("\r\n"), []byte{'\n'})
+				}
+				if bytes.Equal(cOut, goOut) {
+					p.ok()
+					return
+				}
+
+				diff := difflib.UnifiedDiff{
+					A:        difflib.SplitLines(string(cOut)),
+					B:        difflib.SplitLines(string(goOut)),
+					FromFile: "expected",
+					ToFile:   "got",
+					Context:  0,
+				}
+				s, _ := difflib.GetUnifiedDiffString(diff)
+				t.Errorf("%v:\n%v\n--- expexted\n%s\n\n--- got\n%s\n\n--- expected\n%s\n--- got\n%s", apth, s, cOut, goOut, hex.Dump(cOut), hex.Dump(goOut))
+				p.fail()
 			}()
 			return nil
 		})
 		return nil
 	}))
+}
+
+func getCorpusFile(path string) ([]byte, error) {
+	f, err := cfs.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return ioutil.ReadAll(f)
 }

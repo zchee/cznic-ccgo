@@ -6,6 +6,7 @@
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,6 +15,11 @@ import (
 
 	"modernc.org/cc/v4"
 	"modernc.org/opt"
+)
+
+var (
+	oTraceL = flag.Bool("trcl", false, "Print produced link files.")
+	oTraceG = flag.Bool("trcg", false, "Print produced Gofiles.")
 )
 
 // Task represents a compilation job.
@@ -41,6 +47,7 @@ type Task struct {
 	prefixDefine          string // --prefix-define <string>
 	prefixEnumerator      string // --prefix-enumerator <string>
 	prefixExternal        string // --prefix-external <string>
+	prefixField           string // --prefix-field <string>
 	prefixImportQualifier string // --prefix-import-qualifier <string>
 	prefixMacro           string // --prefix-macro <string>
 	prefixStaticInternal  string // --prefix-static-internal <string>
@@ -77,6 +84,7 @@ func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs
 		prefixDefine:          "D",
 		prefixEnumerator:      "C",
 		prefixExternal:        "X",
+		prefixField:           "F",
 		prefixImportQualifier: "",
 		prefixMacro:           "D",
 		prefixStaticInternal:  "s",
@@ -106,6 +114,7 @@ func (t *Task) Main() (err error) {
 	set.Arg("-prefix-define", false, func(opt, val string) error { t.prefixDefine = val; return nil })
 	set.Arg("-prefix-enumerator", false, func(opt, val string) error { t.prefixEnumerator = val; return nil })
 	set.Arg("-prefix-external", false, func(opt, val string) error { t.prefixExternal = val; return nil })
+	set.Arg("-prefix-field", false, func(opt, val string) error { t.prefixField = val; return nil })
 	set.Arg("-prefix-import-qualifier", false, func(opt, val string) error { t.prefixImportQualifier = val; return nil })
 	set.Arg("-prefix-macro", false, func(opt, val string) error { t.prefixMacro = val; return nil })
 	set.Arg("-prefix-static-none", false, func(opt, val string) error { t.prefixStaticNone = val; return nil })

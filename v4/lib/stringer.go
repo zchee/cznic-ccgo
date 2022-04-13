@@ -8,20 +8,23 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[void-0]
-	_ = x[lvalue-1]
-	_ = x[value-2]
-	_ = x[call-3]
-	_ = x[dselect-4]
+	_ = x[boolean-1]
+	_ = x[call-2]
+	_ = x[dselect-3]
+	_ = x[index-4]
+	_ = x[lvalue-5]
+	_ = x[value-6]
+	_ = x[void-7]
 }
 
-const _mode_name = "voidlvaluevaluecalldselect"
+const _mode_name = "booleancalldselectindexlvaluevaluevoid"
 
-var _mode_index = [...]uint8{0, 4, 10, 15, 19, 26}
+var _mode_index = [...]uint8{0, 7, 11, 18, 23, 29, 34, 38}
 
 func (i mode) String() string {
+	i -= 1
 	if i < 0 || i >= mode(len(_mode_index)-1) {
-		return "mode(" + strconv.FormatInt(int64(i), 10) + ")"
+		return "mode(" + strconv.FormatInt(int64(i+1), 10) + ")"
 	}
 	return _mode_name[_mode_index[i]:_mode_index[i+1]]
 }
@@ -42,12 +45,13 @@ func _() {
 	_ = x[staticNone-10]
 	_ = x[automatic-11]
 	_ = x[ccgoAutomatic-12]
-	_ = x[preserve-13]
+	_ = x[field-13]
+	_ = x[preserve-14]
 }
 
-const _name_name = "externaltypenametaggedStructtaggedUniontaggedEumenumConstimportQualifiermacrodefinestaticInternalstaticNoneautomaticccgoAutomaticpreserve"
+const _name_name = "externaltypenametaggedStructtaggedUniontaggedEumenumConstimportQualifiermacrodefinestaticInternalstaticNoneautomaticccgoAutomaticfieldpreserve"
 
-var _name_index = [...]uint8{0, 8, 16, 28, 39, 48, 57, 72, 77, 83, 97, 107, 116, 129, 137}
+var _name_index = [...]uint8{0, 8, 16, 28, 39, 48, 57, 72, 77, 83, 97, 107, 116, 129, 134, 142}
 
 func (i name) String() string {
 	if i < 0 || i >= name(len(_name_index)-1) {
