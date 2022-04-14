@@ -71,10 +71,47 @@ func (c *ctx) expr(w writer, n cc.ExpressionNode, t cc.Type, mode mode) (r []byt
 		return c.multiplicativeExpression(w, x, t, mode)
 	case *cc.AdditiveExpression:
 		return c.additiveExpression(w, x, t, mode)
+	case *cc.ConstantExpression:
+		return c.constantExpression(w, x, t, mode)
 	default:
 		c.err(errorf("%v: TODO %T %s", c.pos(n), x, cc.NodeSource(n)))
 		return nil
 	}
+}
+
+func (c *ctx) constantExpression(w writer, n *cc.ConstantExpression, t cc.Type, mode mode) (r []byte) {
+	if t.Kind() == cc.Void {
+		mode = void
+	}
+	defer func() { r = c.convert(n, r, n.Type(), t) }()
+	var b buf
+	switch mode {
+	case value:
+		//TODO dedup with primaryExpression intconst
+		switch x := n.Value().(type) {
+		case cc.Int64Value:
+			switch {
+			case cc.IsSignedInteger(t):
+				if t.Size() < 8 {
+					m := uint64(1)<<(t.Size()*8) - 1
+					switch {
+					case x < 0:
+						x |= ^cc.Int64Value(m)
+					default:
+						x &= cc.Int64Value(m)
+					}
+				}
+				b.w("int%d(%d)", 8*t.Size(), x)
+			default:
+				c.err(errorf("TODO"))
+			}
+		default:
+			c.err(errorf("TODO %T", x))
+		}
+	default:
+		c.err(errorf("TODO %v", mode))
+	}
+	return b.bytes()
 }
 
 func (c *ctx) additiveExpression(w writer, n *cc.AdditiveExpression, t cc.Type, mode mode) (r []byte) {
@@ -93,8 +130,7 @@ func (c *ctx) additiveExpression(w writer, n *cc.AdditiveExpression, t cc.Type, 
 		case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
 			switch x, y := n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type(); {
 			case cc.IsArithmeticType(x) && cc.IsArithmeticType(y):
-				ct := cc.UsualArithmeticConversions(n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type())
-				b.w("(%s - %s)", c.expr(w, n.AdditiveExpression, ct, value), c.expr(w, n.MultiplicativeExpression, ct, value))
+				b.w("(%s - %s)", c.expr(w, n.AdditiveExpression, n.Type(), value), c.expr(w, n.MultiplicativeExpression, n.Type(), value))
 			default:
 				c.err(errorf("TODO %v - %v", x, y))
 			}
@@ -119,8 +155,7 @@ func (c *ctx) multiplicativeExpression(w writer, n *cc.MultiplicativeExpression,
 		case cc.MultiplicativeExpressionCast: // CastExpression
 			c.err(errorf("TODO %v", n.Case))
 		case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
-			ct := cc.UsualArithmeticConversions(n.MultiplicativeExpression.Type(), n.CastExpression.Type())
-			b.w("(%s * %s)", c.expr(w, n.MultiplicativeExpression, ct, value), c.expr(w, n.CastExpression, ct, value))
+			b.w("(%s * %s)", c.expr(w, n.MultiplicativeExpression, n.Type(), value), c.expr(w, n.CastExpression, n.Type(), value))
 		case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
 			c.err(errorf("TODO %v", n.Case))
 		case cc.MultiplicativeExpressionMod: // MultiplicativeExpression '%' CastExpression
@@ -383,9 +418,10 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression) (r []byte
 		}
 		xargs = append(xargs, c.expr(w, v, t, value))
 	}
+	trc("", n.Position(), ft.IsVariadic())
 	b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(ccgoAutomatic))
 	switch {
-	case ft.MaxArgs() < 0:
+	case ft.IsVariadic():
 		for _, v := range xargs[:ft.MinArgs()] {
 			b.w(", %s", v)
 		}

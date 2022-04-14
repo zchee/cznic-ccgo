@@ -11,19 +11,102 @@ import (
 func (c *ctx) statement(w writer, n *cc.Statement) {
 	switch n.Case {
 	case cc.StatementLabeled: // LabeledStatement
-		c.err(errorf("TODO %v", n.Case))
+		c.labeledStatement(w, n.LabeledStatement)
 	case cc.StatementCompound: // CompoundStatement
-		c.err(errorf("TODO %v", n.Case))
+		c.compoundStatement(w, n.CompoundStatement, false)
 	case cc.StatementExpr: // ExpressionStatement
 		c.expressionStatement(w, n.ExpressionStatement)
 	case cc.StatementSelection: // SelectionStatement
-		c.err(errorf("TODO %v", n.Case))
+		c.selectionStatement(w, n.SelectionStatement)
 	case cc.StatementIteration: // IterationStatement
 		c.iterationStatement(w, n.IterationStatement)
 	case cc.StatementJump: // JumpStatement
 		c.jumpStatement(w, n.JumpStatement)
 	case cc.StatementAsm: // AsmStatement
 		c.err(errorf("TODO %v", n.Case))
+	default:
+		c.err(errorf("internal error %T %v", n, n.Case))
+	}
+	w.w(" // %v:", c.pos(n))
+}
+
+func (c *ctx) labeledStatement(w writer, n *cc.LabeledStatement) {
+	switch n.Case {
+	case cc.LabeledStatementLabel: // IDENTIFIER ':' Statement
+		c.err(errorf("TODO %v", n.Case))
+	case cc.LabeledStatementCaseLabel: // "case" ConstantExpression ':' Statement
+		if n.CaseOrdinal() != 0 {
+			w.w("\nfallthrough")
+		}
+		var a1 buf
+		b1 := c.expr(&a1, n.ConstantExpression, n.ConstantExpression.Type(), value)
+		switch {
+		case a1.len() == 0:
+			w.w("\ncase %s:", b1)
+			c.statement(w, n.Statement)
+		default:
+			c.err(errorf("TODO %v", n.Case))
+		}
+	case cc.LabeledStatementRange: // "case" ConstantExpression "..." ConstantExpression ':' Statement
+		if n.CaseOrdinal() != 0 {
+			w.w("\nfallthrough")
+		}
+		c.err(errorf("TODO %v", n.Case))
+	case cc.LabeledStatementDefault: // "default" ':' Statement
+		if n.CaseOrdinal() != 0 {
+			w.w("\nfallthrough")
+		}
+		w.w("\ndefault:")
+		c.statement(w, n.Statement)
+	default:
+		c.err(errorf("internal error %T %v", n, n.Case))
+	}
+}
+
+func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool) {
+	w.w(" { // %v:", c.pos(n))
+	if fnBlock && c.f.tlsAllocs+c.f.maxValist != 0 {
+		v := c.f.tlsAllocs + 8*(c.f.maxValist+1)
+		w.w("\n%sbp := %[1]stls.Alloc(%d)", tag(ccgoAutomatic), v)
+		w.w("\ndefer %stls.Free(%d)", tag(ccgoAutomatic), v)
+	}
+	for l := n.BlockItemList; l != nil; l = l.BlockItemList {
+		c.blockItem(w, l.BlockItem)
+	}
+	w.w("\n}")
+}
+
+func (c *ctx) blockItem(w writer, n *cc.BlockItem) {
+	switch n.Case {
+	case cc.BlockItemDecl: // Declaration
+		c.declaration(w, n.Declaration, false)
+	case cc.BlockItemLabel: // LabelDeclaration
+		c.err(errorf("TODO %v", n.Case))
+	case cc.BlockItemStmt: // Statement
+		c.statement(w, n.Statement)
+	case cc.BlockItemFuncDef: // DeclarationSpecifiers Declarator CompoundStatement
+		c.err(errorf("TODO %v", n.Case))
+	default:
+		c.err(errorf("internal error %T %v", n, n.Case))
+	}
+}
+
+func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
+	switch n.Case {
+	case cc.SelectionStatementIf: // "if" '(' ExpressionList ')' Statement
+		c.err(errorf("TODO %v", n.Case))
+	case cc.SelectionStatementIfElse: // "if" '(' ExpressionList ')' Statement "else" Statement
+		c.err(errorf("TODO %v", n.Case))
+	case cc.SelectionStatementSwitch: // "switch" '(' ExpressionList ')' Statement
+		var a1 buf
+		b1 := c.expr(&a1, n.ExpressionList, n.ExpressionList.Type(), value)
+		switch {
+		case a1.len() == 0:
+			w.w("\nswitch %s", b1)
+			c.statement(w, n.Statement)
+		default:
+			c.err(errorf("TODO %v", n.Case))
+		}
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
@@ -77,7 +160,6 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
-	w.w(" // %v:", c.pos(n))
 }
 
 func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
@@ -89,15 +171,14 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 	case cc.JumpStatementContinue: // "continue" ';'
 		c.err(errorf("TODO %v", n.Case))
 	case cc.JumpStatementBreak: // "break" ';'
-		c.err(errorf("TODO %v", n.Case))
+		w.w("\nbreak")
 	case cc.JumpStatementReturn: // "return" ExpressionList ';'
 		w.w("\nreturn %s", c.expressionList(w, n.ExpressionList, c.f.t.Result(), value))
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
-	w.w(" // %v:", c.pos(n))
 }
 
 func (c *ctx) expressionStatement(w writer, n *cc.ExpressionStatement) {
-	w.w("\n%s // %v:", c.expressionList(w, n.ExpressionList, c.void, void), c.pos(n))
+	w.w("\n%s", c.expressionList(w, n.ExpressionList, c.void, void))
 }
