@@ -89,10 +89,10 @@ func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs
 		prefixMacro:           "D",
 		prefixStaticInternal:  "s",
 		prefixStaticNone:      "s",
-		prefixTaggedEnum:      "TE",
-		prefixTaggedStruct:    "TS",
+		prefixTaggedEnum:      "T",
+		prefixTaggedStruct:    "T",
 		prefixTypename:        "T",
-		prefixTaggedUnion:     "TU",
+		prefixTaggedUnion:     "T",
 		stderr:                stderr,
 		stdout:                stdout,
 		tlsQualifier:          "libc.",
@@ -228,13 +228,14 @@ func (t *Task) compile(optO string) error {
 	case 1:
 		// ok
 	default:
-		if t.o != "" {
+		if t.o != "" && t.c {
 			return errorf("cannot specify '-o' with '-c' with multiple files")
 		}
 	}
 
 	p := newParallel()
 	for _, ifn := range t.inputFiles {
+		ifn := ifn
 		ofn := optO
 		if ofn == "" {
 			ofn = filepath.Base(ifn) + ".go"

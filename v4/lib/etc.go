@@ -345,11 +345,7 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 				l.fields.registerName(l, linkName)
 			}
 		case typename, taggedEum, taggedStruct, taggedUnion:
-			if tld {
-				panic(todo("", linkName))
-			}
-
-			l.registerType(linkName)
+			// nop
 		default:
 			if k >= 0 {
 				panic(todo("%q %v", linkName, symKind(linkName)))

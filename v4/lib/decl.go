@@ -100,7 +100,9 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool) {
 	w.w(" { // %v:", c.pos(n))
 	if fnBlock && c.f.tlsAllocs+c.f.maxValist != 0 {
-		w.w("\n%sbp := %[1]stls.Alloc(%d)", tag(ccgoAutomatic), c.f.tlsAllocs+8*(c.f.maxValist+1))
+		v := c.f.tlsAllocs + 8*(c.f.maxValist+1)
+		w.w("\n%sbp := %[1]stls.Alloc(%d)", tag(ccgoAutomatic), v)
+		w.w("\ndefer %stls.Free(%d)", tag(ccgoAutomatic), v)
 	}
 	for l := n.BlockItemList; l != nil; l = l.BlockItemList {
 		c.blockItem(w, l.BlockItem)

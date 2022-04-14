@@ -54,7 +54,14 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 				switch {
 				case a3.len() == 0:
 					w.w("\nfor %s; %s; %s {", b1, b2, b3)
-					c.statement(w, n.Statement)
+					switch n.Statement.Case {
+					case cc.StatementCompound:
+						for l := n.Statement.CompoundStatement.BlockItemList; l != nil; l = l.BlockItemList {
+							c.blockItem(w, l.BlockItem)
+						}
+					default:
+						c.statement(w, n.Statement)
+					}
 					w.w("\n}")
 				default:
 					c.err(errorf("TODO %v", n.Case))

@@ -67,10 +67,71 @@ func (c *ctx) expr(w writer, n cc.ExpressionNode, t cc.Type, mode mode) (r []byt
 		return c.unaryExpression(w, x, t, mode)
 	case *cc.RelationalExpression:
 		return c.relationExpression(w, x, t, mode)
+	case *cc.MultiplicativeExpression:
+		return c.multiplicativeExpression(w, x, t, mode)
+	case *cc.AdditiveExpression:
+		return c.additiveExpression(w, x, t, mode)
 	default:
 		c.err(errorf("%v: TODO %T %s", c.pos(n), x, cc.NodeSource(n)))
 		return nil
 	}
+}
+
+func (c *ctx) additiveExpression(w writer, n *cc.AdditiveExpression, t cc.Type, mode mode) (r []byte) {
+	if t.Kind() == cc.Void {
+		mode = void
+	}
+	defer func() { r = c.convert(n, r, n.Type(), t) }()
+	var b buf
+	switch mode {
+	case value:
+		switch n.Case {
+		case cc.AdditiveExpressionMul: // MultiplicativeExpression
+			c.err(errorf("TODO %v", n.Case))
+		case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
+			c.err(errorf("TODO %v", n.Case))
+		case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
+			switch x, y := n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type(); {
+			case cc.IsArithmeticType(x) && cc.IsArithmeticType(y):
+				ct := cc.UsualArithmeticConversions(n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type())
+				b.w("(%s - %s)", c.expr(w, n.AdditiveExpression, ct, value), c.expr(w, n.MultiplicativeExpression, ct, value))
+			default:
+				c.err(errorf("TODO %v - %v", x, y))
+			}
+		default:
+			c.err(errorf("internal error %T %v", n, n.Case))
+		}
+	default:
+		c.err(errorf("TODO %v", mode))
+	}
+	return b.bytes()
+}
+
+func (c *ctx) multiplicativeExpression(w writer, n *cc.MultiplicativeExpression, t cc.Type, mode mode) (r []byte) {
+	if t.Kind() == cc.Void {
+		mode = void
+	}
+	defer func() { r = c.convert(n, r, n.Type(), t) }()
+	var b buf
+	switch mode {
+	case value:
+		switch n.Case {
+		case cc.MultiplicativeExpressionCast: // CastExpression
+			c.err(errorf("TODO %v", n.Case))
+		case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
+			ct := cc.UsualArithmeticConversions(n.MultiplicativeExpression.Type(), n.CastExpression.Type())
+			b.w("(%s * %s)", c.expr(w, n.MultiplicativeExpression, ct, value), c.expr(w, n.CastExpression, ct, value))
+		case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
+			c.err(errorf("TODO %v", n.Case))
+		case cc.MultiplicativeExpressionMod: // MultiplicativeExpression '%' CastExpression
+			c.err(errorf("TODO %v", n.Case))
+		default:
+			c.err(errorf("internal error %T %v", n, n.Case))
+		}
+	default:
+		c.err(errorf("TODO %v", mode))
+	}
+	return b.bytes()
 }
 
 func (c *ctx) relationExpression(w writer, n *cc.RelationalExpression, t cc.Type, mode mode) (r []byte) {
@@ -85,7 +146,8 @@ func (c *ctx) relationExpression(w writer, n *cc.RelationalExpression, t cc.Type
 		case cc.RelationalExpressionShift: // ShiftExpression
 			c.err(errorf("TODO %v", n.Case))
 		case cc.RelationalExpressionLt: // RelationalExpression '<' ShiftExpression
-			c.err(errorf("TODO %v", n.Case))
+			ct := cc.UsualArithmeticConversions(n.RelationalExpression.Type(), n.ShiftExpression.Type())
+			b.w("(%s < %s)", c.expr(w, n.RelationalExpression, ct, value), c.expr(w, n.ShiftExpression, ct, value))
 		case cc.RelationalExpressionGt: // RelationalExpression '>' ShiftExpression
 			c.err(errorf("TODO %v", n.Case))
 		case cc.RelationalExpressionLeq: // RelationalExpression "<=" ShiftExpression
@@ -203,7 +265,7 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 		case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
 			return c.postfixExpressionCall(w, n)
 		case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
-			b.w("(%s).", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), value))
+			b.w("%s.", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), value))
 			switch f := n.Field(); {
 			case f.Parent() != nil:
 				c.err(errorf("TODO %v", n.Case))

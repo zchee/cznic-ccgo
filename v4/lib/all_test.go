@@ -4,6 +4,8 @@
 
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
+//TODO CSmith
+
 import (
 	"bytes"
 	"context"

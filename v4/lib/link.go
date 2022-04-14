@@ -34,7 +34,6 @@ type object struct {
 	id        string // file name or import path
 	pkgName   string // for kind == objectPkg
 	qualifier string
-	types     map[string]string // linkName: typeID
 
 	kind int // {objectFile, objectPkg}
 }
@@ -59,7 +58,8 @@ func (o *object) load(fset *token.FileSet) (file *ast.File, err error) {
 	return file, nil
 }
 
-func (o *object) collectTypes(file *ast.File) (err error) {
+// link name -> type ID
+func (o *object) collectTypes(file *ast.File) (types map[string]string, err error) {
 	var a []string
 	in := map[string]ast.Expr{}
 	for _, decl := range file.Decls {
@@ -72,7 +72,7 @@ func (o *object) collectTypes(file *ast.File) (err error) {
 			for _, spec := range x.Specs {
 				ts := spec.(*ast.TypeSpec)
 				if _, ok := in[ts.Name.Name]; ok {
-					return errorf("%v: type %s redeclared", o.id, ts.Name.Name)
+					return nil, errorf("%v: type %s redeclared", o.id, ts.Name.Name)
 				}
 
 				in[ts.Name.Name] = ts.Type
@@ -81,16 +81,15 @@ func (o *object) collectTypes(file *ast.File) (err error) {
 		}
 	}
 	sort.Strings(a)
-	types := map[string]string{}
+	types = map[string]string{}
 	for _, linkName := range a {
 		if _, ok := types[linkName]; !ok {
 			if types[linkName], err = typeID(o.fset, in, types, in[linkName]); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
-	o.types = types
-	return nil
+	return types, nil
 }
 
 func (t *Task) link() (err error) {
@@ -303,21 +302,23 @@ func (t *Task) getFileSymbols(fset *token.FileSet, fn string) (r *object, err er
 }
 
 type linker struct {
-	errors           errors
-	externs          map[string]*object
-	fields           nameSpace
-	fset             *token.FileSet
-	goTags           []string
-	imports          []*object
-	out              io.Writer
-	stringLiterals   map[string]int64
-	task             *Task
-	textSegment      strings.Builder
-	textSegmentName  string
-	textSegmentNameP string
-	textSegmentOff   int64
-	tld              nameSpace
-	types            nameSpace
+	errors                    errors
+	externs                   map[string]*object
+	fields                    nameSpace
+	fileLinkNames2GoTypeNames dict
+	fset                      *token.FileSet
+	goTags                    []string
+	goTypeNamesEmited         nameSet
+	imports                   []*object
+	linkNames2TypIDs          dict
+	out                       io.Writer
+	stringLiterals            map[string]int64
+	task                      *Task
+	textSegment               strings.Builder
+	textSegmentName           string
+	textSegmentNameP          string
+	textSegmentOff            int64
+	tld                       nameSpace
 
 	closed bool
 }
@@ -496,10 +497,31 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 			return errorf("loading %s: %v", object.id, err)
 		}
 
-		if err := object.collectTypes(file); err != nil {
+		fileLinkNames2typeIDs, err := object.collectTypes(file)
+		if err != nil {
 			return errorf("loading %s: %v", object.id, err)
 		}
 
+		var linkNames []string
+		for linkName := range fileLinkNames2typeIDs {
+			linkNames = append(linkNames, linkName)
+		}
+		sort.Strings(linkNames)
+		l.fileLinkNames2GoTypeNames = dict{}
+		for _, linkName := range linkNames {
+			typeID := fileLinkNames2typeIDs[linkName]
+			associatedTypeID, ok := l.linkNames2TypIDs[linkName]
+			switch {
+			case !ok:
+				l.linkNames2TypIDs.put(linkName, typeID)
+				goName := l.tld.registerName(l, linkName)
+				l.fileLinkNames2GoTypeNames[linkName] = goName
+			case ok && associatedTypeID == typeID:
+				l.fileLinkNames2GoTypeNames[linkName] = l.tld.dict[linkName]
+			default:
+				l.err(errorf("TODO obj %s, linkName %s, typeID %s, ok %v, associatedTypeID %s", object.id, linkName, typeID, ok, associatedTypeID))
+			}
+		}
 		for _, decl := range file.Decls {
 			if err := l.decl(file, object, decl); err != nil {
 				return err
@@ -550,7 +572,7 @@ func (l *linker) decl(file *ast.File, object *object, n ast.Decl) error {
 
 func (l *linker) funcDecl(file *ast.File, object *object, n *ast.FuncDecl) (err error) {
 	l.w("\n\n")
-	info := l.newFnInfo(object, n)
+	info := l.newFnInfo(n)
 	var static []ast.Stmt
 	w := 0
 	for _, stmt := range n.Body.List {
@@ -627,12 +649,13 @@ type fnInfo struct {
 	ns        nameSpace
 	linkNames nameSet
 	linker    *linker
-	object    *object
 }
 
-func (l *linker) newFnInfo(object *object, n *ast.FuncDecl) (r *fnInfo) {
-	r = &fnInfo{linker: l, object: object}
-	ast.Walk(r, n)
+func (l *linker) newFnInfo(n *ast.FuncDecl) (r *fnInfo) {
+	r = &fnInfo{linker: l}
+	if n != nil {
+		ast.Walk(r, n)
+	}
 	var linkNames []string
 	for k := range r.linkNames {
 		linkNames = append(linkNames, k)
@@ -651,10 +674,12 @@ func (fi *fnInfo) name(linkName string) string {
 		if goName := fi.linker.tld.dict[linkName]; goName != "" {
 			return goName
 		}
-	case preserve:
+	case preserve, field:
 		return fi.linker.goName(linkName)
 	case automatic, ccgoAutomatic:
 		return fi.ns.dict[linkName]
+	case typename, taggedEum, taggedStruct, taggedUnion:
+		return fi.linker.fileLinkNames2GoTypeNames[linkName]
 	case -1:
 		return linkName
 	}
@@ -707,7 +732,25 @@ func (l *linker) genDecl(file *ast.File, n *ast.GenDecl) error {
 				return err
 			}
 		}
+	case token.TYPE:
+		if len(n.Specs) != 1 {
+			panic(todo(""))
+		}
+
+		return l.typeSpec(n.Specs[0].(*ast.TypeSpec))
 	}
+	return nil
+}
+
+func (l *linker) typeSpec(n *ast.TypeSpec) error {
+	ast.Walk(&renamer{l.newFnInfo(nil)}, n)
+	if _, ok := l.goTypeNamesEmited[n.Name.Name]; ok {
+		return nil
+	}
+
+	l.goTypeNamesEmited.add(n.Name.Name)
+	l.w("\n\ntype ")
+	printer.Fprint(l.out, l.fset, n)
 	return nil
 }
 
