@@ -8,18 +8,15 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[boolean-1]
-	_ = x[call-2]
-	_ = x[dselect-3]
-	_ = x[index-4]
-	_ = x[lvalue-5]
-	_ = x[value-6]
-	_ = x[void-7]
+	_ = x[expr-1]
+	_ = x[exprAddr-2]
+	_ = x[exprBool-3]
+	_ = x[exprVoid-4]
 }
 
-const _mode_name = "booleancalldselectindexlvaluevaluevoid"
+const _mode_name = "exprexprAddrexprBoolexprVoid"
 
-var _mode_index = [...]uint8{0, 7, 11, 18, 23, 29, 34, 38}
+var _mode_index = [...]uint8{0, 4, 12, 20, 28}
 
 func (i mode) String() string {
 	i -= 1

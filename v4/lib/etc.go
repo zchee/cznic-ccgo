@@ -427,17 +427,17 @@ func symKind(s string) name {
 	return -1
 }
 
-func visit(n cc.Node, visitor func(cc cc.Node) bool) bool {
+type visitor interface {
+	visit(cc.Node, bool) (w visitor)
+}
+
+func visit(n cc.Node, v visitor) {
 	if n == nil {
-		return true
+		return
 	}
 
-	if x, ok := n.(cc.Token); ok {
-		return visitor(x)
-	}
-
-	if !visitor(n) {
-		return true
+	if _, ok := n.(cc.Token); ok {
+		return
 	}
 
 	typ := reflect.TypeOf(n)
@@ -447,13 +447,19 @@ func visit(n cc.Node, visitor func(cc cc.Node) bool) bool {
 		typ = typ.Elem()
 		val = val.Elem()
 		if val == zero {
-			return true
+			return
 		}
 	}
 
 	if typ.Kind() != reflect.Struct {
-		return true
+		return
 	}
+
+	if v = v.visit(n, true); v == nil {
+		return
+	}
+
+	defer v.visit(n, false)
 
 	nf := typ.NumField()
 	for i := 0; i < nf; i++ {
@@ -463,11 +469,6 @@ func visit(n cc.Node, visitor func(cc cc.Node) bool) bool {
 		}
 
 		if strings.HasPrefix(f.Name, "Token") {
-			if x, ok := val.Field(i).Interface().(cc.Token); ok {
-				if !visitor(x) {
-					return true
-				}
-			}
 			continue
 		}
 
@@ -476,12 +477,9 @@ func visit(n cc.Node, visitor func(cc cc.Node) bool) bool {
 		}
 
 		if x, ok := val.Field(i).Interface().(cc.Node); ok {
-			if !visit(x, visitor) {
-				return true
-			}
+			visit(x, v)
 		}
 	}
-	return true
 }
 
 func binary(s string) string {
@@ -496,4 +494,12 @@ func binary(s string) string {
 		}
 	}
 	return s
+}
+
+func roundup(n, to int64) int64 {
+	if r := n % to; r != 0 {
+		return n + to - r
+	}
+
+	return n
 }

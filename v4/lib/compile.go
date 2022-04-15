@@ -110,7 +110,7 @@ type ctx struct {
 	cfg           *cc.Config
 	eh            errHandler
 	enumerators   nameSet
-	f             *fctx
+	f             *fnCtx
 	ifn           string
 	imports       map[string]string // import path: qualifier
 	out           io.Writer

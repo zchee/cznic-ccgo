@@ -11,7 +11,7 @@ import (
 func (c *ctx) initializer(w writer, n *cc.Initializer, t cc.Type) (r []byte) {
 	switch n.Case {
 	case cc.InitializerExpr: // AssignmentExpression
-		return c.expr(w, n.AssignmentExpression, t, value)
+		return c.expr(w, n.AssignmentExpression, t, expr)
 	case cc.InitializerInitList: // '{' InitializerList ',' '}'
 		c.err(errorf("TODO %T %v", n, n.Case))
 	}

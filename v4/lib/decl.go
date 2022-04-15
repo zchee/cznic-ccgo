@@ -6,60 +6,134 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"modernc.org/cc/v4"
 )
 
-type fctx struct {
-	maxValist int
-	t         *cc.FunctionType
-	tlsAllocs int
+type declInfo struct {
+	addressTaken bool
+	bpOff        int64
 }
 
-func newFctx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fctx) {
-	r = &fctx{t: t}
-	visit(n, r.visitor)
+type declInfos map[*cc.Declarator]*declInfo
+
+func (n *declInfos) info(d *cc.Declarator) (r *declInfo) {
+	m := *n
+	if m == nil {
+		m = declInfos{}
+		*n = m
+	}
+	if r = m[d]; r == nil {
+		r = &declInfo{}
+		m[d] = r
+	}
 	return r
 }
 
-func (c *fctx) visitor(n cc.Node) bool {
-	switch x := n.(type) {
-	case *cc.PostfixExpression:
-		switch x.Case {
-		case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-			p, ok := x.PostfixExpression.Type().(*cc.PointerType)
-			if !ok {
+type fnCtx struct {
+	declInfos declInfos
+	stack     []bool
+	t         *cc.FunctionType
+	tlsAllocs int64
+
+	maxValist int
+
+	takeAddress bool
+}
+
+func newFnCtx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fnCtx) {
+	r = &fnCtx{t: t}
+	visit(n, r)
+	var a []*cc.Declarator
+	for d, n := range r.declInfos {
+		if n.addressTaken {
+			a = append(a, d)
+		}
+	}
+	sort.Slice(a, func(i, j int) bool {
+		x := a[i].NameTok()
+		y := a[j].NameTok()
+		return x.Seq() < y.Seq()
+	})
+	for _, d := range a {
+		info := r.declInfos[d]
+		info.bpOff = roundup(r.tlsAllocs, int64(d.Type().Align()))
+		r.tlsAllocs = info.bpOff + d.Type().Size()
+	}
+	return r
+}
+
+func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
+	switch {
+	case enter:
+		switch x := n.(type) {
+		case *cc.PostfixExpression:
+			switch x.Case {
+			case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
+				p, ok := x.PostfixExpression.Type().(*cc.PointerType)
+				if !ok {
+					break
+				}
+
+				ft, ok := p.Elem().(*cc.FunctionType)
+				if !ok {
+					break
+				}
+
+				if ft.MaxArgs() >= 0 {
+					break
+				}
+
+				nargs := 0
+				for l := x.ArgumentExpressionList; l != nil; l = l.ArgumentExpressionList {
+					nargs++
+				}
+				if nargs < ft.MinArgs() {
+					break
+				}
+
+				if nargs > ft.MaxArgs() && ft.MaxArgs() >= 0 {
+					break
+				}
+
+				if v := nargs - ft.MinArgs(); v > f.maxValist {
+					f.maxValist = v
+				}
+			}
+		case *cc.UnaryExpression:
+			switch x.Case {
+			case cc.UnaryExpressionAddrof: // '&' CastExpression
+				f.stack = append(f.stack, f.takeAddress)
+				f.takeAddress = true
+			}
+		case *cc.PrimaryExpression:
+			if !f.takeAddress {
 				break
 			}
 
-			ft, ok := p.Elem().(*cc.FunctionType)
-			if !ok {
-				break
+			switch x.Case {
+			case cc.PrimaryExpressionIdent: // IDENTIFIER
+				switch x := x.ResolvedTo().(type) {
+				case *cc.Declarator:
+					if x.StorageDuration() == cc.Automatic {
+						f.declInfos.info(x).addressTaken = true
+					}
+				}
 			}
-
-			if ft.MaxArgs() >= 0 {
-				break
-			}
-
-			nargs := 0
-			for l := x.ArgumentExpressionList; l != nil; l = l.ArgumentExpressionList {
-				nargs++
-			}
-			if nargs < ft.MinArgs() {
-				break
-			}
-
-			if nargs > ft.MaxArgs() && ft.MaxArgs() >= 0 {
-				break
-			}
-
-			if v := nargs - ft.MinArgs(); v > c.maxValist {
-				c.maxValist = v
+		}
+	default:
+		switch x := n.(type) {
+		case *cc.UnaryExpression:
+			switch x.Case {
+			case cc.UnaryExpressionAddrof: // '&' CastExpression
+				f.takeAddress = f.stack[len(f.stack)-1]
+				f.stack = f.stack[:len(f.stack)-1]
 			}
 		}
 	}
-	return true
+	return f
 }
 
 func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
@@ -87,7 +161,7 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 	}
 
 	f0 := c.f
-	c.f = newFctx(ft, n)
+	c.f = newFnCtx(ft, n)
 	defer func() { c.f = f0 }()
 	isMain := d.Linkage() == cc.External && d.Name() == "main"
 	w.w("\nfunc %s%s%s ", c.declaratorTag(d), d.Name(), c.signature(ft, true, isMain))
