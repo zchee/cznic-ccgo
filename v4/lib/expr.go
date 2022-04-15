@@ -126,7 +126,12 @@ func (c *ctx) additiveExpression(w writer, n *cc.AdditiveExpression, t cc.Type, 
 		case cc.AdditiveExpressionMul: // MultiplicativeExpression
 			c.err(errorf("TODO %v", n.Case))
 		case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
-			c.err(errorf("TODO %v", n.Case))
+			switch x, y := n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type(); {
+			case cc.IsArithmeticType(x) && cc.IsArithmeticType(y):
+				b.w("(%s + %s)", c.expr(w, n.AdditiveExpression, n.Type(), value), c.expr(w, n.MultiplicativeExpression, n.Type(), value))
+			default:
+				c.err(errorf("TODO %v - %v", x, y))
+			}
 		case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
 			switch x, y := n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type(); {
 			case cc.IsArithmeticType(x) && cc.IsArithmeticType(y):
@@ -418,7 +423,6 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression) (r []byte
 		}
 		xargs = append(xargs, c.expr(w, v, t, value))
 	}
-	trc("", n.Position(), ft.IsVariadic())
 	b.w("%s(%stls", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type(), call), tag(ccgoAutomatic))
 	switch {
 	case ft.IsVariadic():

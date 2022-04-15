@@ -115,9 +115,41 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	switch n.Case {
 	case cc.IterationStatementWhile: // "while" '(' ExpressionList ')' Statement
-		c.err(errorf("TODO %v", n.Case))
+		var a1 buf
+		b1 := c.expr(&a1, n.ExpressionList, n.ExpressionList.Type(), boolean)
+		switch {
+		case a1.len() == 0:
+			w.w("\nfor %s {", b1)
+			switch n.Statement.Case {
+			case cc.StatementCompound:
+				for l := n.Statement.CompoundStatement.BlockItemList; l != nil; l = l.BlockItemList {
+					c.blockItem(w, l.BlockItem)
+				}
+			default:
+				c.statement(w, n.Statement)
+			}
+			w.w("\n}")
+		default:
+			c.err(errorf("TODO %v", n.Case))
+		}
 	case cc.IterationStatementDo: // "do" Statement "while" '(' ExpressionList ')' ';'
-		c.err(errorf("TODO %v", n.Case))
+		var a1 buf
+		b1 := c.expr(&a1, n.ExpressionList, n.ExpressionList.Type(), boolean)
+		switch {
+		case a1.len() == 0:
+			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s {", tag(ccgoAutomatic), b1)
+			switch n.Statement.Case {
+			case cc.StatementCompound:
+				for l := n.Statement.CompoundStatement.BlockItemList; l != nil; l = l.BlockItemList {
+					c.blockItem(w, l.BlockItem)
+				}
+			default:
+				c.statement(w, n.Statement)
+			}
+			w.w("\n}")
+		default:
+			c.err(errorf("TODO %v", n.Case))
+		}
 	case cc.IterationStatementFor: // "for" '(' ExpressionList ';' ExpressionList ';' ExpressionList ')' Statement
 		var a1, a2, a3 buf
 		var b1, b2, b3 []byte
