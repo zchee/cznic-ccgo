@@ -9,14 +9,14 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[expr-1]
-	_ = x[exprAddr-2]
-	_ = x[exprBool-3]
+	_ = x[exprBool-2]
+	_ = x[exprIndex-3]
 	_ = x[exprVoid-4]
 }
 
-const _mode_name = "exprexprAddrexprBoolexprVoid"
+const _mode_name = "exprexprBoolexprIndexexprVoid"
 
-var _mode_index = [...]uint8{0, 4, 12, 20, 28}
+var _mode_index = [...]uint8{0, 4, 12, 21, 29}
 
 func (i mode) String() string {
 	i -= 1

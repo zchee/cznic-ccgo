@@ -36,6 +36,8 @@ type object struct {
 	qualifier string
 
 	kind int // {objectFile, objectPkg}
+
+	imported bool
 }
 
 func newObject(kind int, id string) *object {
@@ -118,11 +120,15 @@ func (t *Task) link() (err error) {
 	fset := token.NewFileSet()
 	objects := map[string]*object{}
 	mode := os.Getenv("GO111MODULE")
+	var libc *object
 	for _, v := range t.linkFiles {
 		var object *object
 		switch {
 		case strings.HasPrefix(v, "-l="):
 			object, err = t.getPkgSymbols(v[len("-l="):], mode)
+			if object.pkgName == "libc" && libc == nil {
+				libc = object
+			}
 		default:
 			object, err = t.getFileSymbols(fset, v)
 		}
@@ -140,12 +146,13 @@ func (t *Task) link() (err error) {
 	case t.o == "":
 		return errorf("TODO %v %v %v %v", t.args, t.inputFiles, t.compiledfFiles, t.linkFiles)
 	case strings.HasSuffix(t.o, ".go"):
-		l, err := newLinker(t)
+		l, err := newLinker(t, libc)
 		if err != nil {
 			return err
 		}
 
-		return l.link(t.o, t.linkFiles, objects)
+		r := l.link(t.o, t.linkFiles, objects)
+		return r
 	default:
 		return errorf("TODO %v %v %v %v", t.args, t.inputFiles, t.compiledfFiles, t.linkFiles)
 	}
@@ -310,6 +317,7 @@ type linker struct {
 	goTags                    []string
 	goTypeNamesEmited         nameSet
 	imports                   []*object
+	libc                      *object
 	linkNames2TypIDs          dict
 	out                       io.Writer
 	stringLiterals            map[string]int64
@@ -323,7 +331,7 @@ type linker struct {
 	closed bool
 }
 
-func newLinker(task *Task) (*linker, error) {
+func newLinker(task *Task, libc *object) (*linker, error) {
 	goTags := tags
 	for i := range tags {
 		switch name(i) {
@@ -369,6 +377,7 @@ func newLinker(task *Task) (*linker, error) {
 		externs:        map[string]*object{},
 		fset:           token.NewFileSet(),
 		goTags:         goTags[:],
+		libc:           libc,
 		stringLiterals: map[string]int64{},
 		task:           task,
 	}, nil
@@ -411,7 +420,8 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 
 	// Check for unresolved references.
 	for _, linkFile := range linkFiles {
-		if object := objects[linkFile]; object.kind == objectFile {
+		switch object := objects[linkFile]; {
+		case object.kind == objectFile:
 			file, err := object.load(l.fset)
 			if err != nil {
 				return errorf("loading %s: %v", object.id, err)
@@ -431,9 +441,15 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 				if lib.qualifier == "" {
 					lib.qualifier = l.tld.registerName(l, tag(importQualifier)+lib.pkgName)
 					l.imports = append(l.imports, lib)
+					lib.imported = true
 				}
 			}
 		}
+	}
+	if libc := l.libc; libc != nil && !libc.imported {
+		libc.qualifier = l.tld.registerName(l, tag(importQualifier)+libc.pkgName)
+		l.imports = append(l.imports, libc)
+		libc.imported = true
 	}
 
 	f, err := os.Create(ofn)
@@ -452,6 +468,9 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		if *oTraceG {
 			b, _ := os.ReadFile(ofn)
 			fmt.Fprintf(os.Stderr, "%s\n", b)
+		}
+		if err != nil {
+			l.err(err)
 		}
 		err = l.errors.err()
 	}()
@@ -755,9 +774,8 @@ func (l *linker) typeSpec(n *ast.TypeSpec) error {
 }
 
 func (l *linker) varSpec(n *ast.ValueSpec) error {
-	return errorf("TODO %v:", l.fset.Position(n.Pos()))
-}
-
-func (l *linker) registerType(linkName string) {
-	panic(todo(""))
+	ast.Walk(&renamer{l.newFnInfo(nil)}, n)
+	l.w("\n\nvar ")
+	printer.Fprint(l.out, l.fset, n)
+	return nil
 }

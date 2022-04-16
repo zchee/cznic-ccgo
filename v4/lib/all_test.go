@@ -79,7 +79,7 @@ func h(v interface{}) string {
 	return fmt.Sprint(v)
 }
 
-func walk(dir string, f func(pth string, fi os.FileInfo) error) error {
+func cfsWalk(dir string, f func(pth string, fi os.FileInfo) error) error {
 	fis, err := cfs.ReadDir(dir)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func walk(dir string, f func(pth string, fi os.FileInfo) error) error {
 	for _, v := range fis {
 		switch {
 		case v.IsDir():
-			if err = walk(dir+"/"+v.Name(), f); err != nil {
+			if err = cfsWalk(dir+"/"+v.Name(), f); err != nil {
 				return err
 			}
 		default:
@@ -146,7 +146,7 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 
 	defer func() { p.close(t) }()
 
-	p.err(walk(dir, func(pth string, fi os.FileInfo) error {
+	p.err(cfsWalk(dir, func(pth string, fi os.FileInfo) error {
 		if fi.IsDir() {
 			return nil
 		}
@@ -297,7 +297,9 @@ func shell(echo bool, cmd string, args ...string) ([]byte, error) {
 		return nil, err
 	}
 
-	fmt.Printf("execute %s %q in %s\n", cmd, args, wd)
+	if echo {
+		fmt.Printf("execute %s %q in %s\n", cmd, args, wd)
+	}
 	var b echoWriter
 	b.silent = !echo
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -364,7 +366,7 @@ func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 
 	defer func() { p.close(t) }()
 
-	p.err(walk(dir, func(pth string, fi os.FileInfo) error {
+	p.err(cfsWalk(dir, func(pth string, fi os.FileInfo) error {
 		if fi.IsDir() {
 			return nil
 		}

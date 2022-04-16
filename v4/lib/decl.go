@@ -15,6 +15,9 @@ import (
 type declInfo struct {
 	addressTaken bool
 	bpOff        int64
+
+	read  int
+	write int
 }
 
 type declInfos map[*cc.Declarator]*declInfo
@@ -32,20 +35,27 @@ func (n *declInfos) info(d *cc.Declarator) (r *declInfo) {
 	return r
 }
 
+func (n *declInfos) read(d *cc.Declarator)        { n.info(d).read++ }
+func (n *declInfos) takeAddress(d *cc.Declarator) { n.info(d).addressTaken = true }
+func (n *declInfos) write(d *cc.Declarator)       { n.info(d).write++ }
+
 type fnCtx struct {
+	c         *ctx
 	declInfos declInfos
 	stack     []bool
 	t         *cc.FunctionType
 	tlsAllocs int64
 
 	maxValist int
+	read      int
+	write     int
 
 	takeAddress bool
 }
 
-func newFnCtx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fnCtx) {
-	r = &fnCtx{t: t}
-	visit(n, r)
+func (c *ctx) newFnCtx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fnCtx) {
+	r = &fnCtx{c: c, t: t, read: 1}
+	walk(n, r)
 	var a []*cc.Declarator
 	for d, n := range r.declInfos {
 		if n.addressTaken {
@@ -69,6 +79,35 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 	switch {
 	case enter:
 		switch x := n.(type) {
+		case *cc.AssignmentExpression:
+			switch x.Case {
+			case cc.AssignmentExpressionCond: // ConditionalExpression
+				walk(x.ConditionalExpression, f)
+			default:
+				f.write++
+				f.read--
+				walk(x.UnaryExpression, f)
+				f.read++
+				f.write--
+				walk(x.AssignmentExpression, f)
+			}
+			return nil
+		case *cc.Declaration:
+			switch x.Case {
+			case cc.DeclarationAuto:
+				f.declInfos.write(x.Declarator)
+				walk(x.Initializer, f)
+			default:
+				walk(x.InitDeclaratorList, f)
+			}
+			return nil
+		case *cc.InitDeclarator:
+			switch x.Case {
+			case cc.InitDeclaratorInit:
+				f.declInfos.write(x.Declarator)
+				walk(x.Initializer, f)
+			}
+			return nil
 		case *cc.PostfixExpression:
 			switch x.Case {
 			case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
@@ -101,26 +140,38 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 				if v := nargs - ft.MinArgs(); v > f.maxValist {
 					f.maxValist = v
 				}
+			case cc.PostfixExpressionInc, cc.PostfixExpressionDec:
+				f.write++
+				walk(x.PostfixExpression, f)
+				f.write--
+				return nil
+			}
+		case *cc.PrimaryExpression:
+			switch x.Case {
+			case cc.PrimaryExpressionIdent: // IDENTIFIER
+				switch y := x.ResolvedTo().(type) {
+				case *cc.Declarator:
+					if f.takeAddress {
+						f.declInfos.takeAddress(y)
+					}
+					if f.read != 0 {
+						f.declInfos.read(y)
+					}
+					if f.write != 0 {
+						f.declInfos.write(y)
+					}
+				}
 			}
 		case *cc.UnaryExpression:
 			switch x.Case {
 			case cc.UnaryExpressionAddrof: // '&' CastExpression
 				f.stack = append(f.stack, f.takeAddress)
 				f.takeAddress = true
-			}
-		case *cc.PrimaryExpression:
-			if !f.takeAddress {
-				break
-			}
-
-			switch x.Case {
-			case cc.PrimaryExpressionIdent: // IDENTIFIER
-				switch x := x.ResolvedTo().(type) {
-				case *cc.Declarator:
-					if x.StorageDuration() == cc.Automatic {
-						f.declInfos.info(x).addressTaken = true
-					}
-				}
+			case cc.UnaryExpressionInc, cc.UnaryExpressionDec:
+				f.write++
+				walk(x.UnaryExpression, f)
+				f.write--
+				return nil
 			}
 		}
 	default:
@@ -161,7 +212,7 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 	}
 
 	f0 := c.f
-	c.f = newFnCtx(ft, n)
+	c.f = c.newFnCtx(ft, n)
 	defer func() { c.f = f0 }()
 	isMain := d.Linkage() == cc.External && d.Name() == "main"
 	w.w("\nfunc %s%s%s ", c.declaratorTag(d), d.Name(), c.signature(ft, true, isMain))
@@ -272,4 +323,11 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
 	w.w(" // %v:", c.pos(d))
+	if c.f != nil {
+		info := c.f.declInfos.info(d)
+		w.w(" read: %d, write: %d, addrTaken %v", info.read, info.write, info.addressTaken) //TODO-
+		if d.StorageDuration() == cc.Automatic && info.read == 0 {
+			w.w("\n_ = %s%s", c.declaratorTag(d), nm)
+		}
+	}
 }

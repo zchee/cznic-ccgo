@@ -431,7 +431,7 @@ type visitor interface {
 	visit(cc.Node, bool) (w visitor)
 }
 
-func visit(n cc.Node, v visitor) {
+func walk(n cc.Node, v visitor) {
 	if n == nil {
 		return
 	}
@@ -477,7 +477,7 @@ func visit(n cc.Node, v visitor) {
 		}
 
 		if x, ok := val.Field(i).Interface().(cc.Node); ok {
-			visit(x, v)
+			walk(x, v)
 		}
 	}
 }

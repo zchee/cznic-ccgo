@@ -39,7 +39,7 @@ func (c *ctx) labeledStatement(w writer, n *cc.LabeledStatement) {
 			w.w("\nfallthrough")
 		}
 		var a1 buf
-		b1 := c.expr(&a1, n.ConstantExpression, n.ConstantExpression.Type(), expr)
+		b1 := c.expr(&a1, n.ConstantExpression, nil, expr)
 		switch {
 		case a1.len() == 0:
 			w.w("\ncase %s:", b1)
@@ -99,7 +99,7 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 		c.err(errorf("TODO %v", n.Case))
 	case cc.SelectionStatementSwitch: // "switch" '(' ExpressionList ')' Statement
 		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, n.ExpressionList.Type(), expr)
+		b1 := c.expr(&a1, n.ExpressionList, nil, expr)
 		switch {
 		case a1.len() == 0:
 			w.w("\nswitch %s", b1)
@@ -116,7 +116,7 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	switch n.Case {
 	case cc.IterationStatementWhile: // "while" '(' ExpressionList ')' Statement
 		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, n.ExpressionList.Type(), exprBool)
+		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
 		switch {
 		case a1.len() == 0:
 			w.w("\nfor %s {", b1)
@@ -134,7 +134,7 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 		}
 	case cc.IterationStatementDo: // "do" Statement "while" '(' ExpressionList ')' ';'
 		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, n.ExpressionList.Type(), exprBool)
+		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
 		switch {
 		case a1.len() == 0:
 			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s {", tag(ccgoAutomatic), b1)
@@ -154,17 +154,17 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 		var a1, a2, a3 buf
 		var b1, b2, b3 []byte
 		if n.ExpressionList != nil {
-			b1 = c.expr(&a1, n.ExpressionList, c.void, exprVoid)
+			b1 = c.expr(&a1, n.ExpressionList, nil, exprVoid)
 		}
 		switch {
 		case a1.len() == 0:
 			if n.ExpressionList2 != nil {
-				b2 = c.expr(&a2, n.ExpressionList2, n.ExpressionList2.Type(), exprBool)
+				b2 = c.expr(&a2, n.ExpressionList2, nil, exprBool)
 			}
 			switch {
 			case a2.len() == 0:
 				if n.ExpressionList3 != nil {
-					b3 = c.expr(&a3, n.ExpressionList3, c.void, exprVoid)
+					b3 = c.expr(&a3, n.ExpressionList3, nil, exprVoid)
 				}
 				switch {
 				case a3.len() == 0:
@@ -205,12 +205,12 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 	case cc.JumpStatementBreak: // "break" ';'
 		w.w("\nbreak")
 	case cc.JumpStatementReturn: // "return" ExpressionList ';'
-		w.w("\nreturn %s", c.expressionList(w, n.ExpressionList, c.f.t.Result(), expr))
+		w.w("\nreturn %s", c.expr(w, n.ExpressionList, c.f.t.Result(), expr))
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
 }
 
 func (c *ctx) expressionStatement(w writer, n *cc.ExpressionStatement) {
-	w.w("\n%s", c.expressionList(w, n.ExpressionList, c.void, exprVoid))
+	w.w("\n%s", c.expr(w, n.ExpressionList, nil, exprVoid))
 }
