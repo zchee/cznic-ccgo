@@ -11,12 +11,14 @@ func _() {
 	_ = x[expr-1]
 	_ = x[exprBool-2]
 	_ = x[exprIndex-3]
-	_ = x[exprVoid-4]
+	_ = x[exprPointer-4]
+	_ = x[exprUintpr-5]
+	_ = x[exprVoid-6]
 }
 
-const _mode_name = "exprexprBoolexprIndexexprVoid"
+const _mode_name = "exprexprBoolexprIndexexprPointerexprUintprexprVoid"
 
-var _mode_index = [...]uint8{0, 4, 12, 21, 29}
+var _mode_index = [...]uint8{0, 4, 12, 21, 32, 42, 50}
 
 func (i mode) String() string {
 	i -= 1

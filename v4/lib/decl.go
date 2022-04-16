@@ -17,8 +17,11 @@ type declInfo struct {
 	bpOff        int64
 
 	read  int
+	sd    cc.StorageDuration
 	write int
 }
+
+func (n *declInfo) escapes() bool { return n.sd == cc.Automatic && n.addressTaken }
 
 type declInfos map[*cc.Declarator]*declInfo
 
@@ -29,7 +32,7 @@ func (n *declInfos) info(d *cc.Declarator) (r *declInfo) {
 		*n = m
 	}
 	if r = m[d]; r == nil {
-		r = &declInfo{}
+		r = &declInfo{sd: d.StorageDuration()}
 		m[d] = r
 	}
 	return r
@@ -58,7 +61,7 @@ func (c *ctx) newFnCtx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fnCtx) 
 	walk(n, r)
 	var a []*cc.Declarator
 	for d, n := range r.declInfos {
-		if n.addressTaken {
+		if n.escapes() {
 			a = append(a, d)
 		}
 	}
@@ -292,6 +295,10 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 		return //TODO-
 	}
 
+	var info *declInfo
+	if c.f != nil {
+		info = c.f.declInfos.info(d)
+	}
 	nm := d.Name()
 	switch n.Case {
 	case cc.InitDeclaratorDecl: // Declarator Asm
@@ -306,7 +313,11 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 			}
 
 			c.defineEnumStructUnion(w, d.Type())
-			w.w("\nvar %s%s %s", c.declaratorTag(d), nm, c.typ(d.Type()))
+			s := ""
+			if info != nil && info.escapes() {
+				s = "// "
+			}
+			w.w("\n%svar %s%s %s", s, c.declaratorTag(d), nm, c.typ(d.Type()))
 		}
 	case cc.InitDeclaratorInit: // Declarator Asm '=' Initializer
 		c.defineEnumStructUnion(w, d.Type())
@@ -316,17 +327,21 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 		case d.IsStatic():
 			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
 		default:
-			w.w("\n%s%s := %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+			switch {
+			case info != nil && info.escapes():
+				w.w("\n*(*%s)(unsafe.Pointer(%sbp%+d)) = %s", c.typ(d.Type()), tag(ccgoAutomatic), info.bpOff, c.initializer(w, n.Initializer, d.Type()))
+			default:
+				w.w("\n%s%s := %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+			}
 		}
 
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
 	w.w(" // %v:", c.pos(d))
-	if c.f != nil {
-		info := c.f.declInfos.info(d)
-		w.w(" read: %d, write: %d, addrTaken %v", info.read, info.write, info.addressTaken) //TODO-
-		if d.StorageDuration() == cc.Automatic && info.read == 0 {
+	if info != nil {
+		w.w(" read: %d, write: %d, escapes %v", info.read, info.write, info.escapes()) //TODO-
+		if d.StorageDuration() == cc.Automatic && info.read == 0 && !info.escapes() {
 			w.w("\n_ = %s%s", c.declaratorTag(d), nm)
 		}
 	}

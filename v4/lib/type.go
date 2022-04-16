@@ -53,6 +53,13 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			c.err(errorf("TODO %T", x))
 		case t.Kind() == cc.Void:
 			b.WriteString("struct{}")
+		case t.Kind() == cc.Double:
+			if t.Size() == 8 {
+				b.WriteString("float64")
+				break
+			}
+
+			fallthrough
 		default:
 			b.WriteString("int")
 			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
@@ -97,15 +104,21 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			fmt.Fprintf(b, "%s%s", tag(taggedUnion), nm)
 		default:
 			fmt.Fprintf(b, "struct {")
-			switch t.Align() {
-			case 1:
-				// ok
-			case 2:
-				fmt.Fprintf(b, "\n%s0 [0]uint16", tag(field))
-			case 3, 4:
-				fmt.Fprintf(b, "\n%s0 [0]uint32", tag(field))
-			default:
-				fmt.Fprintf(b, "\n%s0 [0]uint64", tag(field))
+			for i := 0; ; i++ {
+				f := x.FieldByIndex(i)
+				if f == nil {
+					break
+				}
+
+				b.WriteByte('\n')
+				switch nm := f.Name(); {
+				case nm == "":
+					c.err(errorf("TODO"))
+				default:
+					fmt.Fprintf(b, "%s%s", tag(field), nm)
+				}
+				b.WriteString(" [0]")
+				c.typ0(b, f.Type(), true, true)
 			}
 			fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(field), t.Size())
 		}

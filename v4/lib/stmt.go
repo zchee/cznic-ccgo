@@ -66,7 +66,11 @@ func (c *ctx) labeledStatement(w writer, n *cc.LabeledStatement) {
 func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool) {
 	w.w(" { // %v:", c.pos(n))
 	if fnBlock && c.f.tlsAllocs+int64(c.f.maxValist) != 0 {
-		v := c.f.tlsAllocs + 8*int64((c.f.maxValist+1))
+		c.f.tlsAllocs = roundup(c.f.tlsAllocs, 8)
+		v := c.f.tlsAllocs
+		if c.f.maxValist != 0 {
+			v += 8 * int64((c.f.maxValist + 1))
+		}
 		w.w("\n%sbp := %[1]stls.Alloc(%d)", tag(ccgoAutomatic), v)
 		w.w("\ndefer %stls.Free(%d)", tag(ccgoAutomatic), v)
 	}
@@ -94,9 +98,29 @@ func (c *ctx) blockItem(w writer, n *cc.BlockItem) {
 func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 	switch n.Case {
 	case cc.SelectionStatementIf: // "if" '(' ExpressionList ')' Statement
-		c.err(errorf("TODO %v", n.Case))
+		var a1 buf
+		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
+		switch {
+		case a1.len() == 0:
+			w.w("\nif %s {", b1)
+			c.statement(w, n.Statement)
+			w.w("\n}")
+		default:
+			c.err(errorf("TODO %v", n.Case))
+		}
 	case cc.SelectionStatementIfElse: // "if" '(' ExpressionList ')' Statement "else" Statement
-		c.err(errorf("TODO %v", n.Case))
+		var a1 buf
+		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
+		switch {
+		case a1.len() == 0:
+			w.w("\nif %s {", b1)
+			c.statement(w, n.Statement)
+			w.w("\n} else {")
+			c.statement(w, n.Statement2)
+			w.w("\n}")
+		default:
+			c.err(errorf("TODO %v", n.Case))
+		}
 	case cc.SelectionStatementSwitch: // "switch" '(' ExpressionList ')' Statement
 		var a1 buf
 		b1 := c.expr(&a1, n.ExpressionList, nil, expr)
