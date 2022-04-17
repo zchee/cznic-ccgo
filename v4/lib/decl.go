@@ -50,6 +50,7 @@ type fnCtx struct {
 	tlsAllocs int64
 
 	maxValist int
+	nextID    int
 	read      int
 	write     int
 
@@ -77,6 +78,8 @@ func (c *ctx) newFnCtx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fnCtx) 
 	}
 	return r
 }
+
+func (f *fnCtx) id() int { f.nextID++; return f.nextID }
 
 func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 	switch {
