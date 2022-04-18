@@ -324,7 +324,7 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 			}
 
 			n.registerName(l, linkName)
-		case staticNone:
+		case staticInternal, staticNone:
 			if tld {
 				panic(todo("", linkName))
 			}
@@ -344,7 +344,7 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 			if _, ok := l.fields.dict[linkName]; !ok {
 				l.fields.registerName(l, linkName)
 			}
-		case typename, taggedEum, taggedStruct, taggedUnion:
+		case typename, taggedEum, taggedStruct, taggedUnion, enumConst:
 			// nop
 		default:
 			if k >= 0 {
@@ -502,4 +502,12 @@ func roundup(n, to int64) int64 {
 	}
 
 	return n
+}
+
+func bpOff(n int64) string {
+	if n != 0 {
+		return fmt.Sprintf("%sbp%+d", tag(ccgoAutomatic), n)
+	}
+
+	return fmt.Sprintf("%sbp", tag(ccgoAutomatic))
 }

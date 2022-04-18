@@ -59,7 +59,16 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 				break
 			}
 
-			fallthrough
+			b.WriteString("int")
+			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
+		case t.Kind() == cc.Float:
+			if t.Size() == 4 {
+				b.WriteString("float32")
+				break
+			}
+
+			b.WriteString("int")
+			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
 		default:
 			b.WriteString("int")
 			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
@@ -221,7 +230,7 @@ func typeID(fset *token.FileSet, in map[string]ast.Expr, out map[string]string, 
 		return "", err
 	}
 
-	return b.String(), nil
+	return "T" + b.String(), nil
 }
 
 func typeID0(b *strings.Builder, fset *token.FileSet, in map[string]ast.Expr, out map[string]string, typ ast.Expr, m map[string]struct{}) (err error) {

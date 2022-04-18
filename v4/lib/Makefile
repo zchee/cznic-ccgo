@@ -36,12 +36,12 @@ editor:
 	go install -v modernc.org/ccgo/v4 2>&1 | tee log-editor
 
 tmp:
-	go test -v -run TestCompile/tcc 2>&1 | tee log
-	grep -a '^ \+TODO' log | sort | uniq -c | sort -n
+	go test -v -run TestCompile/tcc -trc 2>&1 | tee log
+	grep -a '^ \+TODO' log | sort | uniq -c | sort -n | tee log-2
 	grep -a 'TOTAL\|PASS' log || true
 
 
 tmp2:
-	go test -v -run TestExec/tcc 2>&1 | tee log
-	grep -a '^ \+TODO' log | sort | uniq -c | sort -n
+	go test -v -run TestExec/tcc -trc 2>&1 | tee log
+	grep -a '^ \+TODO' log | sort | uniq -c | sort -n | tee log-2
 	grep -a 'TOTAL\|PASS' log || true

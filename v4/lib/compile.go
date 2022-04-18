@@ -96,6 +96,7 @@ type writer interface {
 
 type buf bytes.Buffer
 
+func (b *buf) Write(p []byte)                  { (*bytes.Buffer)(b).Write(p) }
 func (b *buf) bytes() []byte                   { return (*bytes.Buffer)(b).Bytes() }
 func (b *buf) len() int                        { return (*bytes.Buffer)(b).Len() }
 func (b *buf) w(s string, args ...interface{}) { fmt.Fprintf((*bytes.Buffer)(b), s, args...) }
@@ -268,8 +269,8 @@ func (c *ctx) declaratorTag(d *cc.Declarator) string {
 	switch d.Linkage() {
 	case cc.External:
 		return tag(external)
-	//TODO case cc.Internal:
-	//TODO 	return tag(internal)
+	case cc.Internal:
+		return tag(staticInternal)
 	case cc.None:
 		switch {
 		case d.IsStatic():

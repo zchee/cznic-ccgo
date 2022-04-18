@@ -106,7 +106,6 @@ func cfsWalk(dir string, f func(pth string, fi os.FileInfo) error) error {
 }
 
 func TestCompile(t *testing.T) {
-	return //TODO-
 	tmp := t.TempDir()
 	blacklistCompCert := map[string]struct{}{}
 	// blacklistGCC := map[string]struct{}{
@@ -114,7 +113,35 @@ func TestCompile(t *testing.T) {
 	// 	"950919-1.c": {},
 	// }
 	blacklistTCC := map[string]struct{}{
-		"76_dollars_in_identifiers.c": {},
+		"30_hanoi.c":                  {}, //TODO
+		"31_args.c":                   {}, //TODO
+		"32_led.c":                    {}, //TODO
+		"36_array_initialisers.c":     {}, //TODO
+		"40_stdio.c":                  {}, //TODO
+		"42_function_pointer.c":       {}, //TODO
+		"46_grep.c":                   {}, //TODO
+		"54_goto.c":                   {}, //TODO
+		"55_lshift_type.c":            {}, //TODO
+		"73_arm64.c":                  {}, //TODO
+		"75_array_in_struct_init.c":   {}, //TODO
+		"76_dollars_in_identifiers.c": {}, //TODO
+		"78_vla_label.c":              {}, //TODO
+		"79_vla_continue.c":           {}, //TODO
+		"80_flexarray.c":              {}, //TODO
+		"81_types.c":                  {}, //TODO
+		"83_utf8_in_identifiers.c":    {}, //TODO
+		"86_memory-model.c":           {}, //TODO
+		"87_dead_code.c":              {}, //TODO
+		"88_codeopt.c":                {}, //TODO
+		"89_nocode_wanted.c":          {}, //TODO
+		"90_struct-init.c":            {}, //TODO
+		"91_ptr_longlong_arith32.c":   {}, //TODO
+		"93_integer_promotion.c":      {}, //TODO
+		"94_generic.c":                {}, //TODO
+		"95_bitfields.c":              {}, //TODO
+		"95_bitfields_ms.c":           {}, //TODO
+		"97_utf8_string_literal.c":    {}, //TODO
+		"98_al_ax_extend.c":           {}, //TODO
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/s390x":
@@ -179,7 +206,7 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 			func() {
 				defer func() {
 					if err := recover(); err != nil {
-						err = fmt.Errorf("%v: PANIC: %v", apth, err)
+						err = fmt.Errorf("%v: PANIC: %v", filepath.Base(apth), err)
 						trc("%v: PANIC: %v\n%s", apth, err, debug.Stack())
 						os.Exit(1)
 					}
@@ -197,7 +224,7 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 					return
 				}
 
-				checkFailOk(t, p, ccgoErr, tmp, apth, ofn, afi, task)
+				checkFailOk(t, p, errorf("%v: %v", filepath.Base(apth), ccgoErr), tmp, apth, ofn, afi, task)
 			}()
 			return nil
 		})
@@ -312,7 +339,6 @@ func shell(echo bool, cmd string, args ...string) ([]byte, error) {
 }
 
 func TestExec(t *testing.T) {
-	return //TODO-
 	tmp := t.TempDir()
 	if err := inDir(tmp, func() error {
 		if out, err := shell(true, "go", "mod", "init", "test"); err != nil {
@@ -329,7 +355,44 @@ func TestExec(t *testing.T) {
 		// 	"950919-1.c": {},
 		// }
 		blacklistTCC := map[string]struct{}{
-			"76_dollars_in_identifiers.c": {},
+			"30_hanoi.c":                   {}, //TODO
+			"31_args.c":                    {}, //TODO
+			"32_led.c":                     {}, //TODO
+			"36_array_initialisers.c":      {}, //TODO
+			"37_sprintf.c":                 {}, //TODO
+			"39_typedef.c":                 {}, //TODO
+			"40_stdio.c":                   {}, //TODO
+			"42_function_pointer.c":        {}, //TODO
+			"46_grep.c":                    {}, //TODO
+			"52_unnamed_enum.c":            {}, //TODO
+			"54_goto.c":                    {}, //TODO
+			"55_lshift_type.c":             {}, //TODO
+			"64_macro_nesting.c":           {}, //TODO
+			"67_macro_concat.c":            {}, //TODO
+			"70_floating_point_literals.c": {}, //TODO
+			"71_macro_empty_arg.c":         {}, //TODO
+			"73_arm64.c":                   {}, //TODO
+			"75_array_in_struct_init.c":    {}, //TODO
+			"76_dollars_in_identifiers.c":  {}, //TODO
+			"77_push_pop_macro.c":          {}, //TODO
+			"78_vla_label.c":               {}, //TODO
+			"79_vla_continue.c":            {}, //TODO
+			"80_flexarray.c":               {}, //TODO
+			"81_types.c":                   {}, //TODO
+			"83_utf8_in_identifiers.c":     {}, //TODO
+			"84_hex-float.c":               {}, //TODO
+			"85_asm-outside-function.c":    {}, //TODO
+			"86_memory-model.c":            {}, //TODO
+			"87_dead_code.c":               {}, //TODO
+			"88_codeopt.c":                 {}, //TODO
+			"89_nocode_wanted.c":           {}, //TODO
+			"90_struct-init.c":             {}, //TODO
+			"91_ptr_longlong_arith32.c":    {}, //TODO
+			"92_enum_bitfield.c":           {}, //TODO
+			"93_integer_promotion.c":       {}, //TODO
+			"94_generic.c":                 {}, //TODO
+			"97_utf8_string_literal.c":     {}, //TODO
+			"98_al_ax_extend.c":            {}, //TODO
 		}
 		switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 		case "linux/s390x":
@@ -398,7 +461,7 @@ func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 			func() {
 				defer func() {
 					if err := recover(); err != nil {
-						err = fmt.Errorf("%v: PANIC: %v", apth, err)
+						err = fmt.Errorf("%v: PANIC: %v", filepath.Base(apth), err)
 						trc("%v: PANIC: %v\n%s", apth, err, debug.Stack())
 						os.Exit(1)
 					}
@@ -442,7 +505,7 @@ func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 
 				goOut, err := exec.Command("go", "run", ofn).CombinedOutput()
 				if err != nil {
-					p.err(errorf("%s: %s: FAIL: %v", apth, goOut, err))
+					p.err(errorf("%s: %s: FAIL: %v", filepath.Base(apth), goOut, err))
 					p.fail()
 					return
 				}
@@ -478,7 +541,7 @@ func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 					Context:  0,
 				}
 				s, _ := difflib.GetUnifiedDiffString(diff)
-				t.Errorf("%v:\n%v\n--- expexted\n%s\n\n--- got\n%s\n\n--- expected\n%s\n--- got\n%s", apth, s, cOut, goOut, hex.Dump(cOut), hex.Dump(goOut))
+				t.Errorf("%v:\n%v\n--- expexted\n%s\n\n--- got\n%s\n\n--- expected\n%s\n--- got\n%s", filepath.Base(apth), s, cOut, goOut, hex.Dump(cOut), hex.Dump(goOut))
 				p.fail()
 			}()
 			return nil

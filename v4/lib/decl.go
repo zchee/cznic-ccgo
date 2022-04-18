@@ -148,7 +148,9 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 				}
 			case cc.PostfixExpressionInc, cc.PostfixExpressionDec:
 				f.write++
+				f.read++
 				walk(x.PostfixExpression, f)
+				f.read--
 				f.write--
 				return nil
 			}
@@ -175,7 +177,9 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 				f.takeAddress = true
 			case cc.UnaryExpressionInc, cc.UnaryExpressionDec:
 				f.write++
+				f.read++
 				walk(x.UnaryExpression, f)
+				f.read--
 				f.write--
 				return nil
 			}
@@ -231,16 +235,18 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgoAutomatic), c.task.tlsQualifier, tag(preserve))
-	for _, v := range f.Parameters() {
-		b.WriteString(", ")
-		if names {
-			nm := v.Name()
-			if nm == "" {
-				nm = "_"
+	if f.MaxArgs() != 0 {
+		for _, v := range f.Parameters() {
+			b.WriteString(", ")
+			if names {
+				nm := v.Name()
+				if nm == "" {
+					nm = "_"
+				}
+				fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
 			}
-			fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
+			b.WriteString(c.typ(v.Type()))
 		}
-		b.WriteString(c.typ(v.Type()))
 	}
 	switch {
 	case isMain && len(f.Parameters()) == 0:
@@ -326,15 +332,15 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 		c.defineEnumStructUnion(w, d.Type())
 		switch {
 		case d.Linkage() == cc.Internal:
-			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializerOuter(w, n.Initializer, d.Type()))
 		case d.IsStatic():
-			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializerOuter(w, n.Initializer, d.Type()))
 		default:
 			switch {
 			case info != nil && info.escapes():
-				w.w("\n*(*%s)(unsafe.Pointer(%sbp%+d)) = %s", c.typ(d.Type()), tag(ccgoAutomatic), info.bpOff, c.initializer(w, n.Initializer, d.Type()))
+				w.w("\n*(*%s)(unsafe.Pointer(%s)) = %s", c.typ(d.Type()), bpOff(info.bpOff), c.initializerOuter(w, n.Initializer, d.Type()))
 			default:
-				w.w("\n%s%s := %s", c.declaratorTag(d), nm, c.initializer(w, n.Initializer, d.Type()))
+				w.w("\n%s%s := %s", c.declaratorTag(d), nm, c.initializerOuter(w, n.Initializer, d.Type()))
 			}
 		}
 

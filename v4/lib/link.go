@@ -34,6 +34,7 @@ type object struct {
 	id        string // file name or import path
 	pkgName   string // for kind == objectPkg
 	qualifier string
+	static    nameSet
 
 	kind int // {objectFile, objectPkg}
 
@@ -92,6 +93,41 @@ func (o *object) collectTypes(file *ast.File) (types map[string]string, err erro
 		}
 	}
 	return types, nil
+}
+
+// link name -> const value
+func (o *object) collectConsts(file *ast.File) (consts map[string]string, err error) {
+	var a []string
+	in := map[string]string{}
+	for _, decl := range file.Decls {
+		switch x := decl.(type) {
+		case *ast.GenDecl:
+			if x.Tok != token.CONST {
+				break
+			}
+
+			for _, spec := range x.Specs {
+				vs := spec.(*ast.ValueSpec)
+				for i, ident := range vs.Names {
+					if _, ok := in[ident.Name]; ok {
+						return nil, errorf("%v: const %s redeclared", o.id, ident.Name)
+					}
+
+					var b strings.Builder
+					b.WriteByte('C')
+					printer.Fprint(&b, o.fset, vs.Values[i])
+					in[ident.Name] = b.String()
+					a = append(a, ident.Name)
+				}
+			}
+		}
+	}
+	sort.Strings(a)
+	consts = map[string]string{}
+	for _, linkName := range a {
+		consts[linkName] = in[linkName]
+	}
+	return consts, nil
 }
 
 func (t *Task) link() (err error) {
@@ -291,8 +327,10 @@ func (t *Task) getFileSymbols(fset *token.FileSet, fn string) (r *object, err er
 
 	r = newObject(objectFile, fn)
 	x := tag(external)
+	si := tag(staticInternal)
 	for k, v := range file.Scope.Objects {
-		if strings.HasPrefix(k, x) {
+		switch symKind(k) {
+		case external:
 			if _, ok := r.externs[k]; ok {
 				return nil, errorf("invalid object file: multiple defintions of %s", k[len(x):])
 			}
@@ -303,30 +341,41 @@ func (t *Task) getFileSymbols(fset *token.FileSet, fn string) (r *object, err er
 			default:
 				return nil, errorf("invalid object file: symbol %s of kind %v", k[len(x):], v.Kind)
 			}
+		case staticInternal:
+			if _, ok := r.static[k]; ok {
+				return nil, errorf("invalid object file: multiple defintions of %s", k[len(si):])
+			}
+
+			switch v.Kind {
+			case ast.Var, ast.Fun:
+				r.static.add(k)
+			default:
+				return nil, errorf("invalid object file: symbol %s of kind %v", k[len(si):], v.Kind)
+			}
 		}
 	}
 	return r, nil
 }
 
 type linker struct {
-	errors                    errors
-	externs                   map[string]*object
-	fields                    nameSpace
-	fileLinkNames2GoTypeNames dict
-	fset                      *token.FileSet
-	goTags                    []string
-	goTypeNamesEmited         nameSet
-	imports                   []*object
-	libc                      *object
-	linkNames2TypIDs          dict
-	out                       io.Writer
-	stringLiterals            map[string]int64
-	task                      *Task
-	textSegment               strings.Builder
-	textSegmentName           string
-	textSegmentNameP          string
-	textSegmentOff            int64
-	tld                       nameSpace
+	errors                errors
+	externs               map[string]*object
+	fields                nameSpace
+	fileLinkNames2GoNames dict
+	fset                  *token.FileSet
+	goTags                []string
+	goTypeNamesEmited     nameSet
+	imports               []*object
+	libc                  *object
+	fileLinkNames2IDs     dict
+	out                   io.Writer
+	stringLiterals        map[string]int64
+	task                  *Task
+	textSegment           strings.Builder
+	textSegmentName       string
+	textSegmentNameP      string
+	textSegmentOff        int64
+	tld                   nameSpace
 
 	closed bool
 }
@@ -411,7 +460,6 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 				l.externs[nm] = object
 			}
 			tld.add(nm)
-			//TODO other symbol kinds
 		}
 	}
 	l.tld.registerNameSet(l, tld, true)
@@ -503,7 +551,12 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 		l.w("%q", v.id)
 	}
 	l.w("\n)")
-	l.w("\n\nvar _ reflect.Type\nvar _ unsafe.Pointer")
+	l.w(`
+
+var (
+	_ reflect.Type
+	_ unsafe.Pointer
+)`)
 
 	for _, linkFile := range linkFiles {
 		object := objects[linkFile]
@@ -516,31 +569,69 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 			return errorf("loading %s: %v", object.id, err)
 		}
 
-		fileLinkNames2typeIDs, err := object.collectTypes(file)
+		// types
+		fileLinkNames2IDs, err := object.collectTypes(file)
 		if err != nil {
 			return errorf("loading %s: %v", object.id, err)
 		}
 
 		var linkNames []string
-		for linkName := range fileLinkNames2typeIDs {
+		for linkName := range fileLinkNames2IDs {
 			linkNames = append(linkNames, linkName)
 		}
 		sort.Strings(linkNames)
-		l.fileLinkNames2GoTypeNames = dict{}
+		l.fileLinkNames2GoNames = dict{}
 		for _, linkName := range linkNames {
-			typeID := fileLinkNames2typeIDs[linkName]
-			associatedTypeID, ok := l.linkNames2TypIDs[linkName]
+			typeID := fileLinkNames2IDs[linkName]
+			associatedTypeID, ok := l.fileLinkNames2IDs[linkName]
 			switch {
 			case !ok:
-				l.linkNames2TypIDs.put(linkName, typeID)
+				l.fileLinkNames2IDs.put(linkName, typeID)
 				goName := l.tld.registerName(l, linkName)
-				l.fileLinkNames2GoTypeNames[linkName] = goName
+				l.fileLinkNames2GoNames[linkName] = goName
 			case ok && associatedTypeID == typeID:
-				l.fileLinkNames2GoTypeNames[linkName] = l.tld.dict[linkName]
+				l.fileLinkNames2GoNames[linkName] = l.tld.dict[linkName]
 			default:
 				l.err(errorf("TODO obj %s, linkName %s, typeID %s, ok %v, associatedTypeID %s", object.id, linkName, typeID, ok, associatedTypeID))
 			}
 		}
+
+		// consts
+		if fileLinkNames2IDs, err = object.collectConsts(file); err != nil {
+			return errorf("loading %s: %v", object.id, err)
+		}
+
+		linkNames = linkNames[:0]
+		for linkName := range fileLinkNames2IDs {
+			linkNames = append(linkNames, linkName)
+		}
+		sort.Strings(linkNames)
+		for _, linkName := range linkNames {
+			constID := fileLinkNames2IDs[linkName]
+			associatedConstID, ok := l.fileLinkNames2IDs[linkName]
+			switch {
+			case !ok:
+				l.fileLinkNames2IDs.put(linkName, constID)
+				goName := l.tld.registerName(l, linkName)
+				l.fileLinkNames2GoNames[linkName] = goName
+			case ok && associatedConstID == constID:
+				l.fileLinkNames2GoNames[linkName] = l.tld.dict[linkName]
+			default:
+				l.err(errorf("TODO obj %s, linkName %s, constID %s, ok %v, associatedConstID %s", object.id, linkName, constID, ok, associatedConstID))
+			}
+		}
+
+		// statics
+		linkNames = linkNames[:0]
+		for linkName := range object.static {
+			linkNames = append(linkNames, linkName)
+		}
+		sort.Strings(linkNames)
+		for _, linkName := range linkNames {
+			goName := l.tld.registerName(l, linkName)
+			l.fileLinkNames2GoNames[linkName] = goName
+		}
+
 		for _, decl := range file.Decls {
 			if err := l.decl(file, object, decl); err != nil {
 				return err
@@ -689,7 +780,7 @@ func (l *linker) newFnInfo(n *ast.FuncDecl) (r *fnInfo) {
 
 func (fi *fnInfo) name(linkName string) string {
 	switch symKind(linkName) {
-	case external, staticNone:
+	case external, staticInternal, staticNone:
 		if goName := fi.linker.tld.dict[linkName]; goName != "" {
 			return goName
 		}
@@ -697,8 +788,10 @@ func (fi *fnInfo) name(linkName string) string {
 		return fi.linker.goName(linkName)
 	case automatic, ccgoAutomatic:
 		return fi.ns.dict[linkName]
-	case typename, taggedEum, taggedStruct, taggedUnion:
-		return fi.linker.fileLinkNames2GoTypeNames[linkName]
+	case
+		typename, taggedEum, taggedStruct, taggedUnion, define, macro, enumConst:
+
+		return fi.linker.fileLinkNames2GoNames[linkName]
 	case -1:
 		return linkName
 	}
@@ -710,7 +803,12 @@ func (fi *fnInfo) name(linkName string) string {
 func (fi *fnInfo) Visit(n ast.Node) ast.Visitor {
 	switch x := n.(type) {
 	case *ast.Ident:
-		fi.linkNames.add(x.Name)
+		switch symKind(x.Name) {
+		case staticInternal:
+			// nop
+		default:
+			fi.linkNames.add(x.Name)
+		}
 	case *ast.BasicLit:
 		if x.Kind != token.STRING {
 			break
@@ -745,6 +843,14 @@ func (l *linker) stringLit(s string) string {
 
 func (l *linker) genDecl(file *ast.File, n *ast.GenDecl) error {
 	switch n.Tok {
+	case token.CONST:
+		l.w("\n\nconst (")
+		for _, spec := range n.Specs {
+			if err := l.constSpec(spec.(*ast.ValueSpec)); err != nil {
+				return err
+			}
+		}
+		l.w("\n)")
 	case token.VAR:
 		for _, spec := range n.Specs {
 			if err := l.varSpec(spec.(*ast.ValueSpec)); err != nil {
@@ -776,6 +882,12 @@ func (l *linker) typeSpec(n *ast.TypeSpec) error {
 func (l *linker) varSpec(n *ast.ValueSpec) error {
 	ast.Walk(&renamer{l.newFnInfo(nil)}, n)
 	l.w("\n\nvar ")
+	printer.Fprint(l.out, l.fset, n)
+	return nil
+}
+
+func (l *linker) constSpec(n *ast.ValueSpec) error {
+	ast.Walk(&renamer{l.newFnInfo(nil)}, n)
 	printer.Fprint(l.out, l.fset, n)
 	return nil
 }

@@ -10,15 +10,16 @@ func _() {
 	var x [1]struct{}
 	_ = x[expr-1]
 	_ = x[exprBool-2]
-	_ = x[exprIndex-3]
-	_ = x[exprPointer-4]
-	_ = x[exprUintpr-5]
-	_ = x[exprVoid-6]
+	_ = x[exprFunc-3]
+	_ = x[exprIndex-4]
+	_ = x[exprPointer-5]
+	_ = x[exprUintpr-6]
+	_ = x[exprVoid-7]
 }
 
-const _mode_name = "exprexprBoolexprIndexexprPointerexprUintprexprVoid"
+const _mode_name = "exprexprBoolexprFuncexprIndexexprPointerexprUintprexprVoid"
 
-var _mode_index = [...]uint8{0, 4, 12, 21, 32, 42, 50}
+var _mode_index = [...]uint8{0, 4, 12, 20, 29, 40, 50, 58}
 
 func (i mode) String() string {
 	i -= 1

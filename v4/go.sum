@@ -33,8 +33,8 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 h1:go1bK/D/BFZV2I8cIQd1NKEZ+0owSTG1fDTci4IqFcE=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-modernc.org/cc/v4 v4.0.0-20220416170356-c73037c085d7 h1:sySh0oJ6FqSjM1h/IuLaf6wyEs1LD5ZFJwfzYSOKMec=
-modernc.org/cc/v4 v4.0.0-20220416170356-c73037c085d7/go.mod h1:vbnFXqB4O+YkADjAlFyB9hdhMyXVvg9xM8VFPXNa2tg=
+modernc.org/cc/v4 v4.0.0-20220418201729-59717de3c026 h1:l7xsPn0NLqPqgRTc8qrex4vCtuYLbDNEbzWM3C+bWmQ=
+modernc.org/cc/v4 v4.0.0-20220418201729-59717de3c026/go.mod h1:vbnFXqB4O+YkADjAlFyB9hdhMyXVvg9xM8VFPXNa2tg=
 modernc.org/ccorpus2 v0.0.14 h1:EJuxR4jDTSFfa0uMJRHGmir78IqSvW62MhxNWarG7o8=
 modernc.org/ccorpus2 v0.0.14/go.mod h1:Wifvo4Q/qS/h1aRoC2TffcHsnxwTikmi1AuLANuucJQ=
 modernc.org/mathutil v1.2.2/go.mod h1:mZW8CKdRPY1v87qxC/wUdX5O1qDzXMP5TH3wjfpga6E=
