@@ -162,6 +162,10 @@ func (t *Task) link() (err error) {
 		switch {
 		case strings.HasPrefix(v, "-l="):
 			object, err = t.getPkgSymbols(v[len("-l="):], mode)
+			if err != nil {
+				break
+			}
+
 			if object.pkgName == "libc" && libc == nil {
 				libc = object
 			}

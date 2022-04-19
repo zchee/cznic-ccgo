@@ -575,7 +575,13 @@ out:
 					w.w("\n%s := %s", v, ds)
 					b.w("%s", v)
 				default:
-					c.err(errorf("TODO"))
+					//TODO v2 := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+					//TODO w.w("\n%s := %s", v2, c.expr(w, n.UnaryExpression, nil, exprUintpr))
+					//TODO w.w("\n(*(*%s)(unsafe.Pointer(%s)))--", c.typ(n.UnaryExpression.Type()), v2)
+					//TODO w.w("\n%s := (*(*%s)(unsafe.Pointer(%s)))", v, c.typ(n.UnaryExpression.Type()), v2)
+					//TODO b.w("%s", v)
+					w.w("panic(`TODO`)")
+					b.w("0")
 				}
 			}
 		}
@@ -715,7 +721,11 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 					w.w("\n%s++", ds)
 					b.w("%s", v)
 				default:
-					c.err(errorf("TODO"))
+					v2 := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+					w.w("\n%s := %s", v2, c.expr(w, n.PostfixExpression, nil, exprUintpr))
+					w.w("\n(*(*%s)(unsafe.Pointer(%s)))++", c.typ(n.PostfixExpression.Type()), v2)
+					w.w("\n%s := (*(*%s)(unsafe.Pointer(%s)))", v, c.typ(n.PostfixExpression.Type()), v2)
+					b.w("%s", v)
 				}
 			}
 		}
@@ -755,13 +765,41 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 }
 
 func (c *ctx) declaratorOf(n cc.ExpressionNode) *cc.Declarator {
-	switch x := n.(type) {
-	case *cc.PrimaryExpression:
-		if y, ok := x.ResolvedTo().(*cc.Declarator); ok {
-			return y
+	for n != nil {
+		switch x := n.(type) {
+		case *cc.PrimaryExpression:
+			switch x.Case {
+			case cc.PrimaryExpressionIdent: // IDENTIFIER
+				if y, ok := x.ResolvedTo().(*cc.Declarator); ok {
+					return y
+				}
+			case cc.PrimaryExpressionExpr: // '(' ExpressionList ')'
+				n = x.ExpressionList
+			default:
+				return nil
+			}
+		case *cc.PostfixExpression:
+			switch x.Case {
+			case cc.PostfixExpressionPrimary: // PrimaryExpression
+				n = x.PrimaryExpression
+			default:
+				return nil
+			}
+		case *cc.ExpressionList:
+			for l := x; l != nil; l = l.ExpressionList {
+				n = l.AssignmentExpression
+			}
+		case *cc.CastExpression:
+			switch x.Case {
+			case cc.CastExpressionUnary: // UnaryExpression
+				n = x.UnaryExpression
+			default:
+				return nil
+			}
+		default:
+			panic(todo("%T", n))
 		}
 	}
-	c.err(errorf("TODO %T", n))
 	return nil
 }
 

@@ -143,6 +143,9 @@ func TestCompile(t *testing.T) {
 		"97_utf8_string_literal.c":    {}, //TODO
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
+	case "darwin/amd64":
+		blacklistTCC["22_floating_point.c"] = struct{}{} //TODO
+		blacklistTCC["24_math_library.c"] = struct{}{}   //TODO
 	case "linux/s390x":
 		blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
 	}
@@ -390,6 +393,11 @@ func TestExec(t *testing.T) {
 			"98_al_ax_extend.c":            {}, //TODO
 		}
 		switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
+		case "darwin/amd64":
+			blacklistTCC["22_floating_point.c"] = struct{}{} //TODO
+			blacklistTCC["24_math_library.c"] = struct{}{}   //TODO
+			blacklistTCC["28_strings.c"] = struct{}{}        //TODO
+			blacklistTCC["37_sprintf.c"] = struct{}{}        //TODO
 		case "linux/s390x":
 			blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
 		}
