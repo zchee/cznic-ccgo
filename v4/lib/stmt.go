@@ -71,7 +71,7 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool)
 		if c.f.maxValist != 0 {
 			v += 8 * int64((c.f.maxValist + 1))
 		}
-		w.w("\n%sbp := %[1]stls.Alloc(%d)", tag(ccgoAutomatic), v)
+		w.w("\n%sbp := %[1]stls.Alloc(%d) // tlsAllocs %v maxValist %v", tag(ccgoAutomatic), v, c.f.tlsAllocs, c.f.maxValist)
 		w.w("\ndefer %stls.Free(%d)", tag(ccgoAutomatic), v)
 	}
 	for l := n.BlockItemList; l != nil; l = l.BlockItemList {
@@ -105,7 +105,9 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 			w.w("\nif %s", b1)
 			c.bracedStatement(w, n.Statement)
 		default:
-			c.err(errorf("TODO %v", n.Case))
+			w.w("\n%s", a1.bytes())
+			w.w("\nif %s", b1)
+			c.bracedStatement(w, n.Statement)
 		}
 	case cc.SelectionStatementIfElse: // "if" '(' ExpressionList ')' Statement "else" Statement
 		var a1 buf
@@ -118,7 +120,12 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 			c.statement(w, n.Statement2)
 			w.w("\n}")
 		default:
-			c.err(errorf("TODO %v", n.Case))
+			w.w("\n%s", a1.bytes())
+			w.w("\nif %s {", b1)
+			c.statement(w, n.Statement)
+			w.w("\n} else {")
+			c.statement(w, n.Statement2)
+			w.w("\n}")
 		}
 	case cc.SelectionStatementSwitch: // "switch" '(' ExpressionList ')' Statement
 		var a1 buf
@@ -128,7 +135,9 @@ func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 			w.w("\nswitch %s", b1)
 			c.statement(w, n.Statement)
 		default:
-			c.err(errorf("TODO %v", n.Case))
+			w.w("\n%s", a1.bytes())
+			w.w("\nswitch %s", b1)
+			c.statement(w, n.Statement)
 		}
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
@@ -146,6 +155,17 @@ func (c *ctx) bracedStatement(w writer, n *cc.Statement) {
 	}
 }
 
+func (c *ctx) unbracedStatement(w writer, n *cc.Statement) {
+	switch n.Case {
+	case cc.StatementCompound:
+		for l := n.CompoundStatement.BlockItemList; l != nil; l = l.BlockItemList {
+			c.blockItem(w, l.BlockItem)
+		}
+	default:
+		c.statement(w, n)
+	}
+}
+
 func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	switch n.Case {
 	case cc.IterationStatementWhile: // "while" '(' ExpressionList ')' Statement
@@ -156,7 +176,11 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 			w.w("\nfor %s", b1)
 			c.bracedStatement(w, n.Statement)
 		default:
-			c.err(errorf("TODO %v", n.Case))
+			w.w("\nfor {")
+			w.w("\n%s", a1.bytes())
+			w.w("\nif !(%s) { break }", b1)
+			c.unbracedStatement(w, n.Statement)
+			w.w("\n}")
 		}
 	case cc.IterationStatementDo: // "do" Statement "while" '(' ExpressionList ')' ';'
 		var a1 buf
@@ -166,7 +190,9 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgoAutomatic), b1)
 			c.bracedStatement(w, n.Statement)
 		default:
-			c.err(errorf("TODO %v", n.Case))
+			w.w("\n%s", a1.bytes())
+			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgoAutomatic), b1)
+			c.bracedStatement(w, n.Statement)
 		}
 	case cc.IterationStatementFor: // "for" '(' ExpressionList ';' ExpressionList ';' ExpressionList ')' Statement
 		var a1, a2, a3 buf

@@ -33,7 +33,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 	}
 
 	switch x := t.(type) {
-	case *cc.PointerType:
+	case *cc.PointerType, *cc.FunctionType:
 		b.WriteString("uintptr")
 	case *cc.PredefinedType:
 		if t.VectorSize() > 0 {
@@ -97,7 +97,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 				b.WriteByte('\n')
 				switch nm := f.Name(); {
 				case nm == "":
-					c.err(errorf("TODO"))
+					fmt.Fprintf(b, "%s__%d", tag(field), i)
 				default:
 					fmt.Fprintf(b, "%s%s", tag(field), nm)
 				}
@@ -239,7 +239,7 @@ func typeID0(b *strings.Builder, fset *token.FileSet, in map[string]ast.Expr, ou
 		switch symKind(x.Name) {
 		case -1:
 			b.WriteString(x.Name)
-		case typename:
+		case typename, taggedStruct, taggedUnion, taggedEum:
 			if id, ok := out[x.Name]; ok {
 				b.WriteString(id)
 				break

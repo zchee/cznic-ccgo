@@ -143,7 +143,7 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 					break
 				}
 
-				if v := nargs - ft.MinArgs(); v > f.maxValist {
+				if v := nargs - ft.MinArgs(); ft.IsVariadic() && v > f.maxValist {
 					f.maxValist = v
 				}
 			case cc.PostfixExpressionInc, cc.PostfixExpressionDec:
@@ -234,16 +234,22 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 
 func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgoAutomatic), c.task.tlsQualifier, tag(preserve))
+	switch {
+	case names:
+		fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgoAutomatic), c.task.tlsQualifier, tag(preserve))
+	default:
+		fmt.Fprintf(&b, "(*%s%sTLS", c.task.tlsQualifier, tag(preserve))
+	}
 	if f.MaxArgs() != 0 {
 		for _, v := range f.Parameters() {
 			b.WriteString(", ")
 			if names {
-				nm := v.Name()
-				if nm == "" {
-					nm = "_"
+				switch nm := v.Name(); {
+				case nm == "":
+					fmt.Fprintf(&b, "%sp ", tag(ccgoAutomatic))
+				default:
+					fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
 				}
-				fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
 			}
 			b.WriteString(c.typ(v.Type()))
 		}
@@ -253,6 +259,13 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(ccgoAutomatic))
 	case isMain && len(f.Parameters()) == 1:
 		fmt.Fprintf(&b, ", %sargv uintptr", tag(ccgoAutomatic))
+	case f.IsVariadic():
+		switch {
+		case names:
+			fmt.Fprintf(&b, ", %sva uintptr", tag(ccgoAutomatic))
+		default:
+			fmt.Fprintf(&b, ", uintptr")
+		}
 	}
 	b.WriteByte(')')
 	if f.Result().Kind() != cc.Void {
@@ -316,6 +329,9 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 			if external && c.typenames.add(nm) {
 				w.w("\ntype %s%s = %s", tag(typename), nm, c.typedef(d.Type()))
 			}
+			if !external {
+				return
+			}
 		default:
 			if d.IsExtern() {
 				return
@@ -340,7 +356,12 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 			case info != nil && info.escapes():
 				w.w("\n*(*%s)(unsafe.Pointer(%s)) = %s", c.typ(d.Type()), bpOff(info.bpOff), c.initializerOuter(w, n.Initializer, d.Type()))
 			default:
-				w.w("\n%s%s := %s", c.declaratorTag(d), nm, c.initializerOuter(w, n.Initializer, d.Type()))
+				switch {
+				case d.LexicalScope().Parent == nil:
+					w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializerOuter(w, n.Initializer, d.Type()))
+				default:
+					w.w("\n%s%s := %s", c.declaratorTag(d), nm, c.initializerOuter(w, n.Initializer, d.Type()))
+				}
 			}
 		}
 

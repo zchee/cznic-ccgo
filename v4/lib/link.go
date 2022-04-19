@@ -761,7 +761,7 @@ type fnInfo struct {
 	linker    *linker
 }
 
-func (l *linker) newFnInfo(n *ast.FuncDecl) (r *fnInfo) {
+func (l *linker) newFnInfo(n ast.Node) (r *fnInfo) {
 	r = &fnInfo{linker: l}
 	if n != nil {
 		ast.Walk(r, n)
@@ -880,7 +880,7 @@ func (l *linker) typeSpec(n *ast.TypeSpec) error {
 }
 
 func (l *linker) varSpec(n *ast.ValueSpec) error {
-	ast.Walk(&renamer{l.newFnInfo(nil)}, n)
+	ast.Walk(&renamer{l.newFnInfo(n)}, n)
 	l.w("\n\nvar ")
 	printer.Fprint(l.out, l.fset, n)
 	return nil

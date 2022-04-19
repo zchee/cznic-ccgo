@@ -20,6 +20,9 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,6 +41,8 @@ var (
 	re     *regexp.Regexp
 	hostCC string
 )
+
+func stack() []byte { return debug.Stack() }
 
 func TestMain(m *testing.M) {
 	extendedErrors = true
@@ -106,6 +111,10 @@ func cfsWalk(dir string, f func(pth string, fi os.FileInfo) error) error {
 }
 
 func TestCompile(t *testing.T) {
+	g := newGolden(t, fmt.Sprintf("testdata/test_compile_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
 	tmp := t.TempDir()
 	blacklistCompCert := map[string]struct{}{}
 	// blacklistGCC := map[string]struct{}{
@@ -113,23 +122,14 @@ func TestCompile(t *testing.T) {
 	// 	"950919-1.c": {},
 	// }
 	blacklistTCC := map[string]struct{}{
-		"30_hanoi.c":                  {}, //TODO
-		"31_args.c":                   {}, //TODO
-		"32_led.c":                    {}, //TODO
-		"36_array_initialisers.c":     {}, //TODO
-		"40_stdio.c":                  {}, //TODO
-		"42_function_pointer.c":       {}, //TODO
 		"46_grep.c":                   {}, //TODO
 		"54_goto.c":                   {}, //TODO
-		"55_lshift_type.c":            {}, //TODO
 		"73_arm64.c":                  {}, //TODO
 		"75_array_in_struct_init.c":   {}, //TODO
 		"76_dollars_in_identifiers.c": {}, //TODO
 		"78_vla_label.c":              {}, //TODO
 		"79_vla_continue.c":           {}, //TODO
 		"80_flexarray.c":              {}, //TODO
-		"81_types.c":                  {}, //TODO
-		"83_utf8_in_identifiers.c":    {}, //TODO
 		"86_memory-model.c":           {}, //TODO
 		"87_dead_code.c":              {}, //TODO
 		"88_codeopt.c":                {}, //TODO
@@ -141,7 +141,6 @@ func TestCompile(t *testing.T) {
 		"95_bitfields.c":              {}, //TODO
 		"95_bitfields_ms.c":           {}, //TODO
 		"97_utf8_string_literal.c":    {}, //TODO
-		"98_al_ax_extend.c":           {}, //TODO
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "linux/s390x":
@@ -163,12 +162,12 @@ func TestCompile(t *testing.T) {
 		//TODO {"benchmarksgame-team.pages.debian.net", nil},
 	} {
 		t.Run(v.dir, func(t *testing.T) {
-			testCompile(t, tmp, "assets/"+v.dir, v.blacklist)
+			testCompile(t, tmp, "assets/"+v.dir, v.blacklist, g)
 		})
 	}
 }
 
-func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
+func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}, g *golden) {
 	p := newParallel()
 
 	defer func() { p.close(t) }()
@@ -221,6 +220,7 @@ func testCompile(t *testing.T, tmp, dir string, blacklist map[string]struct{}) {
 				ccgoErr := task.Main()
 				if ccgoErr == nil {
 					p.ok()
+					g.w("%s\n", apth)
 					return
 				}
 
@@ -339,6 +339,10 @@ func shell(echo bool, cmd string, args ...string) ([]byte, error) {
 }
 
 func TestExec(t *testing.T) {
+	g := newGolden(t, fmt.Sprintf("testdata/test_exec_%s_%s.golden", runtime.GOOS, runtime.GOARCH))
+
+	defer g.close()
+
 	tmp := t.TempDir()
 	if err := inDir(tmp, func() error {
 		if out, err := shell(true, "go", "mod", "init", "test"); err != nil {
@@ -355,16 +359,9 @@ func TestExec(t *testing.T) {
 		// 	"950919-1.c": {},
 		// }
 		blacklistTCC := map[string]struct{}{
-			"30_hanoi.c":                   {}, //TODO
-			"31_args.c":                    {}, //TODO
-			"32_led.c":                     {}, //TODO
-			"36_array_initialisers.c":      {}, //TODO
-			"37_sprintf.c":                 {}, //TODO
-			"39_typedef.c":                 {}, //TODO
-			"40_stdio.c":                   {}, //TODO
-			"42_function_pointer.c":        {}, //TODO
-			"46_grep.c":                    {}, //TODO
-			"52_unnamed_enum.c":            {}, //TODO
+			// panics
+			"92_enum_bitfield.c": {}, //TODO
+
 			"54_goto.c":                    {}, //TODO
 			"55_lshift_type.c":             {}, //TODO
 			"64_macro_nesting.c":           {}, //TODO
@@ -379,7 +376,6 @@ func TestExec(t *testing.T) {
 			"79_vla_continue.c":            {}, //TODO
 			"80_flexarray.c":               {}, //TODO
 			"81_types.c":                   {}, //TODO
-			"83_utf8_in_identifiers.c":     {}, //TODO
 			"84_hex-float.c":               {}, //TODO
 			"85_asm-outside-function.c":    {}, //TODO
 			"86_memory-model.c":            {}, //TODO
@@ -388,7 +384,6 @@ func TestExec(t *testing.T) {
 			"89_nocode_wanted.c":           {}, //TODO
 			"90_struct-init.c":             {}, //TODO
 			"91_ptr_longlong_arith32.c":    {}, //TODO
-			"92_enum_bitfield.c":           {}, //TODO
 			"93_integer_promotion.c":       {}, //TODO
 			"94_generic.c":                 {}, //TODO
 			"97_utf8_string_literal.c":     {}, //TODO
@@ -414,7 +409,7 @@ func TestExec(t *testing.T) {
 			//TODO {"benchmarksgame-team.pages.debian.net", nil},
 		} {
 			t.Run(v.dir, func(t *testing.T) {
-				testExec(t, "assets/"+v.dir, v.blacklist)
+				testExec(t, "assets/"+v.dir, v.blacklist, g)
 			})
 		}
 
@@ -424,7 +419,7 @@ func TestExec(t *testing.T) {
 	}
 }
 
-func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
+func testExec(t *testing.T, dir string, blacklist map[string]struct{}, g *golden) {
 	p := newParallel()
 
 	defer func() { p.close(t) }()
@@ -491,6 +486,10 @@ func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 				defer os.Remove(ofn)
 
 				cOut, err := shell(false, "./"+binary(ofn))
+				if err != nil {
+					p.skip()
+					return
+				}
 
 				ofn += ".go"
 
@@ -512,6 +511,7 @@ func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 
 				if bytes.Equal(cOut, goOut) {
 					p.ok()
+					g.w("%s\n", apth)
 					return
 				}
 
@@ -548,6 +548,70 @@ func testExec(t *testing.T, dir string, blacklist map[string]struct{}) {
 		})
 		return nil
 	}))
+}
+
+type golden struct {
+	a  []string
+	f  *os.File
+	mu sync.Mutex
+	t  *testing.T
+
+	discard bool
+}
+
+func newGolden(t *testing.T, fn string) *golden {
+	if re != nil {
+		return &golden{discard: true}
+	}
+
+	f, err := os.Create(filepath.FromSlash(fn))
+	if err != nil { // Possibly R/O fs in a VM
+		base := filepath.Base(filepath.FromSlash(fn))
+		f, err = ioutil.TempFile("", base)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Logf("writing results to %s\n", f.Name())
+	}
+
+	return &golden{t: t, f: f}
+}
+
+func (g *golden) w(s string, args ...interface{}) {
+	if g.discard {
+		return
+	}
+
+	g.mu.Lock()
+
+	defer g.mu.Unlock()
+
+	if s = strings.TrimRight(s, " \t\n\r"); !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+	g.a = append(g.a, fmt.Sprintf(s, args...))
+}
+
+func (g *golden) close() {
+	if g.discard || g.f == nil {
+		return
+	}
+
+	defer func() { g.f = nil }()
+
+	sort.Strings(g.a)
+	if _, err := g.f.WriteString(strings.Join(g.a, "")); err != nil {
+		g.t.Fatal(err)
+	}
+
+	if err := g.f.Sync(); err != nil {
+		g.t.Fatal(err)
+	}
+
+	if err := g.f.Close(); err != nil {
+		g.t.Fatal(err)
+	}
 }
 
 func getCorpusFile(path string) ([]byte, error) {
