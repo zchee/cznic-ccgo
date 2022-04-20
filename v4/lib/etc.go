@@ -93,6 +93,9 @@ var (
 		"uint64":     {},
 		"uint8":      {},
 		"uintptr":    {},
+
+		// Protected identifiers
+		"unsafe": {},
 	}
 )
 

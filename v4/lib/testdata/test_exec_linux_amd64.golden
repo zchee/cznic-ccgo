@@ -8,6 +8,8 @@ assets/tcc-0.9.27/tests/tests2/06_case.c
 assets/tcc-0.9.27/tests/tests2/07_function.c
 assets/tcc-0.9.27/tests/tests2/08_while.c
 assets/tcc-0.9.27/tests/tests2/09_do_while.c
+assets/tcc-0.9.27/tests/tests2/10_pointer.c
+assets/tcc-0.9.27/tests/tests2/12_hashdefine.c
 assets/tcc-0.9.27/tests/tests2/13_integer_literals.c
 assets/tcc-0.9.27/tests/tests2/15_recursion.c
 assets/tcc-0.9.27/tests/tests2/16_nesting.c

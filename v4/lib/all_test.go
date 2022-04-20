@@ -122,9 +122,7 @@ func TestCompile(t *testing.T) {
 	// 	"950919-1.c": {},
 	// }
 	blacklistTCC := map[string]struct{}{
-		"10_pointer.c":                 {}, //TODO
 		"11_precedence.c":              {}, //TODO
-		"12_hashdefine.c":              {}, //TODO
 		"14_if.c":                      {}, //TODO
 		"17_enum.c":                    {}, //TODO
 		"19_pointer_arithmetic.c":      {}, //TODO
@@ -141,13 +139,10 @@ func TestCompile(t *testing.T) {
 		"31_args.c":                    {}, //TODO
 		"32_led.c":                     {}, //TODO
 		"33_ternary_op.c":              {}, //TODO
-		"34_array_assignment.c":        {}, //TODO
 		"35_sizeof.c":                  {}, //TODO
-		"37_sprintf.c":                 {}, //TODO
 		"38_multiple_array_index.c":    {}, //TODO
 		"39_typedef.c":                 {}, //TODO
 		"40_stdio.c":                   {}, //TODO
-		"42_function_pointer.c":        {}, //TODO
 		"45_empty_for.c":               {}, //TODO
 		"46_grep.c":                    {}, //TODO
 		"48_nested_break.c":            {}, //TODO
@@ -407,9 +402,7 @@ func TestExec(t *testing.T) {
 			// panics
 			"92_enum_bitfield.c": {}, //TODO
 
-			"10_pointer.c":                 {}, //TODO
 			"11_precedence.c":              {}, //TODO
-			"12_hashdefine.c":              {}, //TODO
 			"14_if.c":                      {}, //TODO
 			"17_enum.c":                    {}, //TODO
 			"19_pointer_arithmetic.c":      {}, //TODO
