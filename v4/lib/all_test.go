@@ -146,6 +146,10 @@ func TestCompile(t *testing.T) {
 	case "darwin/amd64":
 		blacklistTCC["22_floating_point.c"] = struct{}{} //TODO
 		blacklistTCC["24_math_library.c"] = struct{}{}   //TODO
+	case "linux/386":
+		blacklistTCC["22_floating_point.c"] = struct{}{} //TODO
+		blacklistTCC["24_math_library.c"] = struct{}{}   //TODO
+		blacklistTCC["99_fastcall.c"] = struct{}{}       //TODO
 	case "linux/s390x":
 		blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
 	}
@@ -398,6 +402,9 @@ func TestExec(t *testing.T) {
 			blacklistTCC["24_math_library.c"] = struct{}{}   //TODO
 			blacklistTCC["28_strings.c"] = struct{}{}        //TODO
 			blacklistTCC["37_sprintf.c"] = struct{}{}        //TODO
+		case "linux/386":
+			blacklistTCC["22_floating_point.c"] = struct{}{} //TODO
+			blacklistTCC["24_math_library.c"] = struct{}{}   //TODO
 		case "linux/s390x":
 			blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
 		}
