@@ -8,19 +8,20 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[expr-1]
-	_ = x[exprBool-2]
-	_ = x[exprFunc-3]
+	_ = x[exprBool-1]
+	_ = x[exprCall-2]
+	_ = x[exprDefault-3]
 	_ = x[exprIndex-4]
-	_ = x[exprPointer-5]
+	_ = x[exprLvalue-5]
 	_ = x[exprSelect-6]
 	_ = x[exprUintpr-7]
-	_ = x[exprVoid-8]
+	_ = x[exprUntyped-8]
+	_ = x[exprVoid-9]
 }
 
-const _mode_name = "exprexprBoolexprFuncexprIndexexprPointerexprSelectexprUintprexprVoid"
+const _mode_name = "exprBoolexprCallexprDefaultexprIndexexprLvalueexprSelectexprUintprexprUntypedexprVoid"
 
-var _mode_index = [...]uint8{0, 4, 12, 20, 29, 40, 50, 60, 68}
+var _mode_index = [...]uint8{0, 8, 16, 27, 36, 46, 56, 66, 77, 85}
 
 func (i mode) String() string {
 	i -= 1

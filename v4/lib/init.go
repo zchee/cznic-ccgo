@@ -46,13 +46,13 @@ func (c *ctx) initializer(w writer, a []*cc.Initializer, t cc.Type, off0 int64) 
 			return nil
 		}
 
-		return c.expr(w, a[0].AssignmentExpression, t, expr)
+		return c.expr(w, a[0].AssignmentExpression, t, exprDefault)
 	}
 
 	switch x := t.(type) {
 	case *cc.ArrayType:
 		if len(a) == 1 && a[0].Type().Kind() == cc.Array && a[0].Value() != cc.Unknown {
-			return c.expr(w, a[0].AssignmentExpression, t, expr)
+			return c.expr(w, a[0].AssignmentExpression, t, exprDefault)
 		}
 
 		return c.initializerArray(w, a, x, off0)

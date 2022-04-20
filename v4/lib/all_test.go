@@ -122,25 +122,63 @@ func TestCompile(t *testing.T) {
 	// 	"950919-1.c": {},
 	// }
 	blacklistTCC := map[string]struct{}{
-		"46_grep.c":                   {}, //TODO
-		"54_goto.c":                   {}, //TODO
-		"73_arm64.c":                  {}, //TODO
-		"75_array_in_struct_init.c":   {}, //TODO
-		"76_dollars_in_identifiers.c": {}, //TODO
-		"78_vla_label.c":              {}, //TODO
-		"79_vla_continue.c":           {}, //TODO
-		"80_flexarray.c":              {}, //TODO
-		"86_memory-model.c":           {}, //TODO
-		"87_dead_code.c":              {}, //TODO
-		"88_codeopt.c":                {}, //TODO
-		"89_nocode_wanted.c":          {}, //TODO
-		"90_struct-init.c":            {}, //TODO
-		"91_ptr_longlong_arith32.c":   {}, //TODO
-		"93_integer_promotion.c":      {}, //TODO
-		"94_generic.c":                {}, //TODO
-		"95_bitfields.c":              {}, //TODO
-		"95_bitfields_ms.c":           {}, //TODO
-		"97_utf8_string_literal.c":    {}, //TODO
+		"10_pointer.c":                 {}, //TODO
+		"11_precedence.c":              {}, //TODO
+		"12_hashdefine.c":              {}, //TODO
+		"14_if.c":                      {}, //TODO
+		"17_enum.c":                    {}, //TODO
+		"19_pointer_arithmetic.c":      {}, //TODO
+		"20_pointer_comparison.c":      {}, //TODO
+		"21_char_array.c":              {}, //TODO
+		"22_floating_point.c":          {}, //TODO
+		"23_type_coercion.c":           {}, //TODO
+		"24_math_library.c":            {}, //TODO
+		"25_quicksort.c":               {}, //TODO
+		"27_sizeof.c":                  {}, //TODO
+		"28_strings.c":                 {}, //TODO
+		"29_array_address.c":           {}, //TODO
+		"30_hanoi.c":                   {}, //TODO
+		"31_args.c":                    {}, //TODO
+		"32_led.c":                     {}, //TODO
+		"33_ternary_op.c":              {}, //TODO
+		"34_array_assignment.c":        {}, //TODO
+		"35_sizeof.c":                  {}, //TODO
+		"37_sprintf.c":                 {}, //TODO
+		"38_multiple_array_index.c":    {}, //TODO
+		"39_typedef.c":                 {}, //TODO
+		"40_stdio.c":                   {}, //TODO
+		"42_function_pointer.c":        {}, //TODO
+		"45_empty_for.c":               {}, //TODO
+		"46_grep.c":                    {}, //TODO
+		"48_nested_break.c":            {}, //TODO
+		"49_bracket_evaluation.c":      {}, //TODO
+		"50_logical_second_arg.c":      {}, //TODO
+		"52_unnamed_enum.c":            {}, //TODO
+		"54_goto.c":                    {}, //TODO
+		"55_lshift_type.c":             {}, //TODO
+		"67_macro_concat.c":            {}, //TODO
+		"70_floating_point_literals.c": {}, //TODO
+		"73_arm64.c":                   {}, //TODO
+		"75_array_in_struct_init.c":    {}, //TODO
+		"76_dollars_in_identifiers.c":  {}, //TODO
+		"78_vla_label.c":               {}, //TODO
+		"79_vla_continue.c":            {}, //TODO
+		"80_flexarray.c":               {}, //TODO
+		"81_types.c":                   {}, //TODO
+		"83_utf8_in_identifiers.c":     {}, //TODO
+		"86_memory-model.c":            {}, //TODO
+		"87_dead_code.c":               {}, //TODO
+		"88_codeopt.c":                 {}, //TODO
+		"89_nocode_wanted.c":           {}, //TODO
+		"90_struct-init.c":             {}, //TODO
+		"91_ptr_longlong_arith32.c":    {}, //TODO
+		"92_enum_bitfield.c":           {}, //TODO
+		"93_integer_promotion.c":       {}, //TODO
+		"94_generic.c":                 {}, //TODO
+		"95_bitfields.c":               {}, //TODO
+		"95_bitfields_ms.c":            {}, //TODO
+		"97_utf8_string_literal.c":     {}, //TODO
+		"98_al_ax_extend.c":            {}, //TODO
 	}
 	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
 	case "darwin/amd64":
@@ -369,6 +407,36 @@ func TestExec(t *testing.T) {
 			// panics
 			"92_enum_bitfield.c": {}, //TODO
 
+			"10_pointer.c":                 {}, //TODO
+			"11_precedence.c":              {}, //TODO
+			"12_hashdefine.c":              {}, //TODO
+			"14_if.c":                      {}, //TODO
+			"17_enum.c":                    {}, //TODO
+			"19_pointer_arithmetic.c":      {}, //TODO
+			"20_pointer_comparison.c":      {}, //TODO
+			"21_char_array.c":              {}, //TODO
+			"22_floating_point.c":          {}, //TODO
+			"23_type_coercion.c":           {}, //TODO
+			"24_math_library.c":            {}, //TODO
+			"25_quicksort.c":               {}, //TODO
+			"27_sizeof.c":                  {}, //TODO
+			"28_strings.c":                 {}, //TODO
+			"29_array_address.c":           {}, //TODO
+			"30_hanoi.c":                   {}, //TODO
+			"31_args.c":                    {}, //TODO
+			"32_led.c":                     {}, //TODO
+			"33_ternary_op.c":              {}, //TODO
+			"35_sizeof.c":                  {}, //TODO
+			"37_sprintf.c":                 {}, //TODO
+			"38_multiple_array_index.c":    {}, //TODO
+			"39_typedef.c":                 {}, //TODO
+			"40_stdio.c":                   {}, //TODO
+			"42_function_pointer.c":        {}, //TODO
+			"45_empty_for.c":               {}, //TODO
+			"48_nested_break.c":            {}, //TODO
+			"49_bracket_evaluation.c":      {}, //TODO
+			"50_logical_second_arg.c":      {}, //TODO
+			"52_unnamed_enum.c":            {}, //TODO
 			"54_goto.c":                    {}, //TODO
 			"55_lshift_type.c":             {}, //TODO
 			"64_macro_nesting.c":           {}, //TODO
@@ -383,6 +451,7 @@ func TestExec(t *testing.T) {
 			"79_vla_continue.c":            {}, //TODO
 			"80_flexarray.c":               {}, //TODO
 			"81_types.c":                   {}, //TODO
+			"83_utf8_in_identifiers.c":     {}, //TODO
 			"84_hex-float.c":               {}, //TODO
 			"85_asm-outside-function.c":    {}, //TODO
 			"86_memory-model.c":            {}, //TODO

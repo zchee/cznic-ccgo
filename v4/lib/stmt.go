@@ -38,15 +38,8 @@ func (c *ctx) labeledStatement(w writer, n *cc.LabeledStatement) {
 		if n.CaseOrdinal() != 0 {
 			w.w("\nfallthrough")
 		}
-		var a1 buf
-		b1 := c.expr(&a1, n.ConstantExpression, nil, expr)
-		switch {
-		case a1.len() == 0:
-			w.w("\ncase %s:", b1)
-			c.statement(w, n.Statement)
-		default:
-			c.err(errorf("TODO %v", n.Case))
-		}
+		w.w("\ncase %s:", c.expr(nil, n.ConstantExpression, nil, exprDefault))
+		c.statement(w, n.Statement)
 	case cc.LabeledStatementRange: // "case" ConstantExpression "..." ConstantExpression ':' Statement
 		if n.CaseOrdinal() != 0 {
 			w.w("\nfallthrough")
@@ -98,47 +91,17 @@ func (c *ctx) blockItem(w writer, n *cc.BlockItem) {
 func (c *ctx) selectionStatement(w writer, n *cc.SelectionStatement) {
 	switch n.Case {
 	case cc.SelectionStatementIf: // "if" '(' ExpressionList ')' Statement
-		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
-		switch {
-		case a1.len() == 0:
-			w.w("\nif %s", b1)
-			c.bracedStatement(w, n.Statement)
-		default:
-			w.w("\n%s", a1.bytes())
-			w.w("\nif %s", b1)
-			c.bracedStatement(w, n.Statement)
-		}
+		w.w("\nif %s", c.expr(w, n.ExpressionList, nil, exprBool))
+		c.bracedStatement(w, n.Statement)
 	case cc.SelectionStatementIfElse: // "if" '(' ExpressionList ')' Statement "else" Statement
-		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
-		switch {
-		case a1.len() == 0:
-			w.w("\nif %s {", b1)
-			c.statement(w, n.Statement)
-			w.w("\n} else {")
-			c.statement(w, n.Statement2)
-			w.w("\n}")
-		default:
-			w.w("\n%s", a1.bytes())
-			w.w("\nif %s {", b1)
-			c.statement(w, n.Statement)
-			w.w("\n} else {")
-			c.statement(w, n.Statement2)
-			w.w("\n}")
-		}
+		w.w("\nif %s {", c.expr(w, n.ExpressionList, nil, exprBool))
+		c.statement(w, n.Statement)
+		w.w("\n} else {")
+		c.statement(w, n.Statement2)
+		w.w("\n}")
 	case cc.SelectionStatementSwitch: // "switch" '(' ExpressionList ')' Statement
-		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, nil, expr)
-		switch {
-		case a1.len() == 0:
-			w.w("\nswitch %s", b1)
-			c.statement(w, n.Statement)
-		default:
-			w.w("\n%s", a1.bytes())
-			w.w("\nswitch %s", b1)
-			c.statement(w, n.Statement)
-		}
+		w.w("\nswitch %s", c.expr(w, n.ExpressionList, nil, exprDefault))
+		c.statement(w, n.Statement)
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
@@ -169,60 +132,14 @@ func (c *ctx) unbracedStatement(w writer, n *cc.Statement) {
 func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	switch n.Case {
 	case cc.IterationStatementWhile: // "while" '(' ExpressionList ')' Statement
-		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
-		switch {
-		case a1.len() == 0:
-			w.w("\nfor %s", b1)
-			c.bracedStatement(w, n.Statement)
-		default:
-			w.w("\nfor {")
-			w.w("\n%s", a1.bytes())
-			w.w("\nif !(%s) { break }", b1)
-			c.unbracedStatement(w, n.Statement)
-			w.w("\n}")
-		}
+		w.w("\nfor %s", c.expr(w, n.ExpressionList, nil, exprBool))
+		c.bracedStatement(w, n.Statement)
 	case cc.IterationStatementDo: // "do" Statement "while" '(' ExpressionList ')' ';'
-		var a1 buf
-		b1 := c.expr(&a1, n.ExpressionList, nil, exprBool)
-		switch {
-		case a1.len() == 0:
-			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgoAutomatic), b1)
-			c.bracedStatement(w, n.Statement)
-		default:
-			w.w("\n%s", a1.bytes())
-			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgoAutomatic), b1)
-			c.bracedStatement(w, n.Statement)
-		}
+		w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgoAutomatic), c.expr(w, n.ExpressionList, nil, exprBool))
+		c.bracedStatement(w, n.Statement)
 	case cc.IterationStatementFor: // "for" '(' ExpressionList ';' ExpressionList ';' ExpressionList ')' Statement
-		var a1, a2, a3 buf
-		var b1, b2, b3 []byte
-		if n.ExpressionList != nil {
-			b1 = c.expr(&a1, n.ExpressionList, nil, exprVoid)
-		}
-		switch {
-		case a1.len() == 0:
-			if n.ExpressionList2 != nil {
-				b2 = c.expr(&a2, n.ExpressionList2, nil, exprBool)
-			}
-			switch {
-			case a2.len() == 0:
-				if n.ExpressionList3 != nil {
-					b3 = c.expr(&a3, n.ExpressionList3, nil, exprVoid)
-				}
-				switch {
-				case a3.len() == 0:
-					w.w("\nfor %s; %s; %s", b1, b2, b3)
-					c.bracedStatement(w, n.Statement)
-				default:
-					c.err(errorf("TODO %v", n.Case))
-				}
-			default:
-				c.err(errorf("TODO %v", n.Case))
-			}
-		default:
-			c.err(errorf("TODO %v", n.Case))
-		}
+		w.w("\nfor %s; %s; %s", c.expr(w, n.ExpressionList, nil, exprVoid), c.expr(w, n.ExpressionList2, nil, exprBool), c.expr(w, n.ExpressionList3, nil, exprVoid))
+		c.bracedStatement(w, n.Statement)
 	case cc.IterationStatementForDecl: // "for" '(' Declaration ExpressionList ';' ExpressionList ')' Statement
 		c.err(errorf("TODO %v", n.Case))
 	default:
@@ -243,7 +160,7 @@ func (c *ctx) jumpStatement(w writer, n *cc.JumpStatement) {
 	case cc.JumpStatementReturn: // "return" ExpressionList ';'
 		switch {
 		case n.ExpressionList != nil:
-			w.w("\nreturn %s", c.expr(w, n.ExpressionList, c.f.t.Result(), expr))
+			w.w("\nreturn %s", c.expr(w, n.ExpressionList, c.f.t.Result(), exprDefault))
 		default:
 			w.w("\nreturn")
 		}

@@ -7,6 +7,7 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 import (
 	"fmt"
 	"strconv"
+	"unicode"
 
 	"modernc.org/cc/v4"
 )
@@ -14,18 +15,24 @@ import (
 type mode int
 
 const (
-	_ mode = iota
-	expr
-	exprBool
-	exprFunc
+	_        mode = iota
+	exprBool      // C arithmetic type, Go bool
+	exprCall
+	exprDefault
 	exprIndex
-	exprPointer
+	exprLvalue
 	exprSelect
-	exprUintpr
+	exprUintpr // C pointer, Go uintptr
+	exprUntyped
 	exprVoid
 )
 
-func (c *ctx) expr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode) (r []byte) {
+func (c *ctx) expr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode) []byte {
+	if toMode == 0 {
+		c.err(errorf("internal error"))
+		return nil
+	}
+
 	if n == nil {
 		if toMode != exprVoid {
 			c.err(errorf("TODO"))
@@ -40,234 +47,384 @@ func (c *ctx) expr(w writer, n cc.ExpressionNode, to cc.Type, toMode mode) (r []
 		return nil
 	}
 
-	from := n.Type()
-	var fromMode mode
-	switch {
-	case to == nil:
-		to = from
-	case to.Kind() == cc.Void:
-		toMode = exprVoid
-	case toMode == exprVoid:
-		to = c.void
+	if to == nil {
+		to = n.Type()
 	}
-	if r, from, fromMode = c.expr0(w, n, to, toMode); from == nil {
-		from = n.Type()
+	r, from, fromMode := c.expr0(w, n, to, toMode)
+	if assert && (from == nil || fromMode == 0) {
+		c.err(errorf("TODO %T %v %v", n, from, fromMode))
 	}
-	if fromMode == 0 {
-		fromMode = expr
-	}
+
 	return c.convert(n, r, from, to, fromMode, toMode)
 }
 
-func (c *ctx) convert(n cc.Node, b []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
-	// defer func() { trc("%v: from %v: %v, to %v: %v %q -> %q", c.pos(n), from, fromMode, to, toMode, b, r) }()
-	if from.Kind() == cc.Enum {
-		from = from.(*cc.EnumType).UnderlyingType()
+func (c *ctx) convert(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+	// defer func() { trc("%v: from %v: %v, to %v: %v %q -> %q", c.pos(n), from, fromMode, to, toMode, s, r) }()
+	if fromMode == exprUntyped {
+		return c.convertUntyped(n, s, from, to, fromMode, toMode)
 	}
-	if to.Kind() == cc.Enum {
-		to = to.(*cc.EnumType).UnderlyingType()
-	}
+
 	if from == to {
-		if fromMode == expr && toMode == exprVoid ||
-			fromMode == toMode {
+		if fromMode == toMode {
+			return s
+		}
+
+		return c.convertMode(n, s, from, to, fromMode, toMode)
+	}
+
+	if fromMode == toMode {
+		return c.convertType(n, s, from, to, fromMode, toMode)
+	}
+
+	// 	if from.Kind() == cc.Enum {
+	// 		from = from.(*cc.EnumType).UnderlyingType()
+	// 	}
+	// 	if to.Kind() == cc.Enum {
+	// 		to = to.(*cc.EnumType).UnderlyingType()
+	// 	}
+	// 	if from == to {
+	// 		if fromMode == expr && toMode == exprVoid ||
+	// 			fromMode == toMode {
+	// 			return s
+	// 		}
+	// 	}
+	//
+	// 	if from.Kind() == cc.Ptr {
+	// 		return c.convertFromPointer(n, s, from.(*cc.PointerType), to, fromMode, toMode)
+	// 	}
+	//
+	// 	if to.Kind() == cc.Ptr {
+	// 		return c.convertToPointer(n, s, from, to.(*cc.PointerType), fromMode, toMode)
+	// 	}
+	//
+	// 	if toMode == exprBool {
+	// 		return c.convertToBool(n, s, from, to, fromMode, toMode)
+	// 	}
+	//
+	// 	if fromMode == exprBool {
+	// 		return c.convertFromBool(n, s, from, to, fromMode, toMode)
+	// 	}
+	//
+	// 	if cc.IsIntegerType(from) {
+	// 		return c.convertFromInteger(n, s, from, to, fromMode, toMode)
+	// 	}
+	//
+	// 	if cc.IsArithmeticType(from) {
+	// 		return c.convertFromArithmetic(n, s, from, to, fromMode, toMode)
+	// 	}
+	//
+	// 	if from.Kind() == cc.Struct && fromMode == expr && to.Kind() == cc.Struct && toMode == exprSelect {
+	// 		return s
+	// 	}
+	//
+	c.err(errorf("TODO %q %s %s -> %s %s", s, from, fromMode, to, toMode))
+	return s //TODO
+}
+
+func (c *ctx) convertUntyped(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+	// defer func() { trc("%v: from %v: %v, to %v: %v %q -> %q", c.pos(n), from, fromMode, to, toMode, s, r) }()
+	var b buf
+	from = from.Undecay()
+	switch {
+	case from.Kind() == cc.Array:
+		switch from := from.(*cc.ArrayType); {
+		case c.isCharType(from.Elem()):
+			switch to.Kind() {
+			case cc.Array:
+				to := to.(*cc.ArrayType)
+				max := to.Len()
+				for len(s) != 0 && s[len(s)-1] == 0 {
+					s = s[:len(s)-1]
+				}
+				b.w("%s{", c.typ(to))
+				for i := 0; i < len(s) && int64(i) < max; i++ {
+					b.w("%s, ", c.stringCharConst(s[i]))
+				}
+				b.w("}")
+				return b.bytes()
+			case cc.Ptr:
+				to := to.(*cc.PointerType)
+				if c.isCharType(to.Elem()) {
+					b.w("%q", s)
+					return b.bytes()
+				}
+			}
+		}
+	case cc.IsIntegerType(from):
+		switch {
+		case cc.IsIntegerType(to):
+			var val uint64
+			switch {
+			case cc.IsSignedInteger(from):
+				v, err := strconv.ParseInt(string(s), 10, 64)
+				if err != nil {
+					c.err(errorf("internal error: %v", err))
+					break
+				}
+
+				val = uint64(v)
+			default:
+				c.err(errorf("TODO"))
+			}
+			switch {
+			case cc.IsSignedInteger(to):
+				if to.Size() < 8 {
+					m := uint64(1)<<(to.Size()*8) - 1
+					switch {
+					case int64(val) < 0:
+						val |= m
+					default:
+						val &= m
+					}
+				}
+				b.w("int%d(%d)", 8*to.Size(), int64(val))
+			default:
+				c.err(errorf("TODO"))
+			}
+			return b.bytes()
+		}
+	}
+
+	c.err(errorf("TODO %q %s %s -> %s %s", s, from, fromMode, to, toMode))
+	return s //TODO
+}
+
+// type unchanged
+func (c *ctx) convertMode(n cc.Node, b []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+	// defer func() { trc("%v: from %v: %v, to %v: %v %q -> %q", c.pos(n), from, fromMode, to, toMode, b, r) }()
+	switch fromMode {
+	case exprDefault:
+		switch toMode {
+		case exprLvalue:
+			if assert {
+				s := string(b)
+				if !c.isIdent(s) {
+					break
+				}
+
+				switch symKind(s) {
+				case automatic:
+					// ok
+				default:
+					c.err(errorf("TODO %v", symKind(s)))
+				}
+			}
+			return b
+		case exprCall:
+			if assert {
+				s := string(b)
+				if !c.isIdent(s) {
+					break
+				}
+
+				switch symKind(s) {
+				case external:
+					// ok
+				default:
+					c.err(errorf("TODO %v", symKind(s)))
+				}
+			}
+			return b
+		case exprVoid:
 			return b
 		}
 	}
-
-	if from.Kind() == cc.Ptr {
-		return c.convertFromPointer(n, b, from.(*cc.PointerType), to, fromMode, toMode)
-	}
-
-	if to.Kind() == cc.Ptr {
-		return c.convertToPointer(n, b, from, to.(*cc.PointerType), fromMode, toMode)
-	}
-
-	if toMode == exprBool {
-		return c.convertToBool(n, b, from, to, fromMode, toMode)
-	}
-
-	if fromMode == exprBool {
-		return c.convertFromBool(n, b, from, to, fromMode, toMode)
-	}
-
-	if cc.IsIntegerType(from) {
-		return c.convertFromInteger(n, b, from, to, fromMode, toMode)
-	}
-
-	if cc.IsArithmeticType(from) {
-		return c.convertFromArithmetic(n, b, from, to, fromMode, toMode)
-	}
-
-	if from.Kind() == cc.Struct && fromMode == expr && to.Kind() == cc.Struct && toMode == exprSelect {
-		return b
-	}
-
-	c.err(errorf("%v: TODO %q %s %s, %s -> %s %s, %s", c.pos(n), b, from, from.Kind(), fromMode, to, to.Kind(), toMode))
+	c.err(errorf("TODO %q %s %s -> %s %s", b, from, fromMode, to, toMode))
 	return b //TODO
 }
 
-func (c *ctx) convertFromArithmetic(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
-	var b buf
-	if cc.IsArithmeticType(to) {
-		b.w("%s(%s)", c.typ(to), s)
-		return b.bytes()
-	}
-
-	c.err(errorf("%v: TODO %q %s %s, %s -> %s %s, %s", c.pos(n), s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
-	return s
-}
-
-func (c *ctx) convertFromInteger(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
-	var b buf
-	if cc.IsArithmeticType(to) {
-		b.w("%s(%s)", c.typ(to), s)
-		return b.bytes()
-	}
-
-	c.err(errorf("%v: TODO %q %s %s, %s -> %s %s, %s", c.pos(n), s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
-	return s
-}
-
-func (c *ctx) convertFromBool(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
-	var b buf
-	if toMode == expr && to.Kind() == cc.Int && to.Size() == 4 {
-		b.w("%sBool32(%s)", c.task.tlsQualifier, s)
-		return b.bytes()
-	}
-
-	c.err(errorf("%v: TODO %q %s %s, %s -> %s %s, %s", c.pos(n), s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
-	return s //TODO
-}
-
-func (c *ctx) convertToBool(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
-	var b buf
-	b.w("(%s != 0)", s)
-	return b.bytes()
-}
-
-func (c *ctx) convertToPointer(n cc.Node, s []byte, from cc.Type, to *cc.PointerType, fromMode, toMode mode) (r []byte) {
-	var b buf
-	if from.Kind() == cc.Struct && fromMode == expr && to.Elem().Kind() == cc.Struct && toMode == exprUintpr {
-		b.w("uintptr(unsafe.Pointer(&%s))", s)
-		return b.bytes()
-	}
-
-	if cc.IsScalarType(from) && fromMode == expr && to.Elem().Kind() == from.Kind() && toMode == exprUintpr {
-		b.w("uintptr(unsafe.Pointer(&%s))", s)
-		return b.bytes()
-	}
-
-	if from.Kind() == cc.Function && fromMode == exprFunc && toMode == exprUintpr { //TODO get rid of the alloc
-		b.w("(*(*uintptr)(unsafe.Pointer(&struct{f func%s}{%s})))", c.signature(from.(*cc.FunctionType), false, false), s)
-		return b.bytes()
-	}
-
-	if cc.IsIntegerType(from) {
-		b.w("%s(%s)", c.typ(to), s)
-		return b.bytes()
-	}
-
-	c.err(errorf("%v: TODO %q %s %s, %s -> %s %s, %s", c.pos(n), s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
-	return s //TODO
-}
-
-func (c *ctx) convertFromPointer(n cc.Node, s []byte, from *cc.PointerType, to cc.Type, fromMode, toMode mode) (r []byte) {
-	var b buf
-	if to.Kind() == cc.Ptr {
-		if fromMode == expr && toMode == expr {
-			return s
-		}
-
-		if fromMode == exprUintpr && toMode == exprUintpr {
-			return s
-		}
-
-		if fromMode == expr && toMode == exprUintpr {
-			b.w("uintptr(unsafe.Pointer(&%s))", s)
-			return b.bytes()
-		}
-
-		if fromMode == expr && toMode == exprBool {
-			b.w("(%s != 0)", s)
-			return b.bytes()
-		}
-	}
-
-	if to.Kind() == cc.Array {
-		if ufrom := from.Undecay(); ufrom.Kind() == cc.Array {
-			if fromMode == expr && toMode == exprIndex {
-				return s
+func (c *ctx) isIdent(s string) bool {
+	for i, v := range s {
+		switch {
+		case i == 0:
+			if !unicode.IsLetter(v) && v != '_' {
+				return false
+			}
+		default:
+			if !unicode.IsLetter(v) && v != '_' && !unicode.IsDigit(v) {
+				return false
 			}
 		}
 	}
+	return len(s) != 0
+}
 
-	if from.Elem().Kind() == to.Kind() && fromMode == exprUintpr && toMode == expr {
-		b.w("(*(*%s)(unsafe.Pointer(%s)))", c.typ(to), s)
-		return b.bytes()
-	}
-
-	if to.Kind() == cc.Ptr {
-		tpt := to.(*cc.PointerType)
-		if from.Elem().Kind() == tpt.Elem().Kind() && fromMode == expr && toMode == exprPointer {
-			b.w("(*%s)(unsafe.Pointer(%s))", c.typ(tpt.Elem()), s)
-			return b.bytes()
-		}
-	}
-
-	if from.Elem().Kind() == cc.Array && fromMode == exprUintpr && to.Kind() == cc.Array && toMode == exprIndex {
-		b.w("(*%s)(unsafe.Pointer(%s))", c.typ(to), s)
-		return b.bytes()
-	}
-
-	if fromMode == exprUintpr && to.Kind() == cc.Ptr && toMode == expr {
-		return s
-	}
-
-	if fromMode == exprUintpr && toMode == exprSelect {
-		b.w("(*%s)(unsafe.Pointer(%s))", c.typ(to), s)
-		return b.bytes()
-	}
-
-	if (fromMode == exprUintpr || fromMode == expr) && toMode == exprFunc {
-		b.w("(*(*func%s)(unsafe.Pointer(&(%s))))", c.signature(from.Elem().(*cc.FunctionType), false, false), s)
-		return b.bytes()
-	}
-
-	if cc.IsIntegerType(to) {
-		b.w("%s(%s)", c.typ(to), s)
-		return b.bytes()
-	}
-
-	c.err(errorf("%v: TODO %q %s %s, %s -> %s %s, %s", c.pos(n), s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
+// mode unchanged
+func (c *ctx) convertType(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+	// defer func() { trc("%v: from %v: %v, to %v: %v %q -> %q", c.pos(n), from, fromMode, to, toMode, s, r) }()
+	c.err(errorf("TODO %q %s %s -> %s %s", s, from, fromMode, to, toMode))
 	return s //TODO
 }
+
+func (c *ctx) isCharType(t cc.Type) bool {
+	switch t.Kind() {
+	case cc.Char, cc.UChar, cc.SChar:
+		return true
+	}
+
+	return false
+}
+
+// func (c *ctx) convertFromArithmetic(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+// 	var b buf
+// 	if cc.IsArithmeticType(to) {
+// 		b.w("%s(%s)", c.typ(to), s)
+// 		return b.bytes()
+// 	}
+//
+// 	c.err(errorf("TODO %q %s %s, %s -> %s %s, %s", s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
+// 	return s
+// }
+//
+// func (c *ctx) convertFromInteger(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+// 	var b buf
+// 	if cc.IsArithmeticType(to) {
+// 		b.w("%s(%s)", c.typ(to), s)
+// 		return b.bytes()
+// 	}
+//
+// 	c.err(errorf("TODO %q %s %s, %s -> %s %s, %s", s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
+// 	return s
+// }
+//
+// func (c *ctx) convertFromBool(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+// 	var b buf
+// 	if toMode == expr && to.Kind() == cc.Int && to.Size() == 4 {
+// 		b.w("%sBool32(%s)", c.task.tlsQualifier, s)
+// 		return b.bytes()
+// 	}
+//
+// 	c.err(errorf("TODO %q %s %s, %s -> %s %s, %s", s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
+// 	return s //TODO
+// }
+//
+// func (c *ctx) convertToBool(n cc.Node, s []byte, from, to cc.Type, fromMode, toMode mode) (r []byte) {
+// 	var b buf
+// 	b.w("(%s != 0)", s)
+// 	return b.bytes()
+// }
+//
+// func (c *ctx) convertToPointer(n cc.Node, s []byte, from cc.Type, to *cc.PointerType, fromMode, toMode mode) (r []byte) {
+// 	var b buf
+// 	if from.Kind() == cc.Struct && fromMode == expr && to.Elem().Kind() == cc.Struct && toMode == exprUintpr {
+// 		b.w("uintptr(unsafe.Pointer(&%s))", s)
+// 		return b.bytes()
+// 	}
+//
+// 	if cc.IsScalarType(from) && fromMode == expr && to.Elem().Kind() == from.Kind() && toMode == exprUintpr {
+// 		b.w("uintptr(unsafe.Pointer(&%s))", s)
+// 		return b.bytes()
+// 	}
+//
+// 	if from.Kind() == cc.Function && fromMode == exprFunc && toMode == exprUintpr { //TODO get rid of the alloc
+// 		b.w("(*(*uintptr)(unsafe.Pointer(&struct{f func%s}{%s})))", c.signature(from.(*cc.FunctionType), false, false), s)
+// 		return b.bytes()
+// 	}
+//
+// 	if cc.IsIntegerType(from) {
+// 		b.w("%s(%s)", c.typ(to), s)
+// 		return b.bytes()
+// 	}
+//
+// 	c.err(errorf("TODO %q %s %s, %s -> %s %s, %s", s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
+// 	return s //TODO
+// }
+//
+// func (c *ctx) convertFromPointer(n cc.Node, s []byte, from *cc.PointerType, to cc.Type, fromMode, toMode mode) (r []byte) {
+// 	var b buf
+// 	if to.Kind() == cc.Ptr {
+// 		if fromMode == expr && toMode == expr {
+// 			return s
+// 		}
+//
+// 		if fromMode == exprUintpr && toMode == exprUintpr {
+// 			return s
+// 		}
+//
+// 		if fromMode == expr && toMode == exprUintpr {
+// 			b.w("uintptr(unsafe.Pointer(&%s))", s)
+// 			return b.bytes()
+// 		}
+//
+// 		if fromMode == expr && toMode == exprBool {
+// 			b.w("(%s != 0)", s)
+// 			return b.bytes()
+// 		}
+// 	}
+//
+// 	if to.Kind() == cc.Array {
+// 		if ufrom := from.Undecay(); ufrom.Kind() == cc.Array {
+// 			if fromMode == expr && toMode == exprIndex {
+// 				return s
+// 			}
+// 		}
+// 	}
+//
+// 	if from.Elem().Kind() == to.Kind() && fromMode == exprUintpr && toMode == expr {
+// 		b.w("(*(*%s)(unsafe.Pointer(%s)))", c.typ(to), s)
+// 		return b.bytes()
+// 	}
+//
+// 	if to.Kind() == cc.Ptr {
+// 		tpt := to.(*cc.PointerType)
+// 		if from.Elem().Kind() == tpt.Elem().Kind() && fromMode == expr && toMode == exprPointer {
+// 			b.w("(*%s)(unsafe.Pointer(%s))", c.typ(tpt.Elem()), s)
+// 			return b.bytes()
+// 		}
+// 	}
+//
+// 	if from.Elem().Kind() == cc.Array && fromMode == exprUintpr && to.Kind() == cc.Array && toMode == exprIndex {
+// 		b.w("(*%s)(unsafe.Pointer(%s))", c.typ(to), s)
+// 		return b.bytes()
+// 	}
+//
+// 	if fromMode == exprUintpr && to.Kind() == cc.Ptr && toMode == expr {
+// 		return s
+// 	}
+//
+// 	if fromMode == exprUintpr && toMode == exprSelect {
+// 		b.w("(*%s)(unsafe.Pointer(%s))", c.typ(to), s)
+// 		return b.bytes()
+// 	}
+//
+// 	if (fromMode == exprUintpr || fromMode == expr) && toMode == exprFunc {
+// 		b.w("(*(*func%s)(unsafe.Pointer(&(%s))))", c.signature(from.Elem().(*cc.FunctionType), false, false), s)
+// 		return b.bytes()
+// 	}
+//
+// 	if cc.IsIntegerType(to) {
+// 		b.w("%s(%s)", c.typ(to), s)
+// 		return b.bytes()
+// 	}
+//
+// 	c.err(errorf("TODO %q %s %s, %s -> %s %s, %s", s, from, from.Kind(), fromMode, to, to.Kind(), toMode))
+// 	return s //TODO
+// }
 
 func (c *ctx) expr0(w writer, n cc.ExpressionNode, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
 	switch x := n.(type) {
 	case *cc.AdditiveExpression:
 		return c.additiveExpression(w, x, t, mode)
-	case *cc.AndExpression:
-		return c.andExpression(w, x, t, mode)
+	// 	case *cc.AndExpression:
+	// 		return c.andExpression(w, x, t, mode)
 	case *cc.AssignmentExpression:
 		return c.assignmentExpression(w, x, t, mode)
-	case *cc.CastExpression:
-		return c.castExpression(w, x, t, mode)
-	case *cc.ConditionalExpression:
-		return c.conditionalExpression(w, x, t, mode)
-	case *cc.ConstantExpression:
-		return c.constantExpression(w, x, t, mode)
-	case *cc.EqualityExpression:
-		return c.equalityExpression(w, x, t, mode)
-	case *cc.ExclusiveOrExpression:
-		return c.exclusiveOrExpression(w, x, t, mode)
+	// 	case *cc.CastExpression:
+	// 		return c.castExpression(w, x, t, mode)
+	// 	case *cc.ConditionalExpression:
+	// 		return c.conditionalExpression(w, x, t, mode)
+	// 	case *cc.EqualityExpression:
+	// 		return c.equalityExpression(w, x, t, mode)
+	// 	case *cc.ExclusiveOrExpression:
+	// 		return c.exclusiveOrExpression(w, x, t, mode)
 	case *cc.ExpressionList:
 		return c.expressionList(w, x, t, mode)
-	case *cc.InclusiveOrExpression:
-		return c.inclusiveOrExpression(w, x, t, mode)
-	case *cc.LogicalAndExpression:
-		return c.logicalAndExpression(w, x, t, mode)
-	case *cc.LogicalOrExpression:
-		return c.logicalOrExpression(w, x, t, mode)
+		// 	case *cc.InclusiveOrExpression:
+		// 		return c.inclusiveOrExpression(w, x, t, mode)
+		// 	case *cc.LogicalAndExpression:
+		// 		return c.logicalAndExpression(w, x, t, mode)
+		// 	case *cc.LogicalOrExpression:
+		// 		return c.logicalOrExpression(w, x, t, mode)
 	case *cc.MultiplicativeExpression:
 		return c.multiplicativeExpression(w, x, t, mode)
 	case *cc.PostfixExpression:
@@ -276,152 +433,143 @@ func (c *ctx) expr0(w writer, n cc.ExpressionNode, t cc.Type, mode mode) (r []by
 		return c.primaryExpression(w, x, t, mode)
 	case *cc.RelationalExpression:
 		return c.relationExpression(w, x, t, mode)
-	case *cc.ShiftExpression:
-		return c.shiftExpression(w, x, t, mode)
+		// 	case *cc.ShiftExpression:
+		// 		return c.shiftExpression(w, x, t, mode)
 	case *cc.UnaryExpression:
 		return c.unaryExpression(w, x, t, mode)
 	default:
-		c.err(errorf("TODO %T", n))
+		c.err(errorf("TODO %T", x))
 		return nil, nil, 0
 	}
 }
 
-func (c *ctx) andExpression(w writer, n *cc.AndExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.AndExpressionEq: // EqualityExpression
-		c.err(errorf("TODO %v", n.Case))
-	case cc.AndExpressionAnd: // AndExpression '&' EqualityExpression
-		b.w("(%s & %s)", c.expr(w, n.AndExpression, n.Type(), expr), c.expr(w, n.EqualityExpression, n.Type(), expr))
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) exclusiveOrExpression(w writer, n *cc.ExclusiveOrExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.ExclusiveOrExpressionAnd: // AndExpression
-		c.err(errorf("TODO %v", n.Case))
-	case cc.ExclusiveOrExpressionXor: // ExclusiveOrExpression '^' AndExpression
-		b.w("(%s ^ %s)", c.expr(w, n.ExclusiveOrExpression, n.Type(), expr), c.expr(w, n.AndExpression, n.Type(), expr))
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) inclusiveOrExpression(w writer, n *cc.InclusiveOrExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.InclusiveOrExpressionXor: // ExclusiveOrExpression
-		c.err(errorf("TODO %v", n.Case))
-	case cc.InclusiveOrExpressionOr: // InclusiveOrExpression '|' ExclusiveOrExpression
-		b.w("(%s | %s)", c.expr(w, n.InclusiveOrExpression, n.Type(), expr), c.expr(w, n.ExclusiveOrExpression, n.Type(), expr))
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) shiftExpression(w writer, n *cc.ShiftExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.ShiftExpressionAdd: // AdditiveExpression
-		c.err(errorf("TODO %v", n.Case))
-	case cc.ShiftExpressionLsh: // ShiftExpression "<<" AdditiveExpression
-		b.w("(%s << %s)", c.expr(w, n.ShiftExpression, nil, expr), c.expr(w, n.AdditiveExpression, nil, expr))
-	case cc.ShiftExpressionRsh: // ShiftExpression ">>" AdditiveExpression
-		b.w("(%s >> %s)", c.expr(w, n.ShiftExpression, nil, expr), c.expr(w, n.AdditiveExpression, nil, expr))
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) logicalAndExpression(w writer, n *cc.LogicalAndExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.LogicalAndExpressionOr: // InclusiveOrExpression
-		c.err(errorf("TODO %v", n.Case))
-	case cc.LogicalAndExpressionLAnd: // LogicalAndExpression "&&" InclusiveOrExpression
-		b.w("(%s && %s)", c.expr(w, n.LogicalAndExpression, nil, exprBool), c.expr(w, n.InclusiveOrExpression, nil, exprBool))
-		rmode = exprBool
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) logicalOrExpression(w writer, n *cc.LogicalOrExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.LogicalOrExpressionLAnd: // LogicalAndExpression
-		c.err(errorf("TODO %v", n.Case))
-	case cc.LogicalOrExpressionLOr: // LogicalOrExpression "||" LogicalAndExpression
-		b.w("(%s || %s)", c.expr(w, n.LogicalOrExpression, nil, exprBool), c.expr(w, n.LogicalAndExpression, nil, exprBool))
-		rmode = exprBool
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) conditionalExpression(w writer, n *cc.ConditionalExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.ConditionalExpressionLOr: // LogicalOrExpression
-		c.err(errorf("TODO %v", n.Case))
-	case cc.ConditionalExpressionCond: // LogicalOrExpression '?' ExpressionList ':' ConditionalExpression
-		v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-		w.w("\nvar %s %s", v, c.typ(n.Type()))
-		w.w("\nif %s {", c.expr(w, n.LogicalOrExpression, nil, exprBool))
-		w.w("\n%s = %s", v, c.expr(w, n.ExpressionList, nil, expr))
-		w.w("\n} else {")
-		w.w("\n%s = %s", v, c.expr(w, n.ConditionalExpression, nil, expr))
-		w.w("\n}")
-		b.w("%s", v)
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) castExpression(w writer, n *cc.CastExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	switch n.Case {
-	case cc.CastExpressionUnary: // UnaryExpression
-		return c.expr0(w, n.UnaryExpression, t, mode)
-	case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
-		b.w("%s", c.expr(w, n.CastExpression, n.TypeName.Type(), expr))
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) constantExpression(w writer, n *cc.ConstantExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	switch x := n.Value().(type) {
-	case cc.Int64Value:
-		return c.intConst(x, n.Type(), t)
-	default:
-		c.err(errorf("TODO %T", x))
-	}
-	return nil, rt, rmode
-}
+// func (c *ctx) andExpression(w writer, n *cc.AndExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.AndExpressionEq: // EqualityExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 	case cc.AndExpressionAnd: // AndExpression '&' EqualityExpression
+// 		b.w("(%s & %s)", c.expr(w, n.AndExpression, n.Type(), expr), c.expr(w, n.EqualityExpression, n.Type(), expr))
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
+//
+// func (c *ctx) exclusiveOrExpression(w writer, n *cc.ExclusiveOrExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.ExclusiveOrExpressionAnd: // AndExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 	case cc.ExclusiveOrExpressionXor: // ExclusiveOrExpression '^' AndExpression
+// 		b.w("(%s ^ %s)", c.expr(w, n.ExclusiveOrExpression, n.Type(), expr), c.expr(w, n.AndExpression, n.Type(), expr))
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
+//
+// func (c *ctx) inclusiveOrExpression(w writer, n *cc.InclusiveOrExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.InclusiveOrExpressionXor: // ExclusiveOrExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 	case cc.InclusiveOrExpressionOr: // InclusiveOrExpression '|' ExclusiveOrExpression
+// 		b.w("(%s | %s)", c.expr(w, n.InclusiveOrExpression, n.Type(), expr), c.expr(w, n.ExclusiveOrExpression, n.Type(), expr))
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
+//
+// func (c *ctx) shiftExpression(w writer, n *cc.ShiftExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.ShiftExpressionAdd: // AdditiveExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 	case cc.ShiftExpressionLsh: // ShiftExpression "<<" AdditiveExpression
+// 		b.w("(%s << %s)", c.expr(w, n.ShiftExpression, nil, expr), c.expr(w, n.AdditiveExpression, nil, expr))
+// 	case cc.ShiftExpressionRsh: // ShiftExpression ">>" AdditiveExpression
+// 		b.w("(%s >> %s)", c.expr(w, n.ShiftExpression, nil, expr), c.expr(w, n.AdditiveExpression, nil, expr))
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
+//
+// func (c *ctx) logicalAndExpression(w writer, n *cc.LogicalAndExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.LogicalAndExpressionOr: // InclusiveOrExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 	case cc.LogicalAndExpressionLAnd: // LogicalAndExpression "&&" InclusiveOrExpression
+// 		b.w("(%s && %s)", c.expr(w, n.LogicalAndExpression, nil, exprBool), c.expr(w, n.InclusiveOrExpression, nil, exprBool))
+// 		rmode = exprBool
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
+//
+// func (c *ctx) logicalOrExpression(w writer, n *cc.LogicalOrExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.LogicalOrExpressionLAnd: // LogicalAndExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 	case cc.LogicalOrExpressionLOr: // LogicalOrExpression "||" LogicalAndExpression
+// 		b.w("(%s || %s)", c.expr(w, n.LogicalOrExpression, nil, exprBool), c.expr(w, n.LogicalAndExpression, nil, exprBool))
+// 		rmode = exprBool
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
+//
+// func (c *ctx) conditionalExpression(w writer, n *cc.ConditionalExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.ConditionalExpressionLOr: // LogicalOrExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 	case cc.ConditionalExpressionCond: // LogicalOrExpression '?' ExpressionList ':' ConditionalExpression
+// 		v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+// 		w.w("\nvar %s %s", v, c.typ(n.Type()))
+// 		w.w("\nif %s {", c.expr(w, n.LogicalOrExpression, nil, exprBool))
+// 		w.w("\n%s = %s", v, c.expr(w, n.ExpressionList, nil, expr))
+// 		w.w("\n} else {")
+// 		w.w("\n%s = %s", v, c.expr(w, n.ConditionalExpression, nil, expr))
+// 		w.w("\n}")
+// 		b.w("%s", v)
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
+//
+// func (c *ctx) castExpression(w writer, n *cc.CastExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	switch n.Case {
+// 	case cc.CastExpressionUnary: // UnaryExpression
+// 		return c.expr0(w, n.UnaryExpression, t, mode)
+// 	case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
+// 		b.w("%s", c.expr(w, n.CastExpression, n.TypeName.Type(), expr))
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), rt, rmode
+// }
 
 func (c *ctx) multiplicativeExpression(w writer, n *cc.MultiplicativeExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+	rt, rmode = n.Type(), mode
 	var b buf
 	switch n.Case {
 	case cc.MultiplicativeExpressionCast: // CastExpression
 		c.err(errorf("TODO %v", n.Case))
 	case cc.MultiplicativeExpressionMul: // MultiplicativeExpression '*' CastExpression
-		b.w("(%s * %s)", c.expr(w, n.MultiplicativeExpression, n.Type(), expr), c.expr(w, n.CastExpression, n.Type(), expr))
+		b.w("(%s * %s)", c.expr(w, n.MultiplicativeExpression, n.Type(), exprDefault), c.expr(w, n.CastExpression, n.Type(), exprDefault))
 	case cc.MultiplicativeExpressionDiv: // MultiplicativeExpression '/' CastExpression
-		b.w("(%s / %s)", c.expr(w, n.MultiplicativeExpression, n.Type(), expr), c.expr(w, n.CastExpression, n.Type(), expr))
+		b.w("(%s / %s)", c.expr(w, n.MultiplicativeExpression, n.Type(), exprDefault), c.expr(w, n.CastExpression, n.Type(), exprDefault))
 	case cc.MultiplicativeExpressionMod: // MultiplicativeExpression '%' CastExpression
-		b.w("(%s %% %s)", c.expr(w, n.MultiplicativeExpression, n.Type(), expr), c.expr(w, n.CastExpression, n.Type(), expr))
+		b.w("(%s %% %s)", c.expr(w, n.MultiplicativeExpression, n.Type(), exprDefault), c.expr(w, n.CastExpression, n.Type(), exprDefault))
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
@@ -429,6 +577,7 @@ func (c *ctx) multiplicativeExpression(w writer, n *cc.MultiplicativeExpression,
 }
 
 func (c *ctx) additiveExpression(w writer, n *cc.AdditiveExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+	rt, rmode = n.Type(), mode
 	var b buf
 	switch n.Case {
 	case cc.AdditiveExpressionMul: // MultiplicativeExpression
@@ -436,25 +585,25 @@ func (c *ctx) additiveExpression(w writer, n *cc.AdditiveExpression, t cc.Type, 
 	case cc.AdditiveExpressionAdd: // AdditiveExpression '+' MultiplicativeExpression
 		switch x, y := n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type(); {
 		case cc.IsArithmeticType(x) && cc.IsArithmeticType(y):
-			b.w("(%s + %s)", c.expr(w, n.AdditiveExpression, n.Type(), expr), c.expr(w, n.MultiplicativeExpression, n.Type(), expr))
+			b.w("(%s + %s)", c.expr(w, n.AdditiveExpression, n.Type(), exprDefault), c.expr(w, n.MultiplicativeExpression, n.Type(), exprDefault))
 		default:
 			c.err(errorf("TODO %v + %v", x, y))
 		}
 	case cc.AdditiveExpressionSub: // AdditiveExpression '-' MultiplicativeExpression
 		switch x, y := n.AdditiveExpression.Type(), n.MultiplicativeExpression.Type(); {
 		case cc.IsArithmeticType(x) && cc.IsArithmeticType(y):
-			b.w("(%s - %s)", c.expr(w, n.AdditiveExpression, n.Type(), expr), c.expr(w, n.MultiplicativeExpression, n.Type(), expr))
-		case x.Kind() == cc.Ptr && y.Kind() == cc.Ptr:
-			b.w("(%s - %s)", c.expr(w, n.AdditiveExpression, n.Type(), expr), c.expr(w, n.MultiplicativeExpression, n.Type(), expr))
-			if v := x.(*cc.PointerType).Elem().Size(); v > 1 {
-				b.w("/%d", v)
-			}
-		case x.Kind() == cc.Ptr && cc.IsIntegerType(y):
-			b.w("(%s - (%s", c.expr(w, n.AdditiveExpression, n.Type(), expr), c.expr(w, n.MultiplicativeExpression, n.Type(), expr))
-			if v := x.(*cc.PointerType).Elem().Size(); v > 1 {
-				b.w("*%d)", v)
-			}
-			b.w(")")
+			b.w("(%s - %s)", c.expr(w, n.AdditiveExpression, n.Type(), exprDefault), c.expr(w, n.MultiplicativeExpression, n.Type(), exprDefault))
+		// case x.Kind() == cc.Ptr && y.Kind() == cc.Ptr:
+		// 	b.w("(%s - %s)", c.expr(w, n.AdditiveExpression, n.Type(), expr), c.expr(w, n.MultiplicativeExpression, n.Type(), expr))
+		// 	if v := x.(*cc.PointerType).Elem().Size(); v > 1 {
+		// 		b.w("/%d", v)
+		// 	}
+		// case x.Kind() == cc.Ptr && cc.IsIntegerType(y):
+		// 	b.w("(%s - (%s", c.expr(w, n.AdditiveExpression, n.Type(), expr), c.expr(w, n.MultiplicativeExpression, n.Type(), expr))
+		// 	if v := x.(*cc.PointerType).Elem().Size(); v > 1 {
+		// 		b.w("*%d)", v)
+		// 	}
+		// 	b.w(")")
 		default:
 			c.err(errorf("TODO %v - %v", x, y))
 		}
@@ -464,37 +613,37 @@ func (c *ctx) additiveExpression(w writer, n *cc.AdditiveExpression, t cc.Type, 
 	return b.bytes(), rt, rmode
 }
 
-func (c *ctx) equalityExpression(w writer, n *cc.EqualityExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	if n.Case == cc.EqualityExpressionRel { // RelationalExpression
-		c.err(errorf("TODO %v", n.Case))
-		return b.bytes(), nil, exprBool
-	}
-
-	var ct cc.Type
-	x, y := n.EqualityExpression.Type(), n.RelationalExpression.Type()
-	switch {
-	case cc.IsRealType(x) && cc.IsRealType(y):
-		ct = c.usualArithmeticConversions(x, y)
-	case x.Kind() == cc.Ptr:
-		ct = x
-	case y.Kind() == cc.Ptr:
-		ct = y
-	}
-	emode := expr
-	if x.Undecay().Kind() == cc.Array || y.Undecay().Kind() == cc.Array {
-		emode = exprUintpr
-	}
-	switch n.Case {
-	case cc.EqualityExpressionEq: // EqualityExpression "==" RelationalExpression
-		b.w("(%s == %s)", c.expr(w, n.EqualityExpression, ct, emode), c.expr(w, n.RelationalExpression, ct, emode))
-	case cc.EqualityExpressionNeq: // EqualityExpression "!=" RelationalExpression
-		b.w("(%s != %s)", c.expr(w, n.EqualityExpression, ct, emode), c.expr(w, n.RelationalExpression, ct, emode))
-	default:
-		c.err(errorf("internal error %T %v", n, n.Case))
-	}
-	return b.bytes(), nil, exprBool
-}
+// func (c *ctx) equalityExpression(w writer, n *cc.EqualityExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	if n.Case == cc.EqualityExpressionRel { // RelationalExpression
+// 		c.err(errorf("TODO %v", n.Case))
+// 		return b.bytes(), nil, exprBool
+// 	}
+//
+// 	var ct cc.Type
+// 	x, y := n.EqualityExpression.Type(), n.RelationalExpression.Type()
+// 	switch {
+// 	case cc.IsRealType(x) && cc.IsRealType(y):
+// 		ct = c.usualArithmeticConversions(x, y)
+// 	case x.Kind() == cc.Ptr:
+// 		ct = x
+// 	case y.Kind() == cc.Ptr:
+// 		ct = y
+// 	}
+// 	emode := expr
+// 	if x.Undecay().Kind() == cc.Array || y.Undecay().Kind() == cc.Array {
+// 		emode = exprUintpr
+// 	}
+// 	switch n.Case {
+// 	case cc.EqualityExpressionEq: // EqualityExpression "==" RelationalExpression
+// 		b.w("(%s == %s)", c.expr(w, n.EqualityExpression, ct, emode), c.expr(w, n.RelationalExpression, ct, emode))
+// 	case cc.EqualityExpressionNeq: // EqualityExpression "!=" RelationalExpression
+// 		b.w("(%s != %s)", c.expr(w, n.EqualityExpression, ct, emode), c.expr(w, n.RelationalExpression, ct, emode))
+// 	default:
+// 		c.err(errorf("internal error %T %v", n, n.Case))
+// 	}
+// 	return b.bytes(), nil, exprBool
+// }
 
 func (c *ctx) relationExpression(w writer, n *cc.RelationalExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
 	var b buf
@@ -503,124 +652,139 @@ func (c *ctx) relationExpression(w writer, n *cc.RelationalExpression, t cc.Type
 		return b.bytes(), nil, exprBool
 	}
 
-	var ct cc.Type
-	switch a, b := n.RelationalExpression.Type(), n.ShiftExpression.Type(); {
-	case cc.IsRealType(a) && cc.IsRealType(b):
-		ct = c.usualArithmeticConversions(a, b)
-	case a.Kind() == cc.Ptr:
-		ct = a
-	case b.Kind() == cc.Ptr:
-		ct = b
-	}
+	ct := c.usualArithmeticConversions(n.RelationalExpression.Type(), n.ShiftExpression.Type())
+	rt, rmode = n.Type(), exprBool
 	switch n.Case {
 	case cc.RelationalExpressionLt: // RelationalExpression '<' ShiftExpression
-		b.w("(%s < %s)", c.expr(w, n.RelationalExpression, ct, expr), c.expr(w, n.ShiftExpression, ct, expr))
+		b.w("(%s < %s)", c.expr(w, n.RelationalExpression, ct, exprDefault), c.expr(w, n.ShiftExpression, ct, exprDefault))
 	case cc.RelationalExpressionGt: // RelationalExpression '>' ShiftExpression
-		b.w("(%s > %s)", c.expr(w, n.RelationalExpression, ct, expr), c.expr(w, n.ShiftExpression, ct, expr))
+		b.w("(%s > %s)", c.expr(w, n.RelationalExpression, ct, exprDefault), c.expr(w, n.ShiftExpression, ct, exprDefault))
 	case cc.RelationalExpressionLeq: // RelationalExpression "<=" ShiftExpression
-		b.w("(%s <= %s)", c.expr(w, n.RelationalExpression, ct, expr), c.expr(w, n.ShiftExpression, ct, expr))
+		b.w("(%s <= %s)", c.expr(w, n.RelationalExpression, ct, exprDefault), c.expr(w, n.ShiftExpression, ct, exprDefault))
 	case cc.RelationalExpressionGeq: // RelationalExpression ">=" ShiftExpression
-		b.w("(%s >= %s)", c.expr(w, n.RelationalExpression, ct, expr), c.expr(w, n.ShiftExpression, ct, expr))
+		b.w("(%s >= %s)", c.expr(w, n.RelationalExpression, ct, exprDefault), c.expr(w, n.ShiftExpression, ct, exprDefault))
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
-	return b.bytes(), nil, exprBool
+	return b.bytes(), rt, exprBool
+}
+
+func (c *ctx) usualArithmeticConversions(a, b cc.Type) (r cc.Type) {
+	if a.Kind() == cc.Ptr && (cc.IsIntegerType(b) || b.Kind() == cc.Ptr) {
+		return a
+	}
+
+	if b.Kind() == cc.Ptr && (cc.IsIntegerType(a) || a.Kind() == cc.Ptr) {
+		return b
+	}
+
+	return cc.UsualArithmeticConversions(a, b)
 }
 
 func (c *ctx) unaryExpression(w writer, n *cc.UnaryExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
 	var b buf
-out:
+	// out:
 	switch n.Case {
 	case cc.UnaryExpressionPostfix: // PostfixExpression
 		c.err(errorf("TODO %v", n.Case))
 	case cc.UnaryExpressionInc: // "++" UnaryExpression
-		switch ue := n.UnaryExpression.Type(); {
-		case ue.Kind() == cc.Ptr && ue.(*cc.PointerType).Elem().Size() != 1:
-			sz := ue.(*cc.PointerType).Elem().Size()
-			switch mode {
-			case exprVoid:
-				b.w("%s += %d", c.expr(w, n.UnaryExpression, nil, expr), sz)
-			default:
-				c.err(errorf("TODO"))
-			}
-		default:
-			switch mode {
-			case exprVoid:
-				b.w("%s++", c.expr(w, n.UnaryExpression, nil, expr))
-				rmode = exprVoid
-			default:
-				c.err(errorf("TODO"))
-			}
-		}
+		c.err(errorf("TODO %v", n.Case))
+		// switch ue := n.UnaryExpression.Type(); {
+		// case ue.Kind() == cc.Ptr && ue.(*cc.PointerType).Elem().Size() != 1:
+		// 	sz := ue.(*cc.PointerType).Elem().Size()
+		// 	switch mode {
+		// 	case exprVoid:
+		// 		b.w("%s += %d", c.expr(w, n.UnaryExpression, nil, expr), sz)
+		// 	default:
+		// 		c.err(errorf("TODO"))
+		// 	}
+		// default:
+		// 	switch mode {
+		// 	case exprVoid:
+		// 		b.w("%s++", c.expr(w, n.UnaryExpression, nil, expr))
+		// 		rmode = exprVoid
+		// 	default:
+		// 		c.err(errorf("TODO"))
+		// 	}
+		// }
 	case cc.UnaryExpressionDec: // "--" UnaryExpression
-		switch ue := n.UnaryExpression.Type(); {
-		case ue.Kind() == cc.Ptr && ue.(*cc.PointerType).Elem().Size() != 1:
-			switch mode {
-			case exprVoid:
-				c.err(errorf("TODO"))
-			default:
-				c.err(errorf("TODO"))
-			}
-		default:
-			switch mode {
-			case exprVoid:
-				b.w("%s--", c.expr(w, n.UnaryExpression, nil, expr))
-				rmode = exprVoid
-			default:
-				v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-				switch d := c.declaratorOf(n.UnaryExpression); {
-				case d != nil:
-					ds := c.expr(w, n.UnaryExpression, nil, expr)
-					w.w("\n%s--", ds)
-					w.w("\n%s := %s", v, ds)
-					b.w("%s", v)
-				default:
-					//TODO v2 := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-					//TODO w.w("\n%s := %s", v2, c.expr(w, n.UnaryExpression, nil, exprUintpr))
-					//TODO w.w("\n(*(*%s)(unsafe.Pointer(%s)))--", c.typ(n.UnaryExpression.Type()), v2)
-					//TODO w.w("\n%s := (*(*%s)(unsafe.Pointer(%s)))", v, c.typ(n.UnaryExpression.Type()), v2)
-					//TODO b.w("%s", v)
-					w.w("panic(`TODO`)")
-					b.w("0")
-				}
-			}
-		}
+		c.err(errorf("TODO %v", n.Case))
+		// switch ue := n.UnaryExpression.Type(); {
+		// case ue.Kind() == cc.Ptr && ue.(*cc.PointerType).Elem().Size() != 1:
+		// 	switch mode {
+		// 	case exprVoid:
+		// 		c.err(errorf("TODO"))
+		// 	default:
+		// 		c.err(errorf("TODO"))
+		// 	}
+		// default:
+		// 	switch mode {
+		// 	case exprVoid:
+		// 		b.w("%s--", c.expr(w, n.UnaryExpression, nil, expr))
+		// 		rmode = exprVoid
+		// 	default:
+		// 		v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+		// 		switch d := c.declaratorOf(n.UnaryExpression); {
+		// 		case d != nil:
+		// 			ds := c.expr(w, n.UnaryExpression, nil, expr)
+		// 			w.w("\n%s--", ds)
+		// 			w.w("\n%s := %s", v, ds)
+		// 			b.w("%s", v)
+		// 		default:
+		// 			//TODO v2 := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+		// 			//TODO w.w("\n%s := %s", v2, c.expr(w, n.UnaryExpression, nil, exprUintpr))
+		// 			//TODO w.w("\n(*(*%s)(unsafe.Pointer(%s)))--", c.typ(n.UnaryExpression.Type()), v2)
+		// 			//TODO w.w("\n%s := (*(*%s)(unsafe.Pointer(%s)))", v, c.typ(n.UnaryExpression.Type()), v2)
+		// 			//TODO b.w("%s", v)
+		// 			w.w("panic(`TODO`)")
+		// 			b.w("0")
+		// 		}
+		// 	}
+		// }
 	case cc.UnaryExpressionAddrof: // '&' CastExpression
-		b.w("%s", c.expr(w, n.CastExpression, n.CastExpression.Type().Pointer(), exprUintpr))
+		c.err(errorf("TODO %v", n.Case))
+		// b.w("%s", c.expr(w, n.CastExpression, n.CastExpression.Type().Pointer(), exprUintpr))
 	case cc.UnaryExpressionDeref: // '*' CastExpression
-		switch n.Type().Undecay().(type) {
-		case *cc.FunctionType:
-			if mode == exprFunc {
-				b.w("%s", c.expr(w, n.CastExpression, nil, expr))
-				rmode = exprUintpr
-				break out
-			}
-		}
+		c.err(errorf("TODO %v", n.Case))
+		// switch n.Type().Undecay().(type) {
+		// case *cc.FunctionType:
+		// 	if mode == exprFunc {
+		// 		b.w("%s", c.expr(w, n.CastExpression, nil, expr))
+		// 		rmode = exprUintpr
+		// 		break out
+		// 	}
+		// }
 
-		b.w("(*%s)", c.expr(w, n.CastExpression, nil, exprPointer))
+		// b.w("(*%s)", c.expr(w, n.CastExpression, nil, exprPointer))
 	case cc.UnaryExpressionPlus: // '+' CastExpression
-		b.w("(+%s)", c.expr(w, n.CastExpression, nil, expr))
+		c.err(errorf("TODO %v", n.Case))
+		// b.w("(+%s)", c.expr(w, n.CastExpression, nil, expr))
 	case cc.UnaryExpressionMinus: // '-' CastExpression
-		b.w("(-%s)", c.expr(w, n.CastExpression, nil, expr))
+		rt, rmode = n.Type(), exprDefault
+		b.w("(-%s)", c.expr(w, n.CastExpression, nil, exprDefault))
 	case cc.UnaryExpressionCpl: // '~' CastExpression
-		b.w("(^%s)", c.expr(w, n.CastExpression, nil, expr))
+		c.err(errorf("TODO %v", n.Case))
+		// b.w("(^%s)", c.expr(w, n.CastExpression, nil, expr))
 	case cc.UnaryExpressionNot: // '!' CastExpression
-		b.w("(!%s)", c.expr(w, n.CastExpression, nil, exprBool))
-		rmode = exprBool
+		c.err(errorf("TODO %v", n.Case))
+		// b.w("(!%s)", c.expr(w, n.CastExpression, nil, exprBool))
+		// rmode = exprBool
 	case cc.UnaryExpressionSizeofExpr: // "sizeof" UnaryExpression
-		b.w("unsafe.Sizeof(%s)", c.expr(w, n.UnaryExpression, nil, expr))
+		c.err(errorf("TODO %v", n.Case))
+		// b.w("unsafe.Sizeof(%s)", c.expr(w, n.UnaryExpression, nil, expr))
 	case cc.UnaryExpressionSizeofType: // "sizeof" '(' TypeName ')'
-		switch x := n.TypeName.Type().(type) {
-		case *cc.PredefinedType:
-			switch x.Kind() {
-			case cc.Void:
-				c.err(errorf("TODO %v", x.Kind()))
-			default:
-				b.w("unsafe.Sizeof(%s(0))", c.typ(x))
-			}
-		default:
-			c.err(errorf("TODO %T", x))
-		}
+		c.err(errorf("TODO %v", n.Case))
+		// switch x := n.TypeName.Type().(type) {
+		// case *cc.PredefinedType:
+		// 	switch x.Kind() {
+		// 	case cc.Void:
+		// 		c.err(errorf("TODO %v", x.Kind()))
+		// 	default:
+		// 		b.w("unsafe.Sizeof(%s(0))", c.typ(x))
+		// 	}
+		// default:
+		// 	c.err(errorf("TODO %T", x))
+		// }
 	case cc.UnaryExpressionLabelAddr: // "&&" IDENTIFIER
 		c.err(errorf("TODO %v", n.Case))
 	case cc.UnaryExpressionAlignofExpr: // "_Alignof" UnaryExpression
@@ -647,41 +811,49 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 		case cc.IsIntegerType(n.PostfixExpression.Type()):
 			c.err(errorf("TODO %v", n.Case))
 		default:
-			var a1 buf
-			b1 := c.expr(&a1, n.ExpressionList, nil, expr)
-			switch {
-			case a1.len() != 0:
-				w.w("\n%s", a1.bytes())
-				fallthrough
+			// var a1 buf
+			// b1 := c.expr(&a1, n.ExpressionList, nil, expr)
+			// switch {
+			// case a1.len() != 0:
+			// 	w.w("\n%s", a1.bytes())
+			// 	fallthrough
+			// default:
+			// 	switch x := n.PostfixExpression.Type().Undecay().(type) {
+			// 	case *cc.ArrayType:
+			// 		switch mode {
+			// 		case exprUintpr:
+			// 			rmode = exprUintpr
+			// 			var s string
+			// 			if v := x.Elem().Size(); v != 1 {
+			// 				s = fmt.Sprintf("*%v", v)
+			// 			}
+			// 			b.w("(uintptr(unsafe.%sAdd(unsafe.Pointer(%s), (%s)%s)))", tag(preserve), c.expr(w, n.PostfixExpression, nil, exprUintpr), b1, s)
+			// 			rt = x.Elem()
+			// 		default:
+			// 			b.w("%s[%s]", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Undecay(), exprIndex), b1)
+			// 		}
+			// 	case *cc.PointerType:
+			// 		var s string
+			// 		if v := x.Elem().Size(); v != 1 {
+			// 			s = fmt.Sprintf("*%v", v)
+			// 		}
+			// 		b.w("(*(*%s)(unsafe.%sAdd(unsafe.Pointer(%s), (%s)%s)))", c.typ(x.Elem()), tag(preserve), c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Undecay(), expr), b1, s)
+			// 	default:
+			// 		c.err(errorf("internal error %T", x))
+			// 	}
+			// }
+			switch mode {
+			case exprSelect, exprLvalue, exprDefault:
+				rt, rmode = n.Type(), mode
+				b.w("%s[%s]", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Undecay(), exprIndex), c.expr(w, n.ExpressionList, nil, exprDefault))
 			default:
-				switch x := n.PostfixExpression.Type().Undecay().(type) {
-				case *cc.ArrayType:
-					switch mode {
-					case exprUintpr:
-						rmode = exprUintpr
-						var s string
-						if v := x.Elem().Size(); v != 1 {
-							s = fmt.Sprintf("*%v", v)
-						}
-						b.w("(uintptr(unsafe.%sAdd(unsafe.Pointer(%s), (%s)%s)))", tag(preserve), c.expr(w, n.PostfixExpression, nil, exprUintpr), b1, s)
-						rt = x.Elem()
-					default:
-						b.w("%s[%s]", c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Undecay(), exprIndex), b1)
-					}
-				case *cc.PointerType:
-					var s string
-					if v := x.Elem().Size(); v != 1 {
-						s = fmt.Sprintf("*%v", v)
-					}
-					b.w("(*(*%s)(unsafe.%sAdd(unsafe.Pointer(%s), (%s)%s)))", c.typ(x.Elem()), tag(preserve), c.expr(w, n.PostfixExpression, n.PostfixExpression.Type().Undecay(), expr), b1, s)
-				default:
-					c.err(errorf("internal error %T", x))
-				}
+				c.err(errorf("TODO %v", mode))
 			}
 		}
 	case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
 		return c.postfixExpressionCall(w, n)
 	case cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
+		rt, rmode = n.Type(), mode
 		b.w("%s.", c.expr(w, n.PostfixExpression, nil, exprSelect))
 		switch f := n.Field(); {
 		case f.Parent() != nil:
@@ -690,72 +862,76 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 			b.w("%s%s", tag(field), f.Name())
 		}
 	case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
-		b.w("%s.", c.expr(w, n.PostfixExpression, nil, exprPointer))
-		switch f := n.Field(); {
-		case f.Parent() != nil:
-			c.err(errorf("TODO %v", n.Case))
-		default:
-			b.w("%s%s", tag(field), f.Name())
-		}
+		c.err(errorf("TODO %v", n.Case))
+		// b.w("%s.", c.expr(w, n.PostfixExpression, nil, exprPointer))
+		// switch f := n.Field(); {
+		// case f.Parent() != nil:
+		// 	c.err(errorf("TODO %v", n.Case))
+		// default:
+		// 	b.w("%s%s", tag(field), f.Name())
+		// }
 	case cc.PostfixExpressionInc: // PostfixExpression "++"
 		switch pe := n.PostfixExpression.Type(); {
 		case pe.Kind() == cc.Ptr && pe.(*cc.PointerType).Elem().Size() != 1:
-			sz := pe.(*cc.PointerType).Elem().Size()
-			switch mode {
-			case exprVoid:
-				b.w("%s += %d", c.expr(w, n.PostfixExpression, nil, expr), sz)
-			default:
-				c.err(errorf("TODO"))
-			}
+			c.err(errorf("TODO %v", n.Case))
+		// 	sz := pe.(*cc.PointerType).Elem().Size()
+		// 	switch mode {
+		// 	case exprVoid:
+		// 		b.w("%s += %d", c.expr(w, n.PostfixExpression, nil, expr), sz)
+		// 	default:
+		// 		c.err(errorf("TODO"))
+		// 	}
 		default:
 			switch mode {
 			case exprVoid:
-				b.w("%s++", c.expr(w, n.PostfixExpression, nil, expr))
-				rmode = exprVoid
+				b.w("%s++", c.expr(w, n.PostfixExpression, nil, exprDefault))
+				rt, rmode = n.Type(), exprVoid
 			default:
-				v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-				switch d := c.declaratorOf(n.PostfixExpression); {
-				case d != nil:
-					ds := c.expr(w, n.PostfixExpression, nil, expr)
-					w.w("\n%s := %s", v, ds)
-					w.w("\n%s++", ds)
-					b.w("%s", v)
-				default:
-					v2 := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-					w.w("\n%s := %s", v2, c.expr(w, n.PostfixExpression, nil, exprUintpr))
-					w.w("\n(*(*%s)(unsafe.Pointer(%s)))++", c.typ(n.PostfixExpression.Type()), v2)
-					w.w("\n%s := (*(*%s)(unsafe.Pointer(%s)))", v, c.typ(n.PostfixExpression.Type()), v2)
-					b.w("%s", v)
-				}
+				c.err(errorf("TODO %v", n.Case))
+				// 		v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+				// 		switch d := c.declaratorOf(n.PostfixExpression); {
+				// 		case d != nil:
+				// 			ds := c.expr(w, n.PostfixExpression, nil, expr)
+				// 			w.w("\n%s := %s", v, ds)
+				// 			w.w("\n%s++", ds)
+				// 			b.w("%s", v)
+				// 		default:
+				// 			v2 := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+				// 			w.w("\n%s := %s", v2, c.expr(w, n.PostfixExpression, nil, exprUintpr))
+				// 			w.w("\n(*(*%s)(unsafe.Pointer(%s)))++", c.typ(n.PostfixExpression.Type()), v2)
+				// 			w.w("\n%s := (*(*%s)(unsafe.Pointer(%s)))", v, c.typ(n.PostfixExpression.Type()), v2)
+				// 			b.w("%s", v)
+				// 		}
 			}
 		}
 	case cc.PostfixExpressionDec: // PostfixExpression "--"
-		switch pe := n.PostfixExpression.Type(); {
-		case pe.Kind() == cc.Ptr && pe.(*cc.PointerType).Elem().Size() != 1:
-			switch mode {
-			case exprVoid:
-				c.err(errorf("TODO"))
-			default:
-				c.err(errorf("TODO"))
-			}
-		default:
-			switch mode {
-			case exprVoid:
-				b.w("%s--", c.expr(w, n.PostfixExpression, nil, expr))
-				rmode = exprVoid
-			default:
-				v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-				switch d := c.declaratorOf(n.PostfixExpression); {
-				case d != nil:
-					ds := c.expr(w, n.PostfixExpression, nil, expr)
-					w.w("\n%s := %s", v, ds)
-					w.w("\n%s--", ds)
-					b.w("%s", v)
-				default:
-					c.err(errorf("TODO"))
-				}
-			}
-		}
+		c.err(errorf("TODO %v", n.Case))
+		// switch pe := n.PostfixExpression.Type(); {
+		// case pe.Kind() == cc.Ptr && pe.(*cc.PointerType).Elem().Size() != 1:
+		// 	switch mode {
+		// 	case exprVoid:
+		// 		c.err(errorf("TODO"))
+		// 	default:
+		// 		c.err(errorf("TODO"))
+		// 	}
+		// default:
+		// 	switch mode {
+		// 	case exprVoid:
+		// 		b.w("%s--", c.expr(w, n.PostfixExpression, nil, expr))
+		// 		rmode = exprVoid
+		// 	default:
+		// 		v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+		// 		switch d := c.declaratorOf(n.PostfixExpression); {
+		// 		case d != nil:
+		// 			ds := c.expr(w, n.PostfixExpression, nil, expr)
+		// 			w.w("\n%s := %s", v, ds)
+		// 			w.w("\n%s--", ds)
+		// 			b.w("%s", v)
+		// 		default:
+		// 			c.err(errorf("TODO"))
+		// 		}
+		// 	}
+		// }
 	case cc.PostfixExpressionComplit: // '(' TypeName ')' '{' InitializerList ',' '}'
 		c.err(errorf("TODO %v", n.Case))
 	default:
@@ -764,44 +940,44 @@ func (c *ctx) postfixExpression(w writer, n *cc.PostfixExpression, t cc.Type, mo
 	return b.bytes(), rt, rmode
 }
 
-func (c *ctx) declaratorOf(n cc.ExpressionNode) *cc.Declarator {
-	for n != nil {
-		switch x := n.(type) {
-		case *cc.PrimaryExpression:
-			switch x.Case {
-			case cc.PrimaryExpressionIdent: // IDENTIFIER
-				if y, ok := x.ResolvedTo().(*cc.Declarator); ok {
-					return y
-				}
-			case cc.PrimaryExpressionExpr: // '(' ExpressionList ')'
-				n = x.ExpressionList
-			default:
-				return nil
-			}
-		case *cc.PostfixExpression:
-			switch x.Case {
-			case cc.PostfixExpressionPrimary: // PrimaryExpression
-				n = x.PrimaryExpression
-			default:
-				return nil
-			}
-		case *cc.ExpressionList:
-			for l := x; l != nil; l = l.ExpressionList {
-				n = l.AssignmentExpression
-			}
-		case *cc.CastExpression:
-			switch x.Case {
-			case cc.CastExpressionUnary: // UnaryExpression
-				n = x.UnaryExpression
-			default:
-				return nil
-			}
-		default:
-			panic(todo("%T", n))
-		}
-	}
-	return nil
-}
+// func (c *ctx) declaratorOf(n cc.ExpressionNode) *cc.Declarator {
+// 	for n != nil {
+// 		switch x := n.(type) {
+// 		case *cc.PrimaryExpression:
+// 			switch x.Case {
+// 			case cc.PrimaryExpressionIdent: // IDENTIFIER
+// 				if y, ok := x.ResolvedTo().(*cc.Declarator); ok {
+// 					return y
+// 				}
+// 			case cc.PrimaryExpressionExpr: // '(' ExpressionList ')'
+// 				n = x.ExpressionList
+// 			default:
+// 				return nil
+// 			}
+// 		case *cc.PostfixExpression:
+// 			switch x.Case {
+// 			case cc.PostfixExpressionPrimary: // PrimaryExpression
+// 				n = x.PrimaryExpression
+// 			default:
+// 				return nil
+// 			}
+// 		case *cc.ExpressionList:
+// 			for l := x; l != nil; l = l.ExpressionList {
+// 				n = l.AssignmentExpression
+// 			}
+// 		case *cc.CastExpression:
+// 			switch x.Case {
+// 			case cc.CastExpressionUnary: // UnaryExpression
+// 				n = x.UnaryExpression
+// 			default:
+// 				return nil
+// 			}
+// 		default:
+// 			panic(todo("%T", n))
+// 		}
+// 	}
+// 	return nil
+// }
 
 func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression) (r []byte, rt cc.Type, rmode mode) {
 	var b buf
@@ -823,7 +999,7 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression) (r []byte
 	params := ft.Parameters()
 	var xargs [][]byte
 	for i, v := range args {
-		mode := expr
+		mode := exprDefault
 		var t cc.Type
 		switch {
 		case i < len(params):
@@ -836,17 +1012,17 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression) (r []byte
 				t = c.ast.Double
 			}
 		}
-		switch v.Type().Undecay().Kind() {
-		case cc.Array:
-			if _, ok := v.Value().(cc.StringValue); !ok {
-				mode = exprUintpr
-			}
-		case cc.Function:
-			mode = exprUintpr
-		}
+		// switch v.Type().Undecay().Kind() {
+		// case cc.Array:
+		// 	if _, ok := v.Value().(cc.StringValue); !ok {
+		// 		mode = exprUintpr
+		// 	}
+		// case cc.Function:
+		// 	mode = exprUintpr
+		// }
 		xargs = append(xargs, c.expr(w, v, t, mode))
 	}
-	b.w("%s(%stls", c.expr(w, n.PostfixExpression, nil, exprFunc), tag(ccgoAutomatic))
+	b.w("%s(%stls", c.expr(w, n.PostfixExpression, nil, exprCall), tag(ccgoAutomatic))
 	switch {
 	case ft.IsVariadic():
 		for _, v := range xargs[:ft.MinArgs()] {
@@ -868,8 +1044,7 @@ func (c *ctx) postfixExpressionCall(w writer, n *cc.PostfixExpression) (r []byte
 		}
 	}
 	b.w(")")
-	rt = ft.Result()
-	rmode = expr
+	rt, rmode = ft.Result(), exprDefault
 	if rt.Kind() == cc.Void {
 		rmode = exprVoid
 	}
@@ -883,18 +1058,20 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 		c.err(errorf("TODO %v", n.Case))
 	case cc.AssignmentExpressionAssign: // UnaryExpression '=' AssignmentExpression
 		switch mode {
-		case expr, exprBool:
-			v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-			w.w("\n%s := %s", v, c.expr(w, n.AssignmentExpression, n.UnaryExpression.Type(), expr))
-			w.w("\n%s = %s", c.expr(w, n.UnaryExpression, nil, expr), v)
-			b.w("%s", v)
+		// case expr, exprBool:
+		// 	v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+		// 	w.w("\n%s := %s", v, c.expr(w, n.AssignmentExpression, n.UnaryExpression.Type(), expr))
+		// 	w.w("\n%s = %s", c.expr(w, n.UnaryExpression, nil, expr), v)
+		// 	b.w("%s", v)
+		case exprVoid:
+			// 	rhs := expr
+			// 	if n.UnaryExpression.Type().Kind() == cc.Ptr && n.AssignmentExpression.Type().Undecay().Kind() == cc.Array {
+			// 		rhs = exprUintpr
+			// 	}
+			b.w("%s = %s", c.expr(w, n.UnaryExpression, nil, exprLvalue), c.expr(w, n.AssignmentExpression, n.UnaryExpression.Type(), exprDefault))
+			rt, rmode = n.Type(), exprVoid
 		default:
-			rhs := expr
-			if n.UnaryExpression.Type().Kind() == cc.Ptr && n.AssignmentExpression.Type().Undecay().Kind() == cc.Array {
-				rhs = exprUintpr
-			}
-			b.w("%s = %s", c.expr(w, n.UnaryExpression, nil, expr), c.expr(w, n.AssignmentExpression, n.UnaryExpression.Type(), rhs))
-			rmode = exprVoid
+			c.err(errorf("TODO %v", mode))
 		}
 	case cc.AssignmentExpressionMul, // UnaryExpression "*=" AssignmentExpression
 		cc.AssignmentExpressionDiv, // UnaryExpression "/=" AssignmentExpression
@@ -907,40 +1084,29 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 		cc.AssignmentExpressionXor, // UnaryExpression "^=" AssignmentExpression
 		cc.AssignmentExpressionOr:  // UnaryExpression "|=" AssignmentExpression
 
-		op := n.Token.SrcStr()
-		op = op[:len(op)-1]
-		switch mode {
-		case expr:
-			c.err(errorf("TODO %v", n.Case))
-		default:
-			ct := c.usualArithmeticConversions(n.UnaryExpression.Type(), n.AssignmentExpression.Type())
-			rmode = exprVoid
-			switch d := c.declaratorOf(n.UnaryExpression); {
-			case d != nil:
-				b.w("\n%s = ", c.expr(w, n.UnaryExpression, nil, expr))
-				var b2 buf
-				b2.w("(%s %s %s)", c.expr(w, n.UnaryExpression, ct, expr), op, c.expr(w, n.AssignmentExpression, ct, expr))
-				b.w("%s", c.convert(n, b2.bytes(), ct, t, mode, rmode))
-			default:
-				c.err(errorf("TODO"))
-			}
-		}
+		c.err(errorf("TODO %v", n.Case))
+		// op := n.Token.SrcStr()
+		// op = op[:len(op)-1]
+		// switch mode {
+		// case expr:
+		// 	c.err(errorf("TODO %v", n.Case))
+		// default:
+		// 	ct := c.usualArithmeticConversions(n.UnaryExpression.Type(), n.AssignmentExpression.Type())
+		// 	rmode = exprVoid
+		// 	switch d := c.declaratorOf(n.UnaryExpression); {
+		// 	case d != nil:
+		// 		b.w("\n%s = ", c.expr(w, n.UnaryExpression, nil, expr))
+		// 		var b2 buf
+		// 		b2.w("(%s %s %s)", c.expr(w, n.UnaryExpression, ct, expr), op, c.expr(w, n.AssignmentExpression, ct, expr))
+		// 		b.w("%s", c.convert(n, b2.bytes(), ct, t, mode, rmode))
+		// 	default:
+		// 		c.err(errorf("TODO"))
+		// 	}
+		// }
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
 	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) usualArithmeticConversions(a, b cc.Type) (r cc.Type) {
-	if a.Kind() == cc.Ptr && (cc.IsIntegerType(b) || b.Kind() == cc.Ptr) {
-		return a
-	}
-
-	if b.Kind() == cc.Ptr && (cc.IsIntegerType(a) || a.Kind() == cc.Ptr) {
-		return b
-	}
-
-	return cc.UsualArithmeticConversions(a, b)
 }
 
 func (c *ctx) expressionList(w writer, n *cc.ExpressionList, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
@@ -953,163 +1119,174 @@ func (c *ctx) expressionList(w writer, n *cc.ExpressionList, t cc.Type, mode mod
 		}
 	}
 	c.err(errorf("TODO internal error", n))
-	return nil, nil, expr
+	return r, rt, rmode
 }
 
 func (c *ctx) primaryExpression(w writer, n *cc.PrimaryExpression, t cc.Type, mode mode) (r []byte, rt cc.Type, rmode mode) {
 	var b buf
-out:
+	// out:
 	switch n.Case {
 	case cc.PrimaryExpressionIdent: // IDENTIFIER
+		rt, rmode = n.Type(), mode
 		switch x := n.ResolvedTo().(type) {
 		case *cc.Declarator:
-			if x.StorageDuration() == cc.Automatic {
-				if info := c.f.declInfos.info(x); info.escapes() {
-					b.w("(%s)", bpOff(info.bpOff))
-					rt = x.Type().Pointer()
-					rmode = exprUintpr
-					break
-				}
-			}
+			// 	if x.StorageDuration() == cc.Automatic {
+			// 		if info := c.f.declInfos.info(x); info.escapes() {
+			// 			b.w("(%s)", bpOff(info.bpOff))
+			// 			rt = x.Type().Pointer()
+			// 			rmode = exprUintpr
+			// 			break
+			// 		}
+			// 	}
 
-			if x.Type().Kind() == cc.Function {
-				switch mode {
-				case expr:
-					v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-					w.w("\n%s := %s%s", v, c.declaratorTag(x), x.Name())
-					b.w("(*(*uintptr)(unsafe.Pointer(&%s)))", v)
-					break out
-				default:
-					rmode = exprFunc
-				}
-			}
+			// 	if x.Type().Kind() == cc.Function {
+			// 		switch mode {
+			// 		case expr:
+			// 			v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+			// 			w.w("\n%s := %s%s", v, c.declaratorTag(x), x.Name())
+			// 			b.w("(*(*uintptr)(unsafe.Pointer(&%s)))", v)
+			// 			break out
+			// 		default:
+			// 			rmode = exprFunc
+			// 		}
+			// 	}
 
-			b.w("%s%s", c.declaratorTag(x), x.Name())
-		case *cc.Enumerator:
-			switch {
-			case x.ResolvedIn().Parent == nil:
-				b.w("%s%s", tag(enumConst), x.Token.Src())
+			switch mode {
+			case exprLvalue, exprDefault, exprCall, exprSelect:
+				b.w("%s%s", c.declaratorTag(x), x.Name())
+			case exprIndex:
+				switch x.Type().Kind() {
+				case cc.Array:
+					rt = x.Type()
+					b.w("%s%s", c.declaratorTag(x), x.Name())
+				case cc.Ptr:
+					c.err(errorf("TODO %v", mode))
+				}
 			default:
-				return c.intConst(x.Value(), n.Type(), t)
+				c.err(errorf("TODO %v", mode))
 			}
-		case nil:
-			if n.Type().Kind() == cc.Ptr && n.Type().(*cc.PointerType).Elem().Kind() == cc.Function {
-				switch mode {
-				case expr:
-					v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
-					w.w("\n%s := %s%s", v, tag(external), n.Token.Src())
-					b.w("(*(*uintptr)(unsafe.Pointer(&%s)))", v)
-					break out
-				default:
-					rmode = exprFunc
-				}
-			}
+		// case *cc.Enumerator:
+		// 	switch {
+		// 	case x.ResolvedIn().Parent == nil:
+		// 		b.w("%s%s", tag(enumConst), x.Token.Src())
+		// 	default:
+		// 		return c.intConst(x.Value(), n.Type(), t)
+		// 	}
+		// case nil:
+		// 	if n.Type().Kind() == cc.Ptr && n.Type().(*cc.PointerType).Elem().Kind() == cc.Function {
+		// 		switch mode {
+		// 		case expr:
+		// 			v := fmt.Sprintf("%sv%d", tag(ccgoAutomatic), c.f.id())
+		// 			w.w("\n%s := %s%s", v, tag(external), n.Token.Src())
+		// 			b.w("(*(*uintptr)(unsafe.Pointer(&%s)))", v)
+		// 			break out
+		// 		default:
+		// 			rmode = exprFunc
+		// 		}
+		// 	}
 
-			b.w("%s%s", tag(external), n.Token.Src())
+		// 	b.w("%s%s", tag(external), n.Token.Src())
 		default:
 			c.err(errorf("TODO %T", x))
 		}
 	case cc.PrimaryExpressionInt: // INTCONST
-		return c.intConst(n.Value(), n.Type(), t)
+		rt, rmode = n.Type(), exprUntyped
+		b.w("%d", n.Value())
 	case cc.PrimaryExpressionFloat: // FLOATCONST
-		rt = t
-		switch x := n.Value().(type) {
-		case cc.Float64Value:
-			switch {
-			case t.Kind() == cc.Double:
-				s := fmt.Sprint(x)
-				v, err := strconv.ParseFloat(s, int(t.Size()*8))
-				if err != nil || v != float64(x) {
-					c.err(errorf("TODO %v != %v %v", x, v, err))
-					break
-				}
+		c.err(errorf("TODO %v", n.Case))
+		// rt = t
+		// switch x := n.Value().(type) {
+		// case cc.Float64Value:
+		// 	switch {
+		// 	case t.Kind() == cc.Double:
+		// 		s := fmt.Sprint(x)
+		// 		v, err := strconv.ParseFloat(s, int(t.Size()*8))
+		// 		if err != nil || v != float64(x) {
+		// 			c.err(errorf("TODO %v != %v %v", x, v, err))
+		// 			break
+		// 		}
 
-				b.w("%s", s)
-			case t.Kind() == cc.Float:
-				s := fmt.Sprint(float32(x))
-				v, err := strconv.ParseFloat(s, int(t.Size()*8))
-				if err != nil || float32(v) != float32(x) {
-					c.err(errorf("TODO %v != %v %v", x, v, err))
-					break
-				}
+		// 		b.w("%s", s)
+		// 	case t.Kind() == cc.Float:
+		// 		s := fmt.Sprint(float32(x))
+		// 		v, err := strconv.ParseFloat(s, int(t.Size()*8))
+		// 		if err != nil || float32(v) != float32(x) {
+		// 			c.err(errorf("TODO %v != %v %v", x, v, err))
+		// 			break
+		// 		}
 
-				b.w("%s", s)
-			case cc.IsIntegerType(t):
-				b.w("%s(%v)", c.typ(t), x)
-			default:
-				c.err(errorf("TODO %v", t.Kind()))
-			}
-		default:
-			c.err(errorf("TODO %T", x))
-		}
+		// 		b.w("%s", s)
+		// 	case cc.IsIntegerType(t):
+		// 		b.w("%s(%v)", c.typ(t), x)
+		// 	default:
+		// 		c.err(errorf("TODO %v", t.Kind()))
+		// 	}
+		// default:
+		// 	c.err(errorf("TODO %T", x))
+		// }
 	case cc.PrimaryExpressionChar: // CHARCONST
-		rt = t
-		switch x := n.Value().(type) {
-		case cc.Int64Value:
-			switch {
-			case cc.IsSignedInteger(t):
-				if t.Size() < 8 {
-					m := uint64(1)<<(t.Size()*8) - 1
-					switch {
-					case x < 0:
-						x |= ^cc.Int64Value(m)
-					default:
-						x &= cc.Int64Value(m)
-					}
-				}
-				switch {
-				case x >= ' ' && x < 0x7f:
-					b.w("int%d(%s)", 8*t.Size(), (strconv.QuoteRuneToASCII(rune(x))))
-				default:
-					b.w("int%d(%d)", 8*t.Size(), x)
-				}
-			case cc.IsIntegerType(t):
-				if t.Size() < 8 {
-					m := uint64(1)<<(t.Size()*8) - 1
-					x &= cc.Int64Value(m)
-				}
-				switch {
-				case x >= ' ' && x < 0x7f:
-					b.w("uint%d(%s)", 8*t.Size(), (strconv.QuoteRuneToASCII(rune(x))))
-				default:
-					b.w("uint%d(%d)", 8*t.Size(), x)
-				}
-			default:
-				switch {
-				case x >= ' ' && x < 0x7f:
-					b.w("%s(%s)", c.typ(t), (strconv.QuoteRuneToASCII(rune(x))))
-				default:
-					b.w("%s(%d)", c.typ(t), x)
-				}
-			}
-		default:
-			c.err(errorf("TODO %T", x))
-		}
+		rt, rmode = n.Type(), exprUntyped
+		b.w("%d", n.Value())
+		// rt = t
+		// switch x := n.Value().(type) {
+		// case cc.Int64Value:
+		// 	switch {
+		// 	case cc.IsSignedInteger(t):
+		// 		if t.Size() < 8 {
+		// 			m := uint64(1)<<(t.Size()*8) - 1
+		// 			switch {
+		// 			case x < 0:
+		// 				x |= ^cc.Int64Value(m)
+		// 			default:
+		// 				x &= cc.Int64Value(m)
+		// 			}
+		// 		}
+		// 		switch {
+		// 		case x >= ' ' && x < 0x7f:
+		// 			b.w("int%d(%s)", 8*t.Size(), (strconv.QuoteRuneToASCII(rune(x))))
+		// 		default:
+		// 			b.w("int%d(%d)", 8*t.Size(), x)
+		// 		}
+		// 	case cc.IsIntegerType(t):
+		// 		if t.Size() < 8 {
+		// 			m := uint64(1)<<(t.Size()*8) - 1
+		// 			x &= cc.Int64Value(m)
+		// 		}
+		// 		switch {
+		// 		case x >= ' ' && x < 0x7f:
+		// 			b.w("uint%d(%s)", 8*t.Size(), (strconv.QuoteRuneToASCII(rune(x))))
+		// 		default:
+		// 			b.w("uint%d(%d)", 8*t.Size(), x)
+		// 		}
+		// 	default:
+		// 		switch {
+		// 		case x >= ' ' && x < 0x7f:
+		// 			b.w("%s(%s)", c.typ(t), (strconv.QuoteRuneToASCII(rune(x))))
+		// 		default:
+		// 			b.w("%s(%d)", c.typ(t), x)
+		// 		}
+		// 	}
+		// default:
+		// 	c.err(errorf("TODO %T", x))
+		// }
 	case cc.PrimaryExpressionLChar: // LONGCHARCONST
 		c.err(errorf("TODO %v", n.Case))
 	case cc.PrimaryExpressionString: // STRINGLITERAL
-		switch x := t.(type) {
-		case *cc.ArrayType:
-			rt = t
-			v := n.Value().(cc.StringValue)
-			max := x.Len()
-			for len(v) != 0 && v[len(v)-1] == 0 {
-				v = v[:len(v)-1]
-			}
-			b.w("%s{", c.typ(rt))
-			for i := 0; i < len(v) && int64(i) < max; i++ {
-				b.w("%s, ", c.stringCharConst(v[i]))
-			}
-			b.w("}")
-		case *cc.PointerType:
-			b.w("%q", n.Value())
-		default:
-			c.err(errorf("TODO %T", x))
-		}
+		rt, rmode = n.Type(), exprUntyped
+		b.w("%s", n.Value())
+		// rt, rmode = t, exprDefault
+		// switch x := t.(type) {
+		// case *cc.ArrayType:
+		// case *cc.PointerType:
+		// 	b.w("%q", n.Value())
+		// default:
+		// 	c.err(errorf("TODO %T", x))
+		// }
 	case cc.PrimaryExpressionLString: // LONGSTRINGLITERAL
 		c.err(errorf("TODO %v", n.Case))
 	case cc.PrimaryExpressionExpr: // '(' ExpressionList ')'
-		return c.expr0(w, n.ExpressionList, t, mode)
+		c.err(errorf("TODO %v", n.Case))
+		// return c.expr0(w, n.ExpressionList, t, mode)
 	case cc.PrimaryExpressionStmt: // '(' CompoundStatement ')'
 		c.err(errorf("TODO %v", n.Case))
 	case cc.PrimaryExpressionGeneric: // GenericSelection
@@ -1118,61 +1295,6 @@ out:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
 	return b.bytes(), rt, rmode
-}
-
-func (c *ctx) intConst(v cc.Value, from, to cc.Type) (r []byte, rt cc.Type, rmode mode) {
-	var b buf
-	if !cc.IsIntegerType(to) && to.Kind() != cc.Ptr {
-		b.w("%d", v)
-		return b.bytes(), from, rmode
-	}
-
-	switch x := v.(type) {
-	case cc.Int64Value:
-		switch {
-		case cc.IsSignedInteger(to):
-			if to.Size() < 8 {
-				m := uint64(1)<<(to.Size()*8) - 1
-				switch {
-				case x < 0:
-					x |= ^cc.Int64Value(m)
-				default:
-					x &= cc.Int64Value(m)
-				}
-			}
-			b.w("int%d(%d)", 8*to.Size(), x)
-		default:
-			if to.Size() < 8 {
-				m := uint64(1)<<(to.Size()*8) - 1
-				x &= cc.Int64Value(m)
-			}
-			switch {
-			case to.Kind() == cc.Ptr:
-				b.w("uintptr(%d)", uint64(x))
-			default:
-				b.w("uint%d(%d)", 8*to.Size(), uint64(x))
-			}
-		}
-	case cc.UInt64Value:
-		switch {
-		case cc.IsSignedInteger(to):
-			c.err(errorf("TODO"))
-		default:
-			if to.Size() < 8 {
-				m := uint64(1)<<(to.Size()*8) - 1
-				x &= cc.UInt64Value(m)
-			}
-			switch {
-			case to.Kind() == cc.Ptr:
-				b.w("uintptr(%d)", uint64(x))
-			default:
-				b.w("uint%d(%d)", 8*to.Size(), uint64(x))
-			}
-		}
-	default:
-		c.err(errorf("TODO %T", x))
-	}
-	return b.bytes(), to, rmode
 }
 
 func (c *ctx) stringCharConst(b byte) string {
@@ -1185,3 +1307,58 @@ func (c *ctx) stringCharConst(b byte) string {
 		return fmt.Sprint(b)
 	}
 }
+
+// func (c *ctx) intConst(v cc.Value, from, to cc.Type) (r []byte, rt cc.Type, rmode mode) {
+// 	var b buf
+// 	if !cc.IsIntegerType(to) && to.Kind() != cc.Ptr {
+// 		b.w("%d", v)
+// 		return b.bytes(), from, rmode
+// 	}
+//
+// 	switch x := v.(type) {
+// 	case cc.Int64Value:
+// 		switch {
+// 		case cc.IsSignedInteger(to):
+// 			if to.Size() < 8 {
+// 				m := uint64(1)<<(to.Size()*8) - 1
+// 				switch {
+// 				case x < 0:
+// 					x |= ^cc.Int64Value(m)
+// 				default:
+// 					x &= cc.Int64Value(m)
+// 				}
+// 			}
+// 			b.w("int%d(%d)", 8*to.Size(), x)
+// 		default:
+// 			if to.Size() < 8 {
+// 				m := uint64(1)<<(to.Size()*8) - 1
+// 				x &= cc.Int64Value(m)
+// 			}
+// 			switch {
+// 			case to.Kind() == cc.Ptr:
+// 				b.w("uintptr(%d)", uint64(x))
+// 			default:
+// 				b.w("uint%d(%d)", 8*to.Size(), uint64(x))
+// 			}
+// 		}
+// 	case cc.UInt64Value:
+// 		switch {
+// 		case cc.IsSignedInteger(to):
+// 			c.err(errorf("TODO"))
+// 		default:
+// 			if to.Size() < 8 {
+// 				m := uint64(1)<<(to.Size()*8) - 1
+// 				x &= cc.UInt64Value(m)
+// 			}
+// 			switch {
+// 			case to.Kind() == cc.Ptr:
+// 				b.w("uintptr(%d)", uint64(x))
+// 			default:
+// 				b.w("uint%d(%d)", 8*to.Size(), uint64(x))
+// 			}
+// 		}
+// 	default:
+// 		c.err(errorf("TODO %T", x))
+// 	}
+// 	return b.bytes(), to, rmode
+// }

@@ -5,6 +5,8 @@
 // Package ccgo implements the ccgo command.
 package ccgo // import "modernc.org/ccgo/v4/lib"
 
+// -export-X, -unexport-X flags
+
 import (
 	"flag"
 	"fmt"
