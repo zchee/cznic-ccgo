@@ -26,6 +26,14 @@ func (c *ctx) typ(t cc.Type) string {
 	return b.String()
 }
 
+func (c *ctx) typeSuffix(t cc.Type) string {
+	if assert && !cc.IsIntegerType(t) {
+		c.err(errorf("TODO"))
+	}
+	r := c.typ(t)
+	return strings.ToUpper(r[:1]) + r[1:]
+}
+
 func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag bool) {
 	if tn := t.Typedef(); tn != nil && useTypename && tn.LexicalScope().Parent == nil {
 		fmt.Fprintf(b, "%s%s", tag(typename), tn.Name())
