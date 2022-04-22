@@ -30,8 +30,7 @@ func (c *ctx) typeSuffix(t cc.Type) string {
 	if assert && !cc.IsIntegerType(t) {
 		c.err(errorf("TODO"))
 	}
-	r := c.typ(t)
-	return strings.ToUpper(r[:1]) + r[1:]
+	return c.export(c.typ(t))
 }
 
 func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag bool) {
@@ -61,22 +60,21 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			c.err(errorf("TODO %T", x))
 		case t.Kind() == cc.Void:
 			b.WriteString("struct{}")
-		case t.Kind() == cc.Double:
-			if t.Size() == 8 {
-				b.WriteString("float64")
-				break
-			}
-
-			b.WriteString("int")
-			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
 		case t.Kind() == cc.Float:
-			if t.Size() == 4 {
-				b.WriteString("float32")
-				break
+			if t.Size() != 4 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
 			}
-
-			b.WriteString("int")
-			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
+			b.WriteString("float32")
+		case t.Kind() == cc.Double:
+			if t.Size() != 8 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			}
+			b.WriteString("float64")
+		case t.Kind() == cc.LongDouble:
+			if t.Size() != 8 {
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			}
+			b.WriteString("float64")
 		default:
 			b.WriteString("int")
 			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
@@ -105,7 +103,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 				b.WriteByte('\n')
 				switch nm := f.Name(); {
 				case nm == "":
-					fmt.Fprintf(b, "%s__%d", tag(field), i)
+					fmt.Fprintf(b, "%s__ccgo%d", tag(field), i)
 				default:
 					fmt.Fprintf(b, "%s%s", tag(field), nm)
 				}
@@ -137,7 +135,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 				b.WriteString(" [0]")
 				c.typ0(b, f.Type(), true, true)
 			}
-			fmt.Fprintf(b, "\n%s1 [%d]byte\n}", tag(field), t.Size())
+			fmt.Fprintf(b, "\n%s__ccgo [%d]byte\n}", tag(field), t.Size())
 		}
 	case *cc.ArrayType:
 		fmt.Fprintf(b, "[%d]", x.Len())

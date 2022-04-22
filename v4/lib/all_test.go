@@ -122,23 +122,15 @@ func TestCompile(t *testing.T) {
 	// 	"950919-1.c": {},
 	// }
 	blacklistTCC := map[string]struct{}{
-		"27_sizeof.c":                 {}, //TODO
-		"28_strings.c":                {}, //TODO
-		"30_hanoi.c":                  {}, //TODO
-		"31_args.c":                   {}, //TODO
-		"32_led.c":                    {}, //TODO
-		"35_sizeof.c":                 {}, //TODO
-		"38_multiple_array_index.c":   {}, //TODO
-		"39_typedef.c":                {}, //TODO
-		"40_stdio.c":                  {}, //TODO
+		// panics
+		"75_array_in_struct_init.c": {}, //TODO
+
 		"45_empty_for.c":              {}, //TODO
 		"46_grep.c":                   {}, //TODO
-		"48_nested_break.c":           {}, //TODO
 		"52_unnamed_enum.c":           {}, //TODO
 		"54_goto.c":                   {}, //TODO
 		"55_lshift_type.c":            {}, //TODO
 		"73_arm64.c":                  {}, //TODO
-		"75_array_in_struct_init.c":   {}, //TODO
 		"76_dollars_in_identifiers.c": {}, //TODO
 		"78_vla_label.c":              {}, //TODO
 		"79_vla_continue.c":           {}, //TODO
@@ -167,6 +159,14 @@ func TestCompile(t *testing.T) {
 		blacklistTCC["99_fastcall.c"] = struct{}{}       //TODO
 	case "linux/s390x":
 		blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
+	case "netbsd/amd64":
+		blacklistTCC["98_al_ax_extend.c"] = struct{}{} //TODO
+	case "windows/386":
+		blacklistTCC["29_array_address.c"] = struct{}{} //TODO
+	case "windows/amd64":
+		blacklistTCC["29_array_address.c"] = struct{}{} //TODO
+	case "windows/arm64":
+		blacklistTCC["29_array_address.c"] = struct{}{} //TODO
 	}
 	for _, v := range []struct {
 		dir       string
@@ -382,21 +382,10 @@ func TestExec(t *testing.T) {
 		// }
 		blacklistTCC := map[string]struct{}{
 			// panics
-			"92_enum_bitfield.c": {}, //TODO
+			"75_array_in_struct_init.c": {}, //TODO
+			"92_enum_bitfield.c":        {}, //TODO
 
-			"27_sizeof.c":                 {}, //TODO
-			"28_strings.c":                {}, //TODO
-			"30_hanoi.c":                  {}, //TODO
-			"31_args.c":                   {}, //TODO
-			"32_led.c":                    {}, //TODO
-			"35_sizeof.c":                 {}, //TODO
-			"37_sprintf.c":                {}, //TODO
-			"38_multiple_array_index.c":   {}, //TODO
-			"39_typedef.c":                {}, //TODO
-			"40_stdio.c":                  {}, //TODO
-			"42_function_pointer.c":       {}, //TODO
 			"45_empty_for.c":              {}, //TODO
-			"48_nested_break.c":           {}, //TODO
 			"50_logical_second_arg.c":     {}, //TODO
 			"52_unnamed_enum.c":           {}, //TODO
 			"54_goto.c":                   {}, //TODO
@@ -405,7 +394,6 @@ func TestExec(t *testing.T) {
 			"67_macro_concat.c":           {}, //TODO
 			"71_macro_empty_arg.c":        {}, //TODO
 			"73_arm64.c":                  {}, //TODO
-			"75_array_in_struct_init.c":   {}, //TODO
 			"76_dollars_in_identifiers.c": {}, //TODO
 			"77_push_pop_macro.c":         {}, //TODO
 			"78_vla_label.c":              {}, //TODO
@@ -436,6 +424,12 @@ func TestExec(t *testing.T) {
 			blacklistTCC["24_math_library.c"] = struct{}{}   //TODO
 		case "linux/s390x":
 			blacklistCompCert["aes.c"] = struct{}{} // Unsupported endianness.
+		case "windows/386":
+			blacklistTCC["29_array_address.c"] = struct{}{} //TODO
+		case "windows/amd64":
+			blacklistTCC["29_array_address.c"] = struct{}{} //TODO
+		case "windows/arm64":
+			blacklistTCC["29_array_address.c"] = struct{}{} //TODO
 		}
 		for _, v := range []struct {
 			dir       string

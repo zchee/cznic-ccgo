@@ -132,9 +132,20 @@ func (c *ctx) unbracedStatement(w writer, n *cc.Statement) {
 func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	switch n.Case {
 	case cc.IterationStatementWhile: // "while" '(' ExpressionList ')' Statement
-		w.w("\nfor %s", c.expr(w, n.ExpressionList, nil, exprBool))
-		c.bracedStatement(w, n.Statement)
+		var a buf
+		switch b := c.expr(&a, n.ExpressionList, nil, exprBool); {
+		case len(a.bytes()) != 0:
+			w.w("\nfor {")
+			w.w("%s", a.bytes())
+			w.w("\nif !(%s) { break }", b)
+			c.unbracedStatement(w, n.Statement)
+			w.w("\n}")
+		default:
+			w.w("\nfor %s", b)
+			c.bracedStatement(w, n.Statement)
+		}
 	case cc.IterationStatementDo: // "do" Statement "while" '(' ExpressionList ')' ';'
+		//TODO reproduce IterationStatementWhile
 		w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgoAutomatic), c.expr(w, n.ExpressionList, nil, exprBool))
 		c.bracedStatement(w, n.Statement)
 	case cc.IterationStatementFor: // "for" '(' ExpressionList ';' ExpressionList ';' ExpressionList ')' Statement

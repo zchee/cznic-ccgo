@@ -49,6 +49,7 @@ type fnCtx struct {
 	t         *cc.FunctionType
 	tlsAllocs int64
 
+	callArg   int
 	maxValist int
 	nextID    int
 	read      int
@@ -146,6 +147,11 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 				if v := nargs - ft.MinArgs(); ft.IsVariadic() && v > f.maxValist {
 					f.maxValist = v
 				}
+				walk(x.PostfixExpression, f)
+				f.callArg++
+				walk(x.ArgumentExpressionList, f)
+				f.callArg--
+				return nil
 			case cc.PostfixExpressionInc, cc.PostfixExpressionDec:
 				f.write++
 				f.read++
@@ -153,13 +159,25 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 				f.read--
 				f.write--
 				return nil
+			case
+				cc.PostfixExpressionIndex,   // PostfixExpression '[' ExpressionList ']'
+				cc.PostfixExpressionSelect,  // PostfixExpression '.' IDENTIFIER
+				cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+
+				f.callArg--
+				walk(x.PostfixExpression, f)
+				if x.ExpressionList != nil {
+					walk(x.ExpressionList, f)
+				}
+				f.callArg++
+				return nil
 			}
 		case *cc.PrimaryExpression:
 			switch x.Case {
 			case cc.PrimaryExpressionIdent: // IDENTIFIER
 				switch y := x.ResolvedTo().(type) {
 				case *cc.Declarator:
-					if f.takeAddress {
+					if f.takeAddress || f.callArg > 0 && y.Type().Kind() == cc.Array && y.StorageDuration() == cc.Automatic {
 						f.declInfos.takeAddress(y)
 					}
 					if f.read != 0 {

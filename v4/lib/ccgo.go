@@ -80,24 +80,9 @@ func NewTask(goos, goarch string, args []string, stdout, stderr io.Writer, fs fs
 		fs:             fs,
 		goarch:         goarch,
 		goos:           goos,
-		//TODO prefixUnpinned:        "U",
-		prefixAutomatic:       "",
-		prefixCcgoAutomatic:   "",
-		prefixDefine:          "D",
-		prefixEnumerator:      "C",
-		prefixExternal:        "X",
-		prefixField:           "F",
-		prefixImportQualifier: "",
-		prefixMacro:           "D",
-		prefixStaticInternal:  "s",
-		prefixStaticNone:      "s",
-		prefixTaggedEnum:      "T",
-		prefixTaggedStruct:    "T",
-		prefixTypename:        "T",
-		prefixTaggedUnion:     "T",
-		stderr:                stderr,
-		stdout:                stdout,
-		tlsQualifier:          "libc.",
+		stderr:         stderr,
+		stdout:         stdout,
+		tlsQualifier:   "libc.",
 	}
 }
 
@@ -191,6 +176,9 @@ func (t *Task) Main() (err error) {
 		t.O,
 		t.std,
 	)
+	if flag := cc.LongDouble64Flag(t.goos, t.goarch); flag != "" {
+		t.cfgArgs = append(t.cfgArgs, flag)
+	}
 
 	cfg, err := cc.NewConfig(t.goos, t.goarch, t.cfgArgs...)
 	if err != nil {

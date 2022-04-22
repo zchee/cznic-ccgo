@@ -366,12 +366,13 @@ type linker struct {
 	externs               map[string]*object
 	fields                nameSpace
 	fileLinkNames2GoNames dict
+	fileLinkNames2IDs     dict
+	forceExternalPrefix   nameSet
 	fset                  *token.FileSet
 	goTags                []string
 	goTypeNamesEmited     nameSet
 	imports               []*object
 	libc                  *object
-	fileLinkNames2IDs     dict
 	out                   io.Writer
 	stringLiterals        map[string]int64
 	task                  *Task
@@ -490,6 +491,13 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 					return errorf("%v: undefined reference to '%s'", linkFile, l.rawName(nm))
 				}
 
+				if lib.kind == objectFile {
+					continue
+				}
+
+				if l.task.prefixExternal != "X" {
+					l.forceExternalPrefix.add(nm)
+				}
 				if lib.qualifier == "" {
 					lib.qualifier = l.tld.registerName(l, tag(importQualifier)+lib.pkgName)
 					l.imports = append(l.imports, lib)
@@ -784,7 +792,13 @@ func (l *linker) newFnInfo(n ast.Node) (r *fnInfo) {
 
 func (fi *fnInfo) name(linkName string) string {
 	switch symKind(linkName) {
-	case external, staticInternal, staticNone:
+	case external:
+		if fi.linker.forceExternalPrefix.has(linkName) {
+			return linkName
+		}
+
+		fallthrough
+	case staticInternal, staticNone:
 		if goName := fi.linker.tld.dict[linkName]; goName != "" {
 			return goName
 		}

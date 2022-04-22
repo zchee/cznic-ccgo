@@ -122,6 +122,8 @@ type ctx struct {
 	typenames     nameSet
 	void          cc.Type
 
+	nextID int
+
 	closed bool
 }
 
@@ -132,6 +134,15 @@ func newCtx(task *Task, eh errHandler) *ctx {
 		imports: map[string]string{},
 		task:    task,
 	}
+}
+
+func (c *ctx) id() int {
+	if c.f != nil {
+		return c.f.id()
+	}
+
+	c.nextID++
+	return c.nextID
 }
 
 func (c *ctx) err(err error) { c.eh("%s", err.Error()) }

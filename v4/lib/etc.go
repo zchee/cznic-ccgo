@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"modernc.org/cc/v4"
 )
@@ -95,6 +96,7 @@ var (
 		"uintptr":    {},
 
 		// Protected identifiers
+		"main":   {},
 		"unsafe": {},
 	}
 )
@@ -421,6 +423,8 @@ func (n *nameSet) add(s string) (ok bool) {
 	return true
 }
 
+func (n *nameSet) has(nm string) bool { _, ok := (*n)[nm]; return ok }
+
 func symKind(s string) name {
 	for i, v := range tags {
 		if strings.HasPrefix(s, v) {
@@ -513,4 +517,14 @@ func bpOff(n int64) string {
 	}
 
 	return fmt.Sprintf("%sbp", tag(ccgoAutomatic))
+}
+
+func (c *ctx) export(s string) string {
+	r, sz := utf8.DecodeRuneInString(s)
+	return strings.ToUpper(string(r)) + s[sz:]
+}
+
+func (c *ctx) unexport(s string) string {
+	r, sz := utf8.DecodeRuneInString(s)
+	return strings.ToLower(string(r)) + s[sz:]
 }
