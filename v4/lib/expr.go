@@ -16,7 +16,7 @@ type mode int
 
 const (
 	_           mode = iota
-	exprBool         // C arithmetic type, Go bool
+	exprBool         // C scalar type, Go bool
 	exprCall         // C func pointer, Go function value
 	exprDefault      //
 	exprIndex        // C pointer, Go array
