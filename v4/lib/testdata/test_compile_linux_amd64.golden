@@ -43,11 +43,14 @@ assets/tcc-0.9.27/tests/tests2/41_hashif.c
 assets/tcc-0.9.27/tests/tests2/42_function_pointer.c
 assets/tcc-0.9.27/tests/tests2/43_void_param.c
 assets/tcc-0.9.27/tests/tests2/44_scoped_declarations.c
+assets/tcc-0.9.27/tests/tests2/45_empty_for.c
+assets/tcc-0.9.27/tests/tests2/46_grep.c
 assets/tcc-0.9.27/tests/tests2/47_switch_return.c
 assets/tcc-0.9.27/tests/tests2/48_nested_break.c
 assets/tcc-0.9.27/tests/tests2/49_bracket_evaluation.c
 assets/tcc-0.9.27/tests/tests2/50_logical_second_arg.c
 assets/tcc-0.9.27/tests/tests2/51_static.c
+assets/tcc-0.9.27/tests/tests2/52_unnamed_enum.c
 assets/tcc-0.9.27/tests/tests2/60_errors_and_warnings.c
 assets/tcc-0.9.27/tests/tests2/64_macro_nesting.c
 assets/tcc-0.9.27/tests/tests2/67_macro_concat.c
@@ -59,5 +62,7 @@ assets/tcc-0.9.27/tests/tests2/82_attribs_position.c
 assets/tcc-0.9.27/tests/tests2/83_utf8_in_identifiers.c
 assets/tcc-0.9.27/tests/tests2/84_hex-float.c
 assets/tcc-0.9.27/tests/tests2/85_asm-outside-function.c
+assets/tcc-0.9.27/tests/tests2/86_memory-model.c
+assets/tcc-0.9.27/tests/tests2/91_ptr_longlong_arith32.c
 assets/tcc-0.9.27/tests/tests2/96_nodata_wanted.c
 assets/tcc-0.9.27/tests/tests2/98_al_ax_extend.c

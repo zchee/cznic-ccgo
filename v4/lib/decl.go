@@ -99,6 +99,17 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 				walk(x.AssignmentExpression, f)
 			}
 			return nil
+		case *cc.CastExpression:
+			switch x.Case {
+			case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
+				var w int
+				w, f.write = f.write, 0
+				f.read++
+				walk(x.CastExpression, f)
+				f.read--
+				f.write = w
+				return nil
+			}
 		case *cc.Declaration:
 			switch x.Case {
 			case cc.DeclarationAuto:
@@ -273,7 +284,7 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 		}
 	}
 	switch {
-	case isMain && len(f.Parameters()) == 0:
+	case isMain && len(f.Parameters()) == 0 || isMain && len(f.Parameters()) == 1 && f.Parameters()[0].Type().Kind() == cc.Void:
 		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(ccgoAutomatic))
 	case isMain && len(f.Parameters()) == 1:
 		fmt.Fprintf(&b, ", %sargv uintptr", tag(ccgoAutomatic))
@@ -287,7 +298,13 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	}
 	b.WriteByte(')')
 	if f.Result().Kind() != cc.Void {
+		if names {
+			fmt.Fprintf(&b, "(%sr ", tag(ccgoAutomatic))
+		}
 		b.WriteString(c.typ(f.Result()))
+		if names {
+			b.WriteByte(')')
+		}
 	}
 	return b.String()
 }
@@ -298,6 +315,11 @@ func (c *ctx) declaration(w writer, n *cc.Declaration, external bool) {
 		switch {
 		case n.InitDeclaratorList == nil:
 			if !external {
+				break
+			}
+
+			if n.DeclarationSpecifiers == nil {
+				c.err(errorf("TODO %v:", n.Position()))
 				break
 			}
 
