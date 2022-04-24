@@ -23,7 +23,7 @@ func (c *ctx) statement(w writer, n *cc.Statement) {
 	case cc.StatementJump: // JumpStatement
 		c.jumpStatement(w, n.JumpStatement)
 	case cc.StatementAsm: // AsmStatement
-		c.err(errorf("TODO %v", n.Case))
+		c.err(errorf("%v: assembler statements not supported", n.Position()))
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
@@ -181,7 +181,7 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 			w.w("\nfor %s; %s; %s", b, b2, b3)
 			c.bracedStatement(w, n.Statement)
 		default:
-			panic(todo(""))
+			c.err(errorf("TODO"))
 		}
 	case cc.IterationStatementForDecl: // "for" '(' Declaration ExpressionList ';' ExpressionList ')' Statement
 		c.err(errorf("TODO %v", n.Case))

@@ -528,3 +528,13 @@ func (c *ctx) unexport(s string) string {
 	r, sz := utf8.DecodeRuneInString(s)
 	return strings.ToLower(string(r)) + s[sz:]
 }
+
+func cpos(n cc.Node) (r token.Position) {
+	if n == nil {
+		return r
+	}
+
+	r = token.Position(n.Position())
+	r.Filename = filepath.Join("~/src/modernc.org/ccorpus2", r.Filename)
+	return r
+}

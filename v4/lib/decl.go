@@ -170,10 +170,20 @@ func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
 				f.read--
 				f.write--
 				return nil
+			case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+				f.callArg--
+				ta := f.takeAddress
+				f.takeAddress = false
+				walk(x.PostfixExpression, f)
+				if x.ExpressionList != nil {
+					walk(x.ExpressionList, f)
+				}
+				f.takeAddress = ta
+				f.callArg++
+				return nil
 			case
-				cc.PostfixExpressionIndex,   // PostfixExpression '[' ExpressionList ']'
-				cc.PostfixExpressionSelect,  // PostfixExpression '.' IDENTIFIER
-				cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
+				cc.PostfixExpressionIndex,  // PostfixExpression '[' ExpressionList ']'
+				cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
 
 				f.callArg--
 				walk(x.PostfixExpression, f)
