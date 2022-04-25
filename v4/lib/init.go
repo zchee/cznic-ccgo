@@ -10,7 +10,7 @@ import (
 	"modernc.org/cc/v4"
 )
 
-func (c *ctx) initializerOuter(w writer, n *cc.Initializer, t cc.Type) (r []byte) {
+func (c *ctx) initializerOuter(w writer, n *cc.Initializer, t cc.Type) (r *buf) {
 	return c.initializer(w, c.initalizerFlatten(n, nil), t, 0)
 }
 
@@ -29,7 +29,7 @@ func (c *ctx) initalizerFlatten(n *cc.Initializer, a []*cc.Initializer) (r []*cc
 	return r
 }
 
-func (c *ctx) initializer(w writer, a []*cc.Initializer, t cc.Type, off0 int64) (r []byte) {
+func (c *ctx) initializer(w writer, a []*cc.Initializer, t cc.Type, off0 int64) (r *buf) {
 	if len(a) == 0 {
 		c.err(errorf("TODO"))
 		return nil
@@ -63,7 +63,7 @@ func (c *ctx) initializer(w writer, a []*cc.Initializer, t cc.Type, off0 int64) 
 	}
 }
 
-func (c *ctx) initializerArray(w writer, a []*cc.Initializer, t *cc.ArrayType, off0 int64) (r []byte) {
+func (c *ctx) initializerArray(w writer, a []*cc.Initializer, t *cc.ArrayType, off0 int64) (r *buf) {
 	var b buf
 	b.w("%s{", c.typ(t))
 	if len(a) != 0 {
@@ -101,5 +101,5 @@ func (c *ctx) initializerArray(w writer, a []*cc.Initializer, t *cc.ArrayType, o
 		}
 	}
 	b.w("}")
-	return b.bytes()
+	return &b
 }

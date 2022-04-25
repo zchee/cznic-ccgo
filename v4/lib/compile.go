@@ -94,14 +94,44 @@ type writer interface {
 	w(s string, args ...interface{})
 }
 
-type buf bytes.Buffer
+type discard struct{}
 
-func (b *buf) Write(p []byte)                  { (*bytes.Buffer)(b).Write(p) }
-func (b *buf) bytes() []byte                   { return (*bytes.Buffer)(b).Bytes() }
-func (b *buf) len() int                        { return (*bytes.Buffer)(b).Len() }
-func (b *buf) w(s string, args ...interface{}) { fmt.Fprintf((*bytes.Buffer)(b), s, args...) }
+func (discard) w(s string, args ...interface{}) {}
 
-func tag(nm name) string { return tags[nm] }
+type buf struct {
+	b bytes.Buffer
+	n cc.Node
+}
+
+func newBufFromtring(s string) *buf {
+	var b buf
+	b.w("%s", s)
+	return &b
+}
+
+func (b *buf) Write(p []byte) (int, error)     { return b.b.Write(p) }
+func (b *buf) bytes() []byte                   { return b.b.Bytes() }
+func (b *buf) len() int                        { return b.b.Len() }
+func (b *buf) w(s string, args ...interface{}) { fmt.Fprintf(&b.b, s, args...) }
+
+func (b *buf) Format(f fmt.State, verb rune) {
+	switch verb {
+	case 's':
+		f.Write(b.bytes())
+	case 'q':
+		fmt.Fprintf(f, "%q", b.bytes())
+	default:
+		panic(todo("%q", string(verb)))
+	}
+}
+
+func tag(nm name) string {
+	if nm >= 0 {
+		return tags[nm]
+	}
+
+	return ""
+}
 
 // errHandler is a function called on error.
 type errHandler func(msg string, args ...interface{})
@@ -123,6 +153,7 @@ type ctx struct {
 	void          cc.Type
 
 	nextID int
+	pass   int
 
 	closed bool
 }
@@ -276,21 +307,23 @@ package %s
 	)
 }
 
-func (c *ctx) declaratorTag(d *cc.Declarator) string {
+func (c *ctx) declaratorTag(d *cc.Declarator) string { return tag(c.declaratorKind(d)) }
+
+func (c *ctx) declaratorKind(d *cc.Declarator) name {
 	switch d.Linkage() {
 	case cc.External:
-		return tag(external)
+		return external
 	case cc.Internal:
-		return tag(staticInternal)
+		return staticInternal
 	case cc.None:
 		switch {
 		case d.IsStatic():
-			return tag(staticNone)
+			return staticNone
 		default:
-			return tag(automatic)
+			return automatic
 		}
 	default:
 		c.err(errorf("%v: internal error: %v", d.Position(), d.Linkage()))
-		return ""
+		return -1
 	}
 }

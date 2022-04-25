@@ -36,12 +36,12 @@ editor:
 	go install -v modernc.org/ccgo/v4 2>&1 | tee log-editor
 
 tmp:
-	go test -v -run TestCompile -trc 2>&1 | tee log-tmp
+	go test -tags=ccgo.assert -v -run TestCompile -trc 2>&1 | tee log-tmp
 	grep -a '^ \+TODO' log-tmp | sort | uniq -c | sort -n | tee log-2
 	grep -a 'TOTAL\|PASS' log-tmp || true
 
 
 tmp2:
-	go test -v -run TestExec -trc 2>&1 | tee log-tmp2
+	go test -tags=ccgo.assert -v -run TestExec -trc 2>&1 | tee log-tmp2
 	grep -a '^ \+TODO' log-tmp2 | sort | uniq -c | sort -n | tee log-2
 	grep -a 'TOTAL\|PASS' log-tmp2 || true

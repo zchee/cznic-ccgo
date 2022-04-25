@@ -42,199 +42,28 @@ func (n *declInfos) read(d *cc.Declarator)        { n.info(d).read++ }
 func (n *declInfos) takeAddress(d *cc.Declarator) { n.info(d).addressTaken = true }
 func (n *declInfos) write(d *cc.Declarator)       { n.info(d).write++ }
 
+type wctx struct {
+	addrOf bool
+	deref  bool
+	lhs    bool
+	sizeof bool
+}
+
 type fnCtx struct {
 	c         *ctx
 	declInfos declInfos
-	stack     []bool
 	t         *cc.FunctionType
 	tlsAllocs int64
 
-	callArg   int
 	maxValist int
 	nextID    int
-	read      int
-	write     int
-
-	takeAddress bool
 }
 
 func (c *ctx) newFnCtx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fnCtx) {
-	r = &fnCtx{c: c, t: t, read: 1}
-	walk(n, r)
-	var a []*cc.Declarator
-	for d, n := range r.declInfos {
-		if n.escapes() {
-			a = append(a, d)
-		}
-	}
-	sort.Slice(a, func(i, j int) bool {
-		x := a[i].NameTok()
-		y := a[j].NameTok()
-		return x.Seq() < y.Seq()
-	})
-	for _, d := range a {
-		info := r.declInfos[d]
-		info.bpOff = roundup(r.tlsAllocs, int64(d.Type().Align()))
-		r.tlsAllocs = info.bpOff + d.Type().Size()
-	}
-	return r
+	return &fnCtx{c: c, t: t}
 }
 
 func (f *fnCtx) id() int { f.nextID++; return f.nextID }
-
-func (f *fnCtx) visit(n cc.Node, enter bool) visitor {
-	switch {
-	case enter:
-		switch x := n.(type) {
-		case *cc.AssignmentExpression:
-			switch x.Case {
-			case cc.AssignmentExpressionCond: // ConditionalExpression
-				walk(x.ConditionalExpression, f)
-			default:
-				f.write++
-				f.read--
-				walk(x.UnaryExpression, f)
-				f.read++
-				f.write--
-				walk(x.AssignmentExpression, f)
-			}
-			return nil
-		case *cc.CastExpression:
-			switch x.Case {
-			case cc.CastExpressionCast: // '(' TypeName ')' CastExpression
-				var w int
-				w, f.write = f.write, 0
-				f.read++
-				walk(x.CastExpression, f)
-				f.read--
-				f.write = w
-				return nil
-			}
-		case *cc.Declaration:
-			switch x.Case {
-			case cc.DeclarationAuto:
-				f.declInfos.write(x.Declarator)
-				walk(x.Initializer, f)
-			default:
-				walk(x.InitDeclaratorList, f)
-			}
-			return nil
-		case *cc.InitDeclarator:
-			switch x.Case {
-			case cc.InitDeclaratorInit:
-				f.declInfos.write(x.Declarator)
-				walk(x.Initializer, f)
-			}
-			return nil
-		case *cc.PostfixExpression:
-			switch x.Case {
-			case cc.PostfixExpressionCall: // PostfixExpression '(' ArgumentExpressionList ')'
-				p, ok := x.PostfixExpression.Type().(*cc.PointerType)
-				if !ok {
-					break
-				}
-
-				ft, ok := p.Elem().(*cc.FunctionType)
-				if !ok {
-					break
-				}
-
-				if ft.MaxArgs() >= 0 {
-					break
-				}
-
-				nargs := 0
-				for l := x.ArgumentExpressionList; l != nil; l = l.ArgumentExpressionList {
-					nargs++
-				}
-				if nargs < ft.MinArgs() {
-					break
-				}
-
-				if nargs > ft.MaxArgs() && ft.MaxArgs() >= 0 {
-					break
-				}
-
-				if v := nargs - ft.MinArgs(); ft.IsVariadic() && v > f.maxValist {
-					f.maxValist = v
-				}
-				walk(x.PostfixExpression, f)
-				f.callArg++
-				walk(x.ArgumentExpressionList, f)
-				f.callArg--
-				return nil
-			case cc.PostfixExpressionInc, cc.PostfixExpressionDec:
-				f.write++
-				f.read++
-				walk(x.PostfixExpression, f)
-				f.read--
-				f.write--
-				return nil
-			case cc.PostfixExpressionPSelect: // PostfixExpression "->" IDENTIFIER
-				f.callArg--
-				ta := f.takeAddress
-				f.takeAddress = false
-				walk(x.PostfixExpression, f)
-				if x.ExpressionList != nil {
-					walk(x.ExpressionList, f)
-				}
-				f.takeAddress = ta
-				f.callArg++
-				return nil
-			case
-				cc.PostfixExpressionIndex,  // PostfixExpression '[' ExpressionList ']'
-				cc.PostfixExpressionSelect: // PostfixExpression '.' IDENTIFIER
-
-				f.callArg--
-				walk(x.PostfixExpression, f)
-				if x.ExpressionList != nil {
-					walk(x.ExpressionList, f)
-				}
-				f.callArg++
-				return nil
-			}
-		case *cc.PrimaryExpression:
-			switch x.Case {
-			case cc.PrimaryExpressionIdent: // IDENTIFIER
-				switch y := x.ResolvedTo().(type) {
-				case *cc.Declarator:
-					if f.takeAddress || f.callArg > 0 && y.Type().Kind() == cc.Array && y.StorageDuration() == cc.Automatic {
-						f.declInfos.takeAddress(y)
-					}
-					if f.read != 0 {
-						f.declInfos.read(y)
-					}
-					if f.write != 0 {
-						f.declInfos.write(y)
-					}
-				}
-			}
-		case *cc.UnaryExpression:
-			switch x.Case {
-			case cc.UnaryExpressionAddrof: // '&' CastExpression
-				f.stack = append(f.stack, f.takeAddress)
-				f.takeAddress = true
-			case cc.UnaryExpressionInc, cc.UnaryExpressionDec:
-				f.write++
-				f.read++
-				walk(x.UnaryExpression, f)
-				f.read--
-				f.write--
-				return nil
-			}
-		}
-	default:
-		switch x := n.(type) {
-		case *cc.UnaryExpression:
-			switch x.Case {
-			case cc.UnaryExpressionAddrof: // '&' CastExpression
-				f.takeAddress = f.stack[len(f.stack)-1]
-				f.stack = f.stack[:len(f.stack)-1]
-			}
-		}
-	}
-	return f
-}
 
 func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
 	w.w("\n")
@@ -260,9 +89,28 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 		return
 	}
 
-	f0 := c.f
+	f0, pass := c.f, c.pass
 	c.f = c.newFnCtx(ft, n)
-	defer func() { c.f = f0 }()
+	defer func() { c.f = f0; c.pass = pass }()
+	c.pass = 1
+	c.compoundStatement(discard{}, n.CompoundStatement, true)
+	var a []*cc.Declarator
+	for d, n := range c.f.declInfos {
+		if n.escapes() {
+			a = append(a, d)
+		}
+	}
+	sort.Slice(a, func(i, j int) bool {
+		x := a[i].NameTok()
+		y := a[j].NameTok()
+		return x.Seq() < y.Seq()
+	})
+	for _, d := range a {
+		info := c.f.declInfos[d]
+		info.bpOff = roundup(c.f.tlsAllocs, int64(d.Type().Align()))
+		c.f.tlsAllocs = info.bpOff + d.Type().Size()
+	}
+	c.pass = 2
 	isMain := d.Linkage() == cc.External && d.Name() == "main"
 	w.w("\nfunc %s%s%s ", c.declaratorTag(d), d.Name(), c.signature(ft, true, isMain))
 	c.compoundStatement(w, n.CompoundStatement, true)
@@ -388,11 +236,19 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 			}
 
 			c.defineEnumStructUnion(w, d.Type())
-			s := ""
-			if info != nil && info.escapes() {
-				s = "// "
+			// s := ""
+			// if info != nil && info.escapes() {
+			// 	s = "// "
+			// }
+			// w.w("\n%svar %s%s %s", s, c.declaratorTag(d), nm, c.typ(d.Type()))
+			switch {
+			case info != nil && info.escapes():
+				var b buf
+				b.w("\nvar %s%s %s", c.declaratorTag(d), nm, c.typ(d.Type()))
+				w.w("%s", strings.ReplaceAll(string(b.bytes()), "\n", "\n// "))
+			default:
+				w.w("\nvar %s%s %s", c.declaratorTag(d), nm, c.typ(d.Type()))
 			}
-			w.w("\n%svar %s%s %s", s, c.declaratorTag(d), nm, c.typ(d.Type()))
 		}
 	case cc.InitDeclaratorInit: // Declarator Asm '=' Initializer
 		c.defineEnumStructUnion(w, d.Type())

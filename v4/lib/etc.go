@@ -9,7 +9,6 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
@@ -432,61 +431,6 @@ func symKind(s string) name {
 		}
 	}
 	return -1
-}
-
-type visitor interface {
-	visit(cc.Node, bool) (w visitor)
-}
-
-func walk(n cc.Node, v visitor) {
-	if n == nil {
-		return
-	}
-
-	if _, ok := n.(cc.Token); ok {
-		return
-	}
-
-	typ := reflect.TypeOf(n)
-	val := reflect.ValueOf(n)
-	var zero reflect.Value
-	if typ.Kind() == reflect.Pointer {
-		typ = typ.Elem()
-		val = val.Elem()
-		if val == zero {
-			return
-		}
-	}
-
-	if typ.Kind() != reflect.Struct {
-		return
-	}
-
-	if v = v.visit(n, true); v == nil {
-		return
-	}
-
-	defer v.visit(n, false)
-
-	nf := typ.NumField()
-	for i := 0; i < nf; i++ {
-		f := typ.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-
-		if strings.HasPrefix(f.Name, "Token") {
-			continue
-		}
-
-		if val == zero || val.IsZero() {
-			continue
-		}
-
-		if x, ok := val.Field(i).Interface().(cc.Node); ok {
-			walk(x, v)
-		}
-	}
 }
 
 func binary(s string) string {

@@ -147,7 +147,7 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	case cc.IterationStatementWhile: // "while" '(' ExpressionList ')' Statement
 		var a buf
 		switch b := c.expr(&a, n.ExpressionList, nil, exprBool); {
-		case len(a.bytes()) != 0:
+		case a.len() != 0:
 			w.w("\nfor {")
 			w.w("%s", a.bytes())
 			w.w("\nif !(%s) { break }", b)
@@ -160,7 +160,7 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 	case cc.IterationStatementDo: // "do" Statement "while" '(' ExpressionList ')' ';'
 		var a buf
 		switch b := c.expr(&a, n.ExpressionList, nil, exprBool); {
-		case len(a.bytes()) != 0:
+		case a.len() != 0:
 			w.w("\nfor {")
 			c.unbracedStatement(w, n.Statement)
 			w.w("%s", a.bytes())
@@ -174,10 +174,10 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 		var a, a2, a3 buf
 		var b2 []byte
 		if n.ExpressionList2 != nil {
-			b2 = c.expr(&a2, n.ExpressionList2, nil, exprBool)
+			b2 = c.expr(&a2, n.ExpressionList2, nil, exprBool).bytes()
 		}
 		switch b, b3 := c.expr(&a, n.ExpressionList, nil, exprVoid), c.expr(&a3, n.ExpressionList3, nil, exprVoid); {
-		case len(a.bytes()) == 0 && len(a2.bytes()) == 0 && len(a3.bytes()) == 0:
+		case a.len() == 0 && a2.len() == 0 && a3.len() == 0:
 			w.w("\nfor %s; %s; %s", b, b2, b3)
 			c.bracedStatement(w, n.Statement)
 		default:
