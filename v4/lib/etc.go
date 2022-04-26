@@ -334,7 +334,7 @@ func (n *nameSpace) registerNameSet(l *linker, set nameSet, tld bool) {
 			}
 
 			n.dict.put(linkName, l.tld.registerName(l, linkName))
-		case automatic, ccgoAutomatic:
+		case automatic, ccgoAutomatic, ccgo:
 			if tld {
 				panic(todo("", linkName))
 			}
@@ -457,10 +457,10 @@ func roundup(n, to int64) int64 {
 
 func bpOff(n int64) string {
 	if n != 0 {
-		return fmt.Sprintf("%sbp%+d", tag(ccgoAutomatic), n)
+		return fmt.Sprintf("%sbp%+d", tag(ccgo), n)
 	}
 
-	return fmt.Sprintf("%sbp", tag(ccgoAutomatic))
+	return fmt.Sprintf("%sbp", tag(ccgo))
 }
 
 func (c *ctx) export(s string) string {

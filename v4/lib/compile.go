@@ -6,7 +6,6 @@ package ccgo // import "modernc.org/ccgo/v4/lib"
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"go/token"
 	"io"
@@ -48,8 +47,9 @@ const (
 
 	staticInternal // storage class static, linkage internal
 	staticNone     // storage class static, linkage none
-	automatic      // storage class automatic, linkage none
-	ccgoAutomatic  // storage class automatic, linkage none
+	automatic      // storage class automatic, linkage none, must be pinned if address taken
+	ccgoAutomatic  // storage class automatic, linkage none, must be pinned if address taken
+	ccgo           // not visible to transpiled C code, taking address is ok
 	field          // field name
 
 	//TODO unpinned
@@ -65,7 +65,8 @@ var (
 	// The concatenation of a tag and a valid C identifier must not create a Go
 	// keyword neither it can be a prefix of a Go predefined identifier.
 	tags = [...]string{
-		ccgoAutomatic:   "cc", // eg. tls
+		ccgo:            "aa",
+		ccgoAutomatic:   "cc",
 		define:          "df", // #define
 		enumConst:       "ec", // enumerator constant
 		external:        "X",  // external linkage
@@ -99,20 +100,16 @@ type discard struct{}
 func (discard) w(s string, args ...interface{}) {}
 
 type buf struct {
-	b bytes.Buffer
+	b []byte
 	n cc.Node
 }
 
-func newBufFromtring(s string) *buf {
-	var b buf
-	b.w("%s", s)
-	return &b
-}
+func newBufFromtring(s string) *buf { return &buf{b: []byte(s)} }
 
-func (b *buf) Write(p []byte) (int, error)     { return b.b.Write(p) }
-func (b *buf) bytes() []byte                   { return b.b.Bytes() }
-func (b *buf) len() int                        { return b.b.Len() }
-func (b *buf) w(s string, args ...interface{}) { fmt.Fprintf(&b.b, s, args...) }
+func (b *buf) Write(p []byte) (int, error)     { b.b = append(b.b, p...); return len(p), nil }
+func (b *buf) bytes() []byte                   { return b.b }
+func (b *buf) len() int                        { return len(b.b) }
+func (b *buf) w(s string, args ...interface{}) { fmt.Fprintf(b, s, args...) }
 
 func (b *buf) Format(f fmt.State, verb rune) {
 	switch verb {
@@ -153,7 +150,7 @@ type ctx struct {
 	void          cc.Type
 
 	nextID int
-	pass   int
+	pass   int // 0: out of function, 1: func 1st pass, 2: func 2nd pass.
 
 	closed bool
 }
@@ -201,7 +198,7 @@ func (c *ctx) compile(ifn, ofn string) error {
 			return
 		}
 
-		if err := exec.Command("gofmt", "-w", "-r", "(x) -> x", ofn).Run(); err != nil {
+		if err := exec.Command("gofmt", "-s", "-w", "-r", "(x) -> x", ofn).Run(); err != nil {
 			c.err(errorf("%s: gofmt: %v", ifn, err))
 		}
 		if *oTraceL {

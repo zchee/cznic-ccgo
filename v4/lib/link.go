@@ -58,7 +58,31 @@ func (o *object) load(fset *token.FileSet) (file *ast.File, err error) {
 		return nil, err
 	}
 
+	if err := o.audit(fset, file); err != nil {
+		return nil, err
+	}
+
 	return file, nil
+}
+
+func (o *object) audit(fset *token.FileSet, file *ast.File) (err error) {
+	var errors errors
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.UnaryExpr:
+			if x.Op == token.AND {
+				switch y := x.X.(type) {
+				case *ast.Ident:
+					switch symKind(y.Name) {
+					case automatic, ccgoAutomatic:
+						errors.add(errorf("%v: cannot take address of %s", fset.PositionFor(y.Pos(), true), y.Name))
+					}
+				}
+			}
+		}
+		return true
+	})
+	return errors.err()
 }
 
 // link name -> type ID
@@ -389,7 +413,7 @@ func newLinker(task *Task, libc *object) (*linker, error) {
 	goTags := tags
 	for i := range tags {
 		switch name(i) {
-		case ccgoAutomatic:
+		case ccgoAutomatic, ccgo:
 			goTags[i] = task.prefixCcgoAutomatic
 		case define:
 			goTags[i] = task.prefixDefine
@@ -488,7 +512,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 
 				lib, ok := l.externs[nm]
 				if !ok {
-					return errorf("%v: undefined reference to '%s'", linkFile, l.rawName(nm))
+					return errorf("%v: undefined reference to '%s'", object.fset.PositionFor(ident.Pos(), true), l.rawName(nm))
 				}
 
 				if lib.kind == objectFile {
@@ -522,7 +546,7 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 			l.err(errorf("%s", e))
 		}
 
-		if e := exec.Command("gofmt", "-w", "-r", "(x) -> x", ofn).Run(); e != nil {
+		if e := exec.Command("gofmt", "-s", "-w", "-r", "(x) -> x", ofn).Run(); e != nil {
 			l.err(errorf("%s: gofmt: %v", ofn, e))
 		}
 		if *oTraceG {
@@ -804,7 +828,7 @@ func (fi *fnInfo) name(linkName string) string {
 		}
 	case preserve, field:
 		return fi.linker.goName(linkName)
-	case automatic, ccgoAutomatic:
+	case automatic, ccgoAutomatic, ccgo:
 		return fi.ns.dict[linkName]
 	case
 		typename, taggedEum, taggedStruct, taggedUnion, define, macro, enumConst:
@@ -853,7 +877,7 @@ func (l *linker) stringLit(s string) string {
 	}
 	switch {
 	case off == 0:
-		return fmt.Sprintf("%s", l.textSegmentNameP)
+		return l.textSegmentNameP
 	default:
 		return fmt.Sprintf("(%s%+d)", l.textSegmentNameP, off)
 	}

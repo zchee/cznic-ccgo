@@ -47,13 +47,14 @@ func _() {
 	_ = x[staticNone-10]
 	_ = x[automatic-11]
 	_ = x[ccgoAutomatic-12]
-	_ = x[field-13]
-	_ = x[preserve-14]
+	_ = x[ccgo-13]
+	_ = x[field-14]
+	_ = x[preserve-15]
 }
 
-const _name_name = "externaltypenametaggedStructtaggedUniontaggedEumenumConstimportQualifiermacrodefinestaticInternalstaticNoneautomaticccgoAutomaticfieldpreserve"
+const _name_name = "externaltypenametaggedStructtaggedUniontaggedEumenumConstimportQualifiermacrodefinestaticInternalstaticNoneautomaticccgoAutomaticccgofieldpreserve"
 
-var _name_index = [...]uint8{0, 8, 16, 28, 39, 48, 57, 72, 77, 83, 97, 107, 116, 129, 134, 142}
+var _name_index = [...]uint8{0, 8, 16, 28, 39, 48, 57, 72, 77, 83, 97, 107, 116, 129, 133, 138, 146}
 
 func (i name) String() string {
 	if i < 0 || i >= name(len(_name_index)-1) {

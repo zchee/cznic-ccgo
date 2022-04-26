@@ -64,8 +64,13 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool)
 		if c.f.maxValist != 0 {
 			v += 8 * int64((c.f.maxValist + 1))
 		}
-		w.w("\n%sbp := %[1]stls.Alloc(%d) // tlsAllocs %v maxValist %v", tag(ccgoAutomatic), v, c.f.tlsAllocs, c.f.maxValist)
-		w.w("\ndefer %stls.Free(%d)", tag(ccgoAutomatic), v)
+		w.w("\n%sbp := %[1]stls.Alloc(%d) // tlsAllocs %v maxValist %v", tag(ccgo), v, c.f.tlsAllocs, c.f.maxValist)
+		w.w("\ndefer %stls.Free(%d)", tag(ccgo), v)
+		for _, v := range c.f.t.Parameters() {
+			if d := v.Declarator; d != nil && c.f.declInfos.info(d).escapes() {
+				w.w("\n*(*%s)(unsafe.Pointer(%sbp)) = %[2]s_%s", c.typ(d.Type()), tag(ccgo), d.Name())
+			}
+		}
 	}
 	var bi *cc.BlockItem
 	for l := n.BlockItemList; l != nil; l = l.BlockItemList {
@@ -73,7 +78,7 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool)
 		c.blockItem(w, bi)
 	}
 	if fnBlock && c.f.t.Result().Kind() != cc.Void && !c.isReturn(bi) {
-		w.w("\nreturn %sr", tag(ccgoAutomatic))
+		w.w("\nreturn %sr", tag(ccgo))
 	}
 	w.w("\n}")
 }
@@ -95,7 +100,9 @@ func (c *ctx) blockItem(w writer, n *cc.BlockItem) {
 	case cc.BlockItemStmt: // Statement
 		c.statement(w, n.Statement)
 	case cc.BlockItemFuncDef: // DeclarationSpecifiers Declarator CompoundStatement
-		c.err(errorf("TODO %v", n.Case))
+		if c.pass == 2 {
+			c.functionDefinition0(w, n.Declarator, n.CompoundStatement, true) //TODO does not really work yet
+		}
 	default:
 		c.err(errorf("internal error %T %v", n, n.Case))
 	}
@@ -167,7 +174,7 @@ func (c *ctx) iterationStatement(w writer, n *cc.IterationStatement) {
 			w.w("\nif !(%s) { break }", b)
 			w.w("\n}")
 		default:
-			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgoAutomatic), b)
+			w.w("\nfor %scond := true; %[1]scond; %[1]scond = %s", tag(ccgo), b)
 			c.bracedStatement(w, n.Statement)
 		}
 	case cc.IterationStatementFor: // "for" '(' ExpressionList ';' ExpressionList ';' ExpressionList ')' Statement

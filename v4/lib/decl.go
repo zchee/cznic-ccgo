@@ -42,13 +42,6 @@ func (n *declInfos) read(d *cc.Declarator)        { n.info(d).read++ }
 func (n *declInfos) takeAddress(d *cc.Declarator) { n.info(d).addressTaken = true }
 func (n *declInfos) write(d *cc.Declarator)       { n.info(d).write++ }
 
-type wctx struct {
-	addrOf bool
-	deref  bool
-	lhs    bool
-	sizeof bool
-}
-
 type fnCtx struct {
 	c         *ctx
 	declInfos declInfos
@@ -59,7 +52,7 @@ type fnCtx struct {
 	nextID    int
 }
 
-func (c *ctx) newFnCtx(t *cc.FunctionType, n *cc.FunctionDefinition) (r *fnCtx) {
+func (c *ctx) newFnCtx(t *cc.FunctionType) (r *fnCtx) {
 	return &fnCtx{c: c, t: t}
 }
 
@@ -82,7 +75,10 @@ func (c *ctx) externalDeclaration(w writer, n *cc.ExternalDeclaration) {
 }
 
 func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
-	d := n.Declarator
+	c.functionDefinition0(w, n.Declarator, n.CompoundStatement, false)
+}
+
+func (c *ctx) functionDefinition0(w writer, d *cc.Declarator, cs *cc.CompoundStatement, local bool) {
 	ft, ok := d.Type().(*cc.FunctionType)
 	if !ok {
 		c.err(errorf("%v: internal error %v", d.Position(), d.Type()))
@@ -90,10 +86,10 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 	}
 
 	f0, pass := c.f, c.pass
-	c.f = c.newFnCtx(ft, n)
+	c.f = c.newFnCtx(ft)
 	defer func() { c.f = f0; c.pass = pass }()
 	c.pass = 1
-	c.compoundStatement(discard{}, n.CompoundStatement, true)
+	c.compoundStatement(discard{}, cs, true)
 	var a []*cc.Declarator
 	for d, n := range c.f.declInfos {
 		if n.escapes() {
@@ -112,8 +108,13 @@ func (c *ctx) functionDefinition(w writer, n *cc.FunctionDefinition) {
 	}
 	c.pass = 2
 	isMain := d.Linkage() == cc.External && d.Name() == "main"
-	w.w("\nfunc %s%s%s ", c.declaratorTag(d), d.Name(), c.signature(ft, true, isMain))
-	c.compoundStatement(w, n.CompoundStatement, true)
+	switch {
+	case local:
+		w.w("\n%s%s := func%s", c.declaratorTag(d), d.Name(), c.signature(ft, true, false))
+	default:
+		w.w("\nfunc %s%s%s ", c.declaratorTag(d), d.Name(), c.signature(ft, true, isMain))
+	}
+	c.compoundStatement(w, cs, true)
 	if isMain && c.task.tlsQualifier != "" { //TODO move to linker
 		w.w("\n\nfunc main() { %s%sStart(%smain) }\n", c.task.tlsQualifier, tag(preserve), tag(external))
 	}
@@ -123,7 +124,7 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	var b strings.Builder
 	switch {
 	case names:
-		fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgoAutomatic), c.task.tlsQualifier, tag(preserve))
+		fmt.Fprintf(&b, "(%stls *%s%sTLS", tag(ccgo), c.task.tlsQualifier, tag(preserve))
 	default:
 		fmt.Fprintf(&b, "(*%s%sTLS", c.task.tlsQualifier, tag(preserve))
 	}
@@ -133,9 +134,14 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 			if names {
 				switch nm := v.Name(); {
 				case nm == "":
-					fmt.Fprintf(&b, "%sp ", tag(ccgoAutomatic))
+					fmt.Fprintf(&b, "%sp ", tag(ccgo))
 				default:
-					fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
+					switch info := c.f.declInfos.info(v.Declarator); {
+					case info.escapes():
+						fmt.Fprintf(&b, "%s_%s ", tag(ccgo), nm)
+					default:
+						fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
+					}
 				}
 			}
 			b.WriteString(c.typ(v.Type()))
@@ -143,13 +149,13 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	}
 	switch {
 	case isMain && len(f.Parameters()) == 0 || isMain && len(f.Parameters()) == 1 && f.Parameters()[0].Type().Kind() == cc.Void:
-		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(ccgoAutomatic))
+		fmt.Fprintf(&b, ", %sargc int32, %[1]sargv uintptr", tag(ccgo))
 	case isMain && len(f.Parameters()) == 1:
-		fmt.Fprintf(&b, ", %sargv uintptr", tag(ccgoAutomatic))
+		fmt.Fprintf(&b, ", %sargv uintptr", tag(ccgo))
 	case f.IsVariadic():
 		switch {
 		case names:
-			fmt.Fprintf(&b, ", %sva uintptr", tag(ccgoAutomatic))
+			fmt.Fprintf(&b, ", %sva uintptr", tag(ccgo))
 		default:
 			fmt.Fprintf(&b, ", uintptr")
 		}
@@ -157,7 +163,7 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 	b.WriteByte(')')
 	if f.Result().Kind() != cc.Void {
 		if names {
-			fmt.Fprintf(&b, "(%sr ", tag(ccgoAutomatic))
+			fmt.Fprintf(&b, "(%sr ", tag(ccgo))
 		}
 		b.WriteString(c.typ(f.Result()))
 		if names {
