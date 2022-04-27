@@ -67,7 +67,7 @@ func (c *ctx) compoundStatement(w writer, n *cc.CompoundStatement, fnBlock bool)
 		w.w("\n%sbp := %[1]stls.Alloc(%d) // tlsAllocs %v maxValist %v", tag(ccgo), v, c.f.tlsAllocs, c.f.maxValist)
 		w.w("\ndefer %stls.Free(%d)", tag(ccgo), v)
 		for _, v := range c.f.t.Parameters() {
-			if d := v.Declarator; d != nil && c.f.declInfos.info(d).escapes() {
+			if d := v.Declarator; d != nil && c.f.declInfos.info(d).pinned() {
 				w.w("\n*(*%s)(unsafe.Pointer(%sbp)) = %[2]s_%s", c.typ(d.Type()), tag(ccgo), d.Name())
 			}
 		}

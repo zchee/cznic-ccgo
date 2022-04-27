@@ -20,6 +20,12 @@ func (c *ctx) typedef(t cc.Type) string {
 	return b.String()
 }
 
+func (c *ctx) helper(t cc.Type) string {
+	var b strings.Builder
+	c.typ0(&b, t, false, false)
+	return c.export(b.String())
+}
+
 func (c *ctx) typ(t cc.Type) string {
 	var b strings.Builder
 	c.typ0(&b, t, true, true)
@@ -27,7 +33,7 @@ func (c *ctx) typ(t cc.Type) string {
 }
 
 func (c *ctx) typeSuffix(t cc.Type) string {
-	if assert && !cc.IsIntegerType(t) {
+	if !cc.IsIntegerType(t) {
 		c.err(errorf("TODO"))
 	}
 	return c.export(c.typ(t))

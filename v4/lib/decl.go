@@ -21,7 +21,7 @@ type declInfo struct {
 	write int
 }
 
-func (n *declInfo) escapes() bool { return n.sd == cc.Automatic && n.addressTaken }
+func (n *declInfo) pinned() bool { return n.sd == cc.Automatic && n.addressTaken }
 
 type declInfos map[*cc.Declarator]*declInfo
 
@@ -92,7 +92,7 @@ func (c *ctx) functionDefinition0(w writer, d *cc.Declarator, cs *cc.CompoundSta
 	c.compoundStatement(discard{}, cs, true)
 	var a []*cc.Declarator
 	for d, n := range c.f.declInfos {
-		if n.escapes() {
+		if n.pinned() {
 			a = append(a, d)
 		}
 	}
@@ -137,7 +137,7 @@ func (c *ctx) signature(f *cc.FunctionType, names, isMain bool) string {
 					fmt.Fprintf(&b, "%sp ", tag(ccgo))
 				default:
 					switch info := c.f.declInfos.info(v.Declarator); {
-					case info.escapes():
+					case info.pinned():
 						fmt.Fprintf(&b, "%s_%s ", tag(ccgo), nm)
 					default:
 						fmt.Fprintf(&b, "%s%s ", tag(automatic), nm)
@@ -248,7 +248,7 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 			// }
 			// w.w("\n%svar %s%s %s", s, c.declaratorTag(d), nm, c.typ(d.Type()))
 			switch {
-			case info != nil && info.escapes():
+			case info != nil && info.pinned():
 				var b buf
 				b.w("\nvar %s%s %s", c.declaratorTag(d), nm, c.typ(d.Type()))
 				w.w("%s", strings.ReplaceAll(string(b.bytes()), "\n", "\n// "))
@@ -265,7 +265,7 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 			w.w("\nvar %s%s = %s", c.declaratorTag(d), nm, c.initializerOuter(w, n.Initializer, d.Type()))
 		default:
 			switch {
-			case info != nil && info.escapes():
+			case info != nil && info.pinned():
 				w.w("\n*(*%s)(unsafe.Pointer(%s)) = %s", c.typ(d.Type()), bpOff(info.bpOff), c.initializerOuter(w, n.Initializer, d.Type()))
 			default:
 				switch {
@@ -282,8 +282,8 @@ func (c *ctx) initDeclarator(w writer, n *cc.InitDeclarator, external bool) {
 	}
 	w.w(" // %v:", c.pos(d))
 	if info != nil {
-		w.w(" read: %d, write: %d, escapes %v", info.read, info.write, info.escapes()) //TODO-
-		if d.StorageDuration() == cc.Automatic && info.read == 0 && !info.escapes() {
+		w.w(" read: %d, write: %d, escapes %v", info.read, info.write, info.pinned()) //TODO-
+		if d.StorageDuration() == cc.Automatic && info.read == 0 && !info.pinned() {
 			w.w("\n_ = %s%s", c.declaratorTag(d), nm)
 		}
 	}

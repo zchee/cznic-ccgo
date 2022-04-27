@@ -97,6 +97,7 @@ func (c *ctx) initializerArray(w writer, a []*cc.Initializer, t *cc.ArrayType, o
 
 			ins := m[off]
 			sort.Slice(ins, func(i, j int) bool { return ins[i].Offset() < ins[j].Offset() })
+			//trc("", cc.NodeSource(a[0].AssignmentExpression), a[0].Type(), t)
 			b.w("%s, ", c.initializer(w, ins, et, off))
 		}
 	}
