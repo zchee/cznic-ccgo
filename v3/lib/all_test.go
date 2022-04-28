@@ -546,7 +546,7 @@ func (t *runTask) run0() (_ []byte, err error, ccTime, ccgoTime time.Duration) {
 	}
 
 	ccgoArgs := append([]string(nil), t.opts...)
-	ccgoArgs = append(ccgoArgs, "-D__ccgo_test__", "-export-fields", "F")
+	ccgoArgs = append(ccgoArgs, "-D__ccgo_test__", "-export-fields", "F", "-ignore-unsupported-alignment")
 	if *oFullPaths {
 		ccgoArgs = append(ccgoArgs, "-full-paths-comments")
 	}
@@ -2622,6 +2622,11 @@ func TestCxgo(t *testing.T) {
 }
 
 func TestSQLite(t *testing.T) {
+	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
+	case "linux/ppc64le":
+		t.Skip("TODO")
+	}
+
 	root := filepath.Join(testWD, filepath.FromSlash(sqliteDir))
 	testSQLite(t, root)
 }
@@ -2667,6 +2672,7 @@ func testSQLite(t *testing.T, dir string) {
 		"-DSQLITE_MEMDEBUG",
 		"-DSQLITE_THREADSAFE=0",
 		"-export-fields", "F",
+		"-ignore-unsupported-alignment",
 		"-all-errors",
 		"-o", main,
 		"-verify-structs",
@@ -2686,6 +2692,7 @@ func testSQLite(t *testing.T, dir string) {
 			"-DSQLITE_MEMDEBUG",
 			"-DSQLITE_THREADSAFE=0",
 			"-export-fields", "F",
+			"-ignore-unsupported-alignment",
 			"-all-errors",
 			"-o", main,
 			//TODO "-verify-structs",
