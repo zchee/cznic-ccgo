@@ -180,7 +180,11 @@ func tidyCommentString(s string) (r string) {
 		r = strings.Join(a, "\n")
 	}()
 
+	// count of slash for line comment
+	// const maxSlash = uint8(2)
+	// var written uint8
 	s = strings.ReplaceAll(s, "\f", "")
+	s = strings.ReplaceAll(s, "///", "//")
 	b := bytesBufferPool.Get().(*bytes.Buffer)
 	defer func() { b.Reset(); bytesBufferPool.Put(b) }()
 	for len(s) != 0 {
@@ -201,7 +205,10 @@ func tidyCommentString(s string) (r string) {
 		switch c2 {
 		case '/': // line comment start
 			b.WriteByte(c)
+			// if c == '/' && written < maxSlash {
 			b.WriteByte(c2)
+			// 	written++
+			// }
 			for {
 				c := s[0]
 				s = s[1:]
