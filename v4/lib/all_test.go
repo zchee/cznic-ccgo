@@ -711,6 +711,9 @@ func TestCompile(t *testing.T) {
 		"zerolen-1.c":                  {}, //TODO
 	}
 	blacklistTCC := map[string]struct{}{
+		// asm
+		"99_fastcall.c": {},
+
 		"76_dollars_in_identifiers.c": {}, //TODO
 
 		"54_goto.c":                 {}, //TODO
@@ -738,6 +741,14 @@ func TestCompile(t *testing.T) {
 	case "freebsd/386":
 	case "freebsd/amd64":
 	case "linux/386":
+		// asm
+		blacklistGCC["960830-1.c"] = struct{}{}
+
+		// _Float128
+		blacklistGCC["nest-align-1.c"] = struct{}{}
+		blacklistGCC["strcmp-1.c"] = struct{}{}
+		blacklistGCC["strlen-1.c"] = struct{}{}
+		blacklistGCC["strncmp-1.c"] = struct{}{}
 	case "linux/s390x":
 		// asm
 		blacklistGCC["pr58574.c"] = struct{}{}
@@ -1809,6 +1820,9 @@ func TestExec(t *testing.T) {
 			"zerolen-2.c":                  {}, //TODO
 		}
 		blacklistTCC := map[string]struct{}{
+			// asm
+			"99_fastcall.c": {},
+
 			"76_dollars_in_identifiers.c": {}, //TODO
 
 			"54_goto.c":                 {}, //TODO
@@ -1841,6 +1855,18 @@ func TestExec(t *testing.T) {
 		case "freebsd/386":
 		case "freebsd/amd64":
 		case "linux/386":
+			// asm
+			blacklistGCC["960830-1.c"] = struct{}{}
+
+			// _Float128
+			blacklistGCC["nest-align-1.c"] = struct{}{}
+			blacklistGCC["strcmp-1.c"] = struct{}{}
+			blacklistGCC["strlen-1.c"] = struct{}{}
+			blacklistGCC["strncmp-1.c"] = struct{}{}
+
+			// Needs -D_FILE_OFFSET_BITS=64.
+			blacklistGCC["loop-2f.c"] = struct{}{} //TODO
+			blacklistGCC["loop-2g.c"] = struct{}{} //TODO
 		case "linux/arm":
 		case "linux/s390x":
 			// asm

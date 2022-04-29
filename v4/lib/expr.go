@@ -153,10 +153,17 @@ func (c *ctx) pin(n cc.Node, b *buf) *buf {
 
 func (c *ctx) convertUntyped(n cc.Node, s *buf, from, to cc.Type, fromMode, toMode mode) (r *buf) {
 	// defer func() { trc("%v: from %v: %v, to %v: %v %q -> %q", c.pos(n), from, fromMode, to, toMode, s, r) }()
-	if toMode != exprDefault {
+	var b buf
+	switch toMode {
+	case exprDefault:
+		// ok
+	case exprBool:
+		toMode = exprDefault
+		var b2 buf
+		defer func() { b2.w("(%s != 0)", b.bytes()); r = &b2 }()
+	default:
 		c.err(errorf("TODO %v: %v", n.Position(), toMode))
 	}
-	var b buf
 	var val cc.Value
 	switch x := s.n.(type) {
 	case *cc.PrimaryExpression:

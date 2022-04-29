@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
+	"path/filepath"
 	"strings"
 
 	"modernc.org/cc/v4"
@@ -228,13 +228,7 @@ func (t *Task) compile(optO string) error {
 		ifn := ifn
 		ofn := optO
 		if ofn == "" {
-			f, err := ioutil.TempFile("", "ccgo-")
-			if err != nil {
-				return err
-			}
-
-			ofn = f.Name()
-			f.Close()
+			ofn = filepath.Base(ifn) + ".go"
 		}
 		t.compiledfFiles[ifn] = ofn
 		p.exec(func() error { return newCtx(t, p.eh).compile(ifn, ofn) })
