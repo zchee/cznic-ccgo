@@ -2622,11 +2622,6 @@ func TestCxgo(t *testing.T) {
 }
 
 func TestSQLite(t *testing.T) {
-	switch fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH) {
-	case "linux/ppc64le":
-		t.Skip("TODO")
-	}
-
 	root := filepath.Join(testWD, filepath.FromSlash(sqliteDir))
 	testSQLite(t, root)
 }
@@ -2701,7 +2696,7 @@ func testSQLite(t *testing.T, dir string) {
 		}
 	}
 	if *oDebug {
-		ccgoArgs = append(ccgoArgs, "-DSQLITE_DEBUG_OS_TRACE", "-DSQLITE_FORCE_OS_TRACE")
+		ccgoArgs = append(ccgoArgs, "-DSQLITE_DEBUG_OS_TRACE", "-DSQLITE_FORCE_OS_TRACE", "-DSQLITE_LOCK_TRACE")
 	}
 	if os.Getenv("GO111MODULE") != "off" {
 		if out, err := Shell("go", "mod", "init", "example.com/ccgo/v3/lib/sqlite"); err != nil {
