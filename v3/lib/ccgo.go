@@ -646,6 +646,11 @@ func (t *Task) Main() (err error) {
 		return err
 	}
 
+	switch fmt.Sprintf("%s/%s", t.goos, t.goarch) {
+	case "linux/ppc64le":
+		t.U = append(t.U, "_FILE_OFFSET_BITS")
+	}
+
 	opts := opt.NewSet()
 	opts.Arg("D", true, func(arg, value string) error { t.D = append(t.D, value); return nil })
 	opts.Arg("I", true, func(opt, arg string) error { t.I = append(t.I, arg); return nil })
