@@ -1022,7 +1022,6 @@ func (p *project) pos(n cc.Node) (r token.Position) {
 	}
 
 	if r = token.Position(n.Position()); r.IsValid() {
-		trc("", r, origin(1), home)
 		switch {
 		case p.task.fullPathComments:
 			if strings.HasPrefix(r.Filename, home) {
