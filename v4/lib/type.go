@@ -54,16 +54,19 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		}
 		switch {
 		case cc.IsIntegerType(t):
-			if t.Size() <= 8 {
+			switch {
+			case t.Size() <= 8:
 				if !cc.IsSignedInteger(t) {
 					b.WriteByte('u')
 				}
 				fmt.Fprintf(b, "int%d", 8*t.Size())
 				break
+			case t.Size() == 16:
+				b.WriteString("[2]uint64")
+			default:
+				b.WriteString("int")
+				c.err(errorf("TODO %T %v", x, t))
 			}
-
-			b.WriteString("int")
-			c.err(errorf("TODO %T", x))
 		case t.Kind() == cc.Void:
 			b.WriteString("struct{}")
 		case t.Kind() == cc.Float:
@@ -77,10 +80,17 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			}
 			b.WriteString("float64")
 		case t.Kind() == cc.LongDouble:
-			if t.Size() != 8 {
-				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			// if t.Size() != 8 {
+			// 	c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+			// }
+			switch t.Size() {
+			case 8:
+				b.WriteString("float64")
+			case 16:
+				b.WriteString("complex128")
+			default:
+			 	c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
 			}
-			b.WriteString("float64")
 		default:
 			b.WriteString("int")
 			c.err(errorf("TODO %T %v %v", x, x, x.Kind()))
