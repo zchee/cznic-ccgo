@@ -592,7 +592,9 @@ func (l *linker) link(ofn string, linkFiles []string, objects map[string]*object
 var (
 	_ reflect.Type
 	_ unsafe.Pointer
-)`)
+)
+
+type float128 = struct { __ccgo [2]float64 }`)
 
 	for _, linkFile := range linkFiles {
 		object := objects[linkFile]

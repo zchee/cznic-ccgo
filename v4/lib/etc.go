@@ -95,8 +95,9 @@ var (
 		"uintptr":    {},
 
 		// Protected identifiers
-		"main":   {},
-		"unsafe": {},
+		"float128": {},
+		"main":     {},
+		"unsafe":   {},
 	}
 )
 

@@ -16,19 +16,19 @@ import (
 
 func (c *ctx) typedef(t cc.Type) string {
 	var b strings.Builder
-	c.typ0(&b, t, false, false)
+	c.typ0(&b, t, false, false, false)
 	return b.String()
 }
 
 func (c *ctx) helper(t cc.Type) string {
 	var b strings.Builder
-	c.typ0(&b, t, false, false)
+	c.typ0(&b, t, false, false, false)
 	return c.export(b.String())
 }
 
 func (c *ctx) typ(t cc.Type) string {
 	var b strings.Builder
-	c.typ0(&b, t, true, true)
+	c.typ0(&b, t, true, true, false)
 	return b.String()
 }
 
@@ -39,7 +39,7 @@ func (c *ctx) typeSuffix(t cc.Type) string {
 	return c.export(c.typ(t))
 }
 
-func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag bool) {
+func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag, isField bool) {
 	if tn := t.Typedef(); tn != nil && useTypename && tn.LexicalScope().Parent == nil {
 		fmt.Fprintf(b, "%s%s", tag(typename), tn.Name())
 		return
@@ -87,9 +87,14 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 			case 8:
 				b.WriteString("float64")
 			case 16:
-				b.WriteString("complex128")
+				switch {
+				case isField:
+					b.WriteString("float128")
+				default:
+					b.WriteString("float64")
+				}
 			default:
-			 	c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
+				c.err(errorf("C %v of unexpected size %d", x.Kind(), t.Size()))
 			}
 		default:
 			b.WriteString("int")
@@ -101,7 +106,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 		case nm != "" && x.LexicalScope().Parent == nil:
 			fmt.Fprintf(b, "%s%s", tag(taggedEum), nm)
 		default:
-			c.typ0(b, x.UnderlyingType(), false, false)
+			c.typ0(b, x.UnderlyingType(), false, false, false)
 		}
 	case *cc.StructType:
 		nmTag := x.Tag()
@@ -124,7 +129,7 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 					fmt.Fprintf(b, "%s%s", tag(field), nm)
 				}
 				b.WriteByte(' ')
-				c.typ0(b, f.Type(), true, true)
+				c.typ0(b, f.Type(), true, true, true)
 			}
 			b.WriteString("\n}")
 		}
@@ -149,13 +154,13 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 					fmt.Fprintf(b, "%s%s", tag(field), nm)
 				}
 				b.WriteString(" [0]")
-				c.typ0(b, f.Type(), true, true)
+				c.typ0(b, f.Type(), true, true, true)
 			}
 			fmt.Fprintf(b, "\n%s__ccgo [%d]byte\n}", tag(field), t.Size())
 		}
 	case *cc.ArrayType:
 		fmt.Fprintf(b, "[%d]", x.Len())
-		c.typ0(b, x.Elem(), true, true)
+		c.typ0(b, x.Elem(), true, true, true)
 	default:
 		b.WriteString("int")
 		c.err(errorf("TODO %T", x))
@@ -164,13 +169,13 @@ func (c *ctx) typ0(b *strings.Builder, t cc.Type, useTypename, useStructUnionTag
 
 func (c *ctx) unionLiteral(t *cc.UnionType) string {
 	var b strings.Builder
-	c.typ0(&b, t, true, false)
+	c.typ0(&b, t, true, false, false)
 	return b.String()
 }
 
 func (c *ctx) structLiteral(t *cc.StructType) string {
 	var b strings.Builder
-	c.typ0(&b, t, true, false)
+	c.typ0(&b, t, true, false, false)
 	return b.String()
 }
 
