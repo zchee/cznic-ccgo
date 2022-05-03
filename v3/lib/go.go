@@ -1994,32 +1994,35 @@ func (p *project) structLiteral(n cc.Node, t cc.Type) string {
 		if info.NeedExplicitAlign {
 			fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*p.align(n, t))
 		}
-		al := uintptr(t.Align())
-		sz := t.Size()
-		if al > sz {
-			panic(todo("", p.pos(n)))
-		}
-
-		f := t.FieldByIndex([]int{0})
-		ft := f.Type()
-		al0 := ft.Align()
-		if f.IsBitField() {
-			al0 = f.BitFieldBlockWidth() >> 3
-		}
-		if al != uintptr(al0) {
-			fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*al)
-		}
-		fsz := ft.Size()
-		switch {
-		case f.IsBitField():
-			fmt.Fprintf(b, "%s ", p.fieldName2(n, f))
-			fmt.Fprintf(b, "uint%d;", f.BitFieldBlockWidth())
-			fsz = uintptr(f.BitFieldBlockWidth()) >> 3
-		default:
-			fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(n, ft))
-		}
-		if pad := sz - fsz; pad != 0 {
-			fmt.Fprintf(b, "%s [%d]byte;", p.padName(&npad), pad)
+		nf := t.NumField()
+		for idx := []int{0}; idx[0] < nf; idx[0]++ {
+			f := t.FieldByIndex(idx)
+			al := uintptr(t.Align())
+			sz := t.Size()
+			if al > sz {
+				panic(todo("", p.pos(n)))
+			}
+			ft := f.Type()
+			al0 := ft.Align()
+			if f.IsBitField() {
+				al0 = f.BitFieldBlockWidth() >> 3
+			}
+			if al != uintptr(al0) {
+				fmt.Fprintf(b, "%s [0]uint%d;", p.padName(&npad), 8*al)
+			}
+			switch pad := info.PaddingsBefore[f]; {
+			case pad < 0:
+				continue
+			case pad > 0:
+				fmt.Fprintf(b, "%s [%d]byte;", p.padName(&npad), pad)
+			}
+			switch {
+			case f.IsBitField():
+				fmt.Fprintf(b, "%s ", p.fieldName2(n, f))
+				fmt.Fprintf(b, "uint%d;", f.BitFieldBlockWidth())
+			default:
+				fmt.Fprintf(b, "%s %s;", p.fieldName2(n, f), p.typ(n, ft))
+			}
 		}
 		b.WriteByte('}')
 	default:
